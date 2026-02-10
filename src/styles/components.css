@@ -1,0 +1,398 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* Button Component */
+.sas-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.sas-button--small {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.sas-button--medium {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-base);
+}
+
+.sas-button--large {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--font-size-md);
+}
+
+.sas-button--primary {
+  background-color: var(--sas-blue-primary);
+  color: var(--sas-white);
+}
+
+.sas-button--primary:hover:not(:disabled) {
+  background-color: var(--sas-blue-dark);
+}
+
+.sas-button--secondary {
+  background-color: var(--sas-white);
+  color: var(--sas-blue-primary);
+  border: 1px solid var(--sas-blue-primary);
+}
+
+.sas-button--secondary:hover:not(:disabled) {
+  background-color: var(--sas-blue-light);
+}
+
+.sas-button--tertiary {
+  background-color: transparent;
+  color: var(--sas-blue-primary);
+}
+
+.sas-button--tertiary:hover:not(:disabled) {
+  background-color: var(--sas-blue-light);
+}
+
+.sas-button--danger {
+  background-color: var(--sas-error);
+  color: var(--sas-white);
+}
+
+.sas-button--danger:hover:not(:disabled) {
+  background-color: var(--sas-error-dark);
+}
+
+.sas-button--full-width {
+  width: 100%;
+}
+
+.sas-button--loading .sas-button__spinner {
+  animation: spin 1s linear infinite;
+}
+
+.sas-button__spinner {
+  width: 16px;
+  height: 16px;
+}
+
+.sas-button__icon {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Badge Component */
+.sas-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sas-badge--small {
+  padding: 2px var(--space-1);
+  font-size: 10px;
+}
+
+.sas-badge--default {
+  background-color: var(--sas-gray-200);
+  color: var(--sas-gray-700);
+}
+
+.sas-badge--success {
+  background-color: var(--sas-success-light);
+  color: var(--sas-success-dark);
+}
+
+.sas-badge--warning {
+  background-color: var(--sas-warning-light);
+  color: var(--sas-warning-dark);
+}
+
+.sas-badge--error {
+  background-color: var(--sas-error-light);
+  color: var(--sas-error-dark);
+}
+
+.sas-badge--info {
+  background-color: var(--sas-info-light);
+  color: var(--sas-info-dark);
+}
+
+/* Alert Component */
+.sas-alert {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+}
+
+.sas-alert--success {
+  background-color: var(--sas-success-light);
+  border-color: var(--sas-success);
+}
+
+.sas-alert--warning {
+  background-color: var(--sas-warning-light);
+  border-color: var(--sas-warning);
+}
+
+.sas-alert--error {
+  background-color: var(--sas-error-light);
+  border-color: var(--sas-error);
+}
+
+.sas-alert--info {
+  background-color: var(--sas-info-light);
+  border-color: var(--sas-info);
+}
+
+.sas-alert__icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.sas-alert__content {
+  flex: 1;
+}
+
+.sas-alert__title {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.sas-alert__close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--sas-gray-600);
+}
+
+.sas-alert__close:hover {
+  color: var(--sas-gray-800);
+}
+
+/* Card Component */
+.sas-card {
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+}
+
+.sas-card--shadow {
+  box-shadow: var(--shadow-sm);
+}
+
+.sas-card--padding-none { }
+.sas-card--padding-small { padding: var(--space-3); }
+.sas-card--padding-medium { padding: var(--space-4); }
+.sas-card--padding-large { padding: var(--space-6); }
+
+.sas-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.sas-card__header h3 {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sas-card__header-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sas-card__body {
+  padding: var(--space-4);
+}
+
+.sas-card__footer {
+  display: flex;
+  padding: var(--space-4);
+  border-top: 1px solid var(--sas-gray-200);
+  gap: var(--space-2);
+}
+
+.sas-card__footer--left { justify-content: flex-start; }
+.sas-card__footer--center { justify-content: center; }
+.sas-card__footer--right { justify-content: flex-end; }
+
+/* Loading Component */
+.sas-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8);
+}
+
+.sas-loading__spinner {
+  color: var(--sas-blue-primary);
+}
+
+.sas-loading--small .sas-loading__svg { width: 24px; height: 24px; }
+.sas-loading--medium .sas-loading__svg { width: 40px; height: 40px; }
+.sas-loading--large .sas-loading__svg { width: 56px; height: 56px; }
+
+.sas-loading__svg {
+  animation: spin 1s linear infinite;
+}
+
+.sas-loading__message {
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+}
+
+.sas-loading__overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.9);
+  z-index: var(--z-modal-backdrop);
+}
+
+/* Skeleton Loading */
+.sas-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sas-skeleton__line {
+  height: 16px;
+  background: linear-gradient(90deg, var(--sas-gray-200) 25%, var(--sas-gray-100) 50%, var(--sas-gray-200) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Data Table Component */
+.sas-table__wrapper {
+  overflow-x: auto;
+}
+
+.sas-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sas-table__head {
+  background-color: var(--sas-gray-50);
+  border-bottom: 2px solid var(--sas-gray-200);
+}
+
+.sas-table__th {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.sas-table__row {
+  border-bottom: 1px solid var(--sas-gray-200);
+  transition: background-color var(--transition-fast);
+}
+
+.sas-table--striped .sas-table__row:nth-child(even) {
+  background-color: var(--sas-gray-50);
+}
+
+.sas-table--hoverable .sas-table__row:hover {
+  background-color: var(--sas-blue-light);
+}
+
+.sas-table--clickable .sas-table__row {
+  cursor: pointer;
+}
+
+.sas-table__row--selected {
+  background-color: var(--sas-blue-light) !important;
+}
+
+.sas-table__td {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+}
+
+.sas-table__loading,
+.sas-table__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12);
+  color: var(--sas-gray-500);
+}
+
+.sas-table__empty-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--sas-gray-400);
+}
+
+/* Form Inputs */
+.sas-input,
+.sas-textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-base);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  background-color: var(--sas-white);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sas-input:focus,
+.sas-textarea:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 3px var(--sas-blue-light);
+}
+
+.sas-input:disabled,
+.sas-textarea:disabled {
+  background-color: var(--sas-gray-100);
+  color: var(--sas-gray-500);
+  cursor: not-allowed;
+}
+
+.sas-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.sas-input::placeholder,
+.sas-textarea::placeholder {
+  color: var(--sas-gray-400);
+}

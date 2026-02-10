@@ -1,0 +1,361 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* Module List */
+.module-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.module-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+}
+
+.module-list__search {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.module-list__search-icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--sas-gray-400);
+  pointer-events: none;
+}
+
+.module-list__search-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-10);
+  font-size: var(--font-size-base);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  background-color: var(--sas-white);
+}
+
+.module-list__search-input:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 3px var(--sas-blue-light);
+}
+
+.module-list__search-clear {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sas-gray-400);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.module-list__search-clear:hover {
+  background-color: var(--sas-gray-100);
+  color: var(--sas-gray-600);
+}
+
+.module-list__search-clear svg {
+  width: 16px;
+  height: 16px;
+}
+
+.module-list__search-info {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  white-space: nowrap;
+}
+
+/* Sortable column headers */
+.module-list__sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.module-list__sort-header:hover {
+  color: var(--sas-blue-primary);
+}
+
+.module-list__sort-header--active {
+  color: var(--sas-blue-primary);
+}
+
+.module-list__sort-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.module-list__sort-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.module-list__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--sas-error-light);
+  color: var(--sas-error-dark);
+  border-radius: var(--radius-md);
+}
+
+.module-list__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.module-list__pagination-info {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+/* Login Prompt */
+.module-list__login-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12);
+}
+
+.module-list__login-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 400px;
+  padding: var(--space-8);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+  box-shadow: var(--shadow-md);
+}
+
+.module-list__login-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--sas-blue-primary);
+  margin-bottom: var(--space-4);
+}
+
+.module-list__login-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  margin-bottom: var(--space-2);
+}
+
+.module-list__login-text {
+  font-size: var(--font-size-base);
+  color: var(--sas-gray-600);
+  margin-bottom: var(--space-6);
+  line-height: 1.5;
+}
+
+.module-name-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.module-name-cell__name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+}
+
+.module-name-cell__id {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+  font-family: var(--font-family-mono);
+}
+
+.date-cell {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+/* Module Details */
+.module-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.module-details__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.module-details__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.module-details__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+.module-details__info-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.module-details__info-list--wide {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* Entries Table */
+.module-details__entries-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.module-details__entries-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.module-details__entries-table th,
+.module-details__entries-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--sas-gray-200);
+  white-space: nowrap;
+}
+
+.module-details__entries-table th {
+  background-color: var(--sas-gray-50);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+  text-transform: uppercase;
+  font-size: var(--font-size-xs);
+}
+
+.module-details__entries-table tbody tr:hover {
+  background-color: var(--sas-gray-50);
+}
+
+.module-details__empty-message {
+  color: var(--sas-gray-500);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.module-details__info-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.module-details__info-item--full {
+  grid-column: 1 / -1;
+}
+
+.module-details__info-item dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-500);
+  text-transform: uppercase;
+}
+
+.module-details__info-item dd {
+  font-size: var(--font-size-base);
+  color: var(--sas-gray-900);
+}
+
+.module-details__properties-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.module-details__property-item {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-2);
+  background-color: var(--sas-gray-50);
+  border-radius: var(--radius-sm);
+}
+
+.module-details__property-item dt {
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+.module-details__property-item dd {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+/* Job List */
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.job-list__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--sas-error-light);
+  color: var(--sas-error-dark);
+  border-radius: var(--radius-md);
+}
+
+.job-id-cell {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.job-operation {
+  text-transform: capitalize;
+}

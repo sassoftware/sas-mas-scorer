@@ -1,0 +1,108 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* SAS Corporate Color Palette and Design Tokens */
+:root {
+  /* Primary Brand Colors */
+  --sas-blue-primary: #0066B2;
+  --sas-blue-dark: #003D6B;
+  --sas-blue-darker: #00294A;
+  --sas-blue-light: #E6F2F9;
+  --sas-blue-lighter: #F5FAFD;
+
+  /* Accent Colors */
+  --sas-teal: #00B2A9;
+  --sas-teal-dark: #008C84;
+  --sas-teal-light: #E6F8F7;
+
+  /* Neutral Colors */
+  --sas-gray-900: #1A1A1A;
+  --sas-gray-800: #333333;
+  --sas-gray-700: #4D4D4D;
+  --sas-gray-600: #666666;
+  --sas-gray-500: #808080;
+  --sas-gray-400: #999999;
+  --sas-gray-300: #CCCCCC;
+  --sas-gray-200: #E5E5E5;
+  --sas-gray-100: #F4F4F4;
+  --sas-gray-50: #FAFAFA;
+  --sas-white: #FFFFFF;
+
+  /* Semantic Colors */
+  --sas-success: #4CAF50;
+  --sas-success-dark: #388E3C;
+  --sas-success-light: #E8F5E9;
+  --sas-warning: #FF9800;
+  --sas-warning-dark: #F57C00;
+  --sas-warning-light: #FFF3E0;
+  --sas-error: #F44336;
+  --sas-error-dark: #D32F2F;
+  --sas-error-light: #FFEBEE;
+  --sas-info: #2196F3;
+  --sas-info-dark: #1976D2;
+  --sas-info-light: #E3F2FD;
+
+  /* Typography */
+  --font-family-primary: 'Open Sans', 'Arial', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Border Radius */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* Layout */
+  --header-height: 56px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+
+  /* Z-Index Scale */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-tooltip: 500;
+}
