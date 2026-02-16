@@ -41,7 +41,7 @@ Here is an explanation on why they are needed.
 
 You can just download the [./dist.zip](./dist.zip) and unzip that onto your webserver. If it is under the same URL origin as the SAS Viya environment you do not have to do anything else - otherwise edit the config.js file and enter the URL of your SAS Viya environment for the SAS_VIYA_URL value.
 
-That is it, the application is now available under the URL that corresponds to the webserver you have deployed and the subdirector that you put this application into.
+That is it, the application is now available under the URL that corresponds to the webserver you have deployed and the subdirectory that you put this application into.
 
 If you want to build this from source you will require Node.js 18+ and npm installed on your system and then run
 ```bash
