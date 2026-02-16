@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isJobDefBuild = process.env.BUILD_MODE === 'jobdef';
+const isElectronBuild = process.env.BUILD_MODE === 'electron';
 
 export default defineConfig(async () => {
   // Conditionally import vite-plugin-singlefile for jobdef builds
@@ -35,6 +36,17 @@ export default defineConfig(async () => {
     });
   }
 
+  // For electron builds, redirect auth imports to Electron IPC-based implementation
+  if (isElectronBuild) {
+    aliasConfig.push({
+      find: /^(\.\.?\/)+auth(\/index)?$/,
+      replacement: path.resolve(__dirname, 'src/auth/electron-index'),
+    });
+  }
+
+  // Determine build mode string for runtime detection
+  const buildMode = isElectronBuild ? 'electron' : isJobDefBuild ? 'jobdef' : 'standard';
+
   return {
     plugins,
     base: './',
@@ -45,7 +57,7 @@ export default defineConfig(async () => {
     },
     define: {
       // Expose build mode to application code
-      __BUILD_MODE__: JSON.stringify(isJobDefBuild ? 'jobdef' : 'standard'),
+      __BUILD_MODE__: JSON.stringify(buildMode),
     },
     build: {
       // Output to different directories based on build mode

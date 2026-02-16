@@ -13,6 +13,8 @@ interface LayoutProps {
   selectedModule?: Module | null;
   recentModules?: Module[];
   onSelectModule?: (module: Module) => void;
+  onOpenSettings?: () => void;
+  activeConnectionName?: string | null;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -22,10 +24,12 @@ export const Layout: React.FC<LayoutProps> = ({
   selectedModule,
   recentModules,
   onSelectModule,
+  onOpenSettings,
+  activeConnectionName,
 }) => {
   return (
     <div className="sas-layout">
-      <Header />
+      <Header onOpenSettings={onOpenSettings} activeConnectionName={activeConnectionName} />
       <div className="sas-layout__container">
         <Sidebar
           activeView={activeView}

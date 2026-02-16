@@ -5,6 +5,8 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 import { ApiError } from '../types';
 import { getSasViyaUrl } from '../config';
 
+const isElectron = !!window.electronAPI;
+
 // CSRF Token management - token is extracted from failed request responses
 let csrfToken: string | null = null;
 
@@ -12,25 +14,30 @@ const clearCsrfToken = (): void => {
   csrfToken = null;
 };
 
-// Create the axios instance with cookie-based authentication
-const createApiClient = (): AxiosInstance => {
-  const client = axios.create({
-    baseURL: `${getSasViyaUrl()}/microanalyticScore`,
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    timeout: 30000,
-    // Enable cookies for cross-origin requests
-    withCredentials: true,
-  });
-
-  // Request interceptor to add CSRF token for mutating requests (if we have one cached)
+/**
+ * Shared request interceptor that adds:
+ * - Bearer token (Electron mode) or cookies (browser mode)
+ * - CSRF token for mutating requests
+ * - Dynamic baseURL (Electron mode)
+ */
+const addAuthInterceptor = (client: AxiosInstance, basePath: string): void => {
   client.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
-      const method = config.method?.toUpperCase();
+    async (config: InternalAxiosRequestConfig) => {
+      // Electron mode: dynamic baseURL + Bearer token
+      if (isElectron && window.electronAPI) {
+        const viyaUrl = await window.electronAPI.getViyaUrl();
+        if (viyaUrl) {
+          config.baseURL = basePath ? `${viyaUrl}${basePath}` : viyaUrl;
+        }
 
-      // Add CSRF token for POST, PUT, DELETE, PATCH requests if we have one
+        const token = await window.electronAPI.getAccessToken();
+        if (token) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
+
+      // CSRF token for mutating requests (needed in both modes)
+      const method = config.method?.toUpperCase();
       if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && csrfToken) {
         config.headers['X-CSRF-TOKEN'] = csrfToken;
       }
@@ -39,34 +46,33 @@ const createApiClient = (): AxiosInstance => {
     },
     (error) => Promise.reject(error)
   );
+};
 
-  // Response interceptor for error handling and CSRF retry
+/**
+ * Shared response interceptor for CSRF retry and error handling.
+ */
+const addErrorInterceptor = (client: AxiosInstance): void => {
   client.interceptors.response.use(
     (response) => response,
     async (error: AxiosError<ApiError>) => {
       const originalRequest = error.config as InternalAxiosRequestConfig & { _csrfRetry?: boolean };
 
-      // Check if this is a CSRF error (403) and we haven't retried yet
+      // CSRF error (403) — extract token and retry once
       if (
         error.response?.status === 403 &&
         !originalRequest._csrfRetry
       ) {
-        // Extract CSRF token from the failed response headers
         const newToken = error.response.headers['x-csrf-token'];
 
         if (newToken && typeof newToken === 'string') {
-          // Cache the token for future requests
           csrfToken = newToken;
           originalRequest._csrfRetry = true;
-
-          // Retry the request with the new token
           originalRequest.headers['X-CSRF-TOKEN'] = newToken;
           return client(originalRequest);
         }
       }
 
       if (error.response?.status === 401) {
-        // Authentication error - will be handled by auth context
         return Promise.reject(new Error('Authentication required. Please log in.'));
       }
       if (error.response?.data) {
@@ -79,6 +85,24 @@ const createApiClient = (): AxiosInstance => {
       return Promise.reject(error);
     }
   );
+};
+
+// Create the MAS API client (bound to /microanalyticScore)
+const createApiClient = (): AxiosInstance => {
+  const client = axios.create({
+    // In browser mode, set baseURL at creation time; in Electron, interceptor sets it per-request
+    baseURL: isElectron ? '' : `${getSasViyaUrl()}/microanalyticScore`,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    timeout: 30000,
+    // Cookie auth for browser mode only
+    withCredentials: !isElectron,
+  });
+
+  addAuthInterceptor(client, '/microanalyticScore');
+  addErrorInterceptor(client);
 
   return client;
 };
@@ -89,56 +113,17 @@ export const apiClient = createApiClient();
 // Create a generic SAS Viya API client (not bound to /microanalyticScore)
 const createGenericApiClient = (): AxiosInstance => {
   const client = axios.create({
-    baseURL: getSasViyaUrl(),
+    baseURL: isElectron ? '' : getSasViyaUrl(),
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
     timeout: 30000,
-    withCredentials: true,
+    withCredentials: !isElectron,
   });
 
-  // Request interceptor to add CSRF token
-  client.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
-      const method = config.method?.toUpperCase();
-      if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && csrfToken) {
-        config.headers['X-CSRF-TOKEN'] = csrfToken;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  // Response interceptor for error handling
-  client.interceptors.response.use(
-    (response) => response,
-    async (error: AxiosError<ApiError>) => {
-      const originalRequest = error.config as InternalAxiosRequestConfig & { _csrfRetry?: boolean };
-
-      if (error.response?.status === 403 && !originalRequest._csrfRetry) {
-        const newToken = error.response.headers['x-csrf-token'];
-        if (newToken && typeof newToken === 'string') {
-          csrfToken = newToken;
-          originalRequest._csrfRetry = true;
-          originalRequest.headers['X-CSRF-TOKEN'] = newToken;
-          return client(originalRequest);
-        }
-      }
-
-      if (error.response?.status === 401) {
-        return Promise.reject(new Error('Authentication required. Please log in.'));
-      }
-      if (error.response?.data) {
-        const apiError = error.response.data;
-        const errorMessage = apiError.message ||
-          apiError.details?.join(', ') ||
-          'An unknown error occurred';
-        return Promise.reject(new Error(errorMessage));
-      }
-      return Promise.reject(error);
-    }
-  );
+  addAuthInterceptor(client, '');
+  addErrorInterceptor(client);
 
   return client;
 };

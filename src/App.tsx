@@ -12,11 +12,31 @@ import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
+import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import './styles/index.css';
 
+const isElectron = !!window.electronAPI;
+
 function App() {
-  const { isAuthenticated } = useSasAuth();
+  const { isAuthenticated, checkAuth } = useSasAuth();
   const prevAuthRef = useRef(isAuthenticated);
+
+  // Electron: track whether an active connection is configured
+  const [hasActiveConnection, setHasActiveConnection] = useState<boolean | null>(isElectron ? null : true);
+  const [activeConnectionName, setActiveConnectionName] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const loadActiveConnection = useCallback(async () => {
+    if (!isElectron || !window.electronAPI) return;
+    const conn = await window.electronAPI.getActiveConnection();
+    setHasActiveConnection(conn !== null && conn.viyaUrl !== '');
+    setActiveConnectionName(conn?.name ?? null);
+  }, []);
+
+  useEffect(() => {
+    loadActiveConnection();
+  }, [loadActiveConnection]);
+
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -192,6 +212,19 @@ function App() {
     setSortBy(`${field}:${direction === 'asc' ? 'ascending' : 'descending'}`);
   }, [setSortBy, setPage]);
 
+  // Called when a connection is switched or deleted in settings
+  const handleConnectionSwitch = useCallback(async () => {
+    // Reset app state
+    setSelectedModule(null);
+    setSelectedStep(null);
+    setRecentModules([]);
+    navigate('/');
+    // Reload active connection info
+    await loadActiveConnection();
+    // Re-check auth for the new connection
+    await checkAuth();
+  }, [loadActiveConnection, checkAuth, navigate]);
+
   // Render content based on current view
   const renderContent = () => {
     const activeView = getActiveView();
@@ -282,6 +315,56 @@ function App() {
     return null;
   };
 
+  // Electron: show loading while checking active connection
+  if (isElectron && hasActiveConnection === null) {
+    return <Loading message="Loading..." />;
+  }
+
+  // Electron: show connection settings if no active connection
+  if (isElectron && hasActiveConnection === false) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '24px', background: 'var(--sas-gray-50)' }}>
+        <div style={{ maxWidth: '560px', width: '100%' }}>
+          <ConnectionSettings
+            onSave={() => loadActiveConnection()}
+            onConnectionSwitch={handleConnectionSwitch}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Electron: settings modal overlay
+  if (showSettings) {
+    return (
+      <>
+        <Layout
+          activeView={getActiveView()}
+          onNavigate={handleNavigate}
+          selectedModule={selectedModule}
+          recentModules={recentModules}
+          onSelectModule={handleSelectModule}
+          onOpenSettings={() => setShowSettings(true)}
+          activeConnectionName={activeConnectionName}
+        >
+          {renderContent()}
+        </Layout>
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
+        >
+          <div style={{ maxWidth: '600px', width: '100%', margin: '24px' }}>
+            <ConnectionSettings
+              onSave={() => { setShowSettings(false); loadActiveConnection(); }}
+              onCancel={() => setShowSettings(false)}
+              onConnectionSwitch={handleConnectionSwitch}
+            />
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <Layout
       activeView={getActiveView()}
@@ -289,6 +372,8 @@ function App() {
       selectedModule={selectedModule}
       recentModules={recentModules}
       onSelectModule={handleSelectModule}
+      onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
+      activeConnectionName={activeConnectionName}
     >
       {renderContent()}
     </Layout>

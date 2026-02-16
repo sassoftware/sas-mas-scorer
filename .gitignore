@@ -3,7 +3,13 @@ node_modules/
 
 # Build output
 dist/
+dist-jobdef/
 build/
+
+# Electron
+electron/dist/
+out/
+release/
 
 # IDE
 .idea/

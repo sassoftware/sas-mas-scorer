@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "SAS Micro Analytic Score Module Scorer Application",
   "type": "module",
+  "main": "electron/dist/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && npm run zip",
@@ -10,11 +11,15 @@
     "zip": "cd dist && bestzip ../dist.zip *",
     "preview": "vite preview",
     "preview:jobdef": "vite preview --outDir dist-jobdef",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "electron:dev": "concurrently \"cross-env BUILD_MODE=electron vite\" \"wait-on tcp:localhost:3000 && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:build": "tsc -p electron/tsconfig.json && cross-env BUILD_MODE=electron vite build && electron-builder",
+    "electron:start": "electron ."
   },
   "dependencies": {
     "@sassoftware/sas-auth-browser": "^0.2.0",
     "axios": "^1.6.0",
+    "electron-store": "^8.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.12.0"
@@ -26,12 +31,36 @@
     "@typescript-eslint/parser": "^6.13.0",
     "@vitejs/plugin-react": "^4.2.0",
     "bestzip": "^2.2.1",
+    "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.3.0",
     "vite": "^7.3.1",
-    "vite-plugin-singlefile": "^2.0.0"
+    "vite-plugin-singlefile": "^2.0.0",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.sas.mas-scorer",
+    "productName": "SAS MAS Scorer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/dist/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

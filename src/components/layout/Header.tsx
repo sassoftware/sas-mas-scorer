@@ -7,8 +7,14 @@ import { Button } from '../common/Button';
 
 // Check build mode at runtime
 const isJobDefBuild = typeof __BUILD_MODE__ !== 'undefined' && __BUILD_MODE__ === 'jobdef';
+const isElectron = !!window.electronAPI;
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenSettings?: () => void;
+  activeConnectionName?: string | null;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnectionName }) => {
   const { isAuthenticated, isLoading, login, logout } = useSasAuth();
 
   const handleAuthClick = async () => {
@@ -54,6 +60,18 @@ export const Header: React.FC = () => {
       </nav>
 
       <div className="sas-header__actions">
+        {isElectron && onOpenSettings && (
+          <button
+            className="sas-header__help-link"
+            title="Connection Settings"
+            onClick={onOpenSettings}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        )}
         <a
           href="https://developer.sas.com/rest-apis/microanalyticScore"
           target="_blank"
@@ -80,12 +98,16 @@ export const Header: React.FC = () => {
               {isAuthenticated ? (
                 <div className="sas-header__auth-status">
                   <span className="sas-header__auth-indicator sas-header__auth-indicator--connected" />
-                  <span className="sas-header__auth-text">Connected</span>
+                  <span className="sas-header__auth-text">
+                    {activeConnectionName ? `${activeConnectionName} — Connected` : 'Connected'}
+                  </span>
                 </div>
               ) : (
                 <div className="sas-header__auth-status">
                   <span className="sas-header__auth-indicator sas-header__auth-indicator--disconnected" />
-                  <span className="sas-header__auth-text">Not connected</span>
+                  <span className="sas-header__auth-text">
+                    {activeConnectionName ? `${activeConnectionName} — Not connected` : 'Not connected'}
+                  </span>
                 </div>
               )}
               <Button
