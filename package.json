@@ -51,7 +51,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/dist/**/*"
+      "electron/dist/**/*",
+      "electron/package.json"
     ],
     "win": {
       "target": "nsis"
