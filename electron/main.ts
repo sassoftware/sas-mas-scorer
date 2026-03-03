@@ -5,7 +5,7 @@
  * Electron main process — window management, IPC handlers, OAuth flow.
  */
 
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import path from 'node:path';
 import {
   generatePkce,
@@ -73,6 +73,13 @@ function createWindow(): void {
     // In production, load from built dist files
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
   }
+
+  // Open external links (target="_blank") in the user's default browser
+  // instead of opening a new Electron window.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

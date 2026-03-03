@@ -12,6 +12,7 @@ import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
+import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import './styles/index.css';
 
@@ -53,8 +54,8 @@ function App() {
     const moduleMatch = hash.match(/^\/modules\/([^/]+)/);
     const stepMatch = hash.match(/^\/modules\/[^/]+\/steps\/([^/]+)/);
     return {
-      moduleId: moduleMatch ? moduleMatch[1] : null,
-      stepId: stepMatch ? stepMatch[1] : null,
+      moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
+      stepId: stepMatch ? decodeURIComponent(stepMatch[1]) : null,
     };
   };
 
@@ -89,11 +90,17 @@ function App() {
     prevAuthRef.current = isAuthenticated;
   }, [isAuthenticated, refreshModules]);
 
+  // Use a ref to check selectedModule inside the effect without it being a dependency.
+  // This prevents the effect from re-running when selectedModule changes (which would
+  // cause an infinite loop when the module ID contains encoded characters).
+  const selectedModuleRef = useRef<Module | null>(null);
+  selectedModuleRef.current = selectedModule;
+
   // Load module from URL when needed
   useEffect(() => {
     if (moduleId && isAuthenticated) {
       // If we don't have the module or it's a different one, fetch it
-      if (!selectedModule || selectedModule.id !== moduleId) {
+      if (!selectedModuleRef.current || selectedModuleRef.current.id !== moduleId) {
         setModuleLoading(true);
         setModuleError(null);
         getModule(moduleId)
@@ -117,7 +124,8 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
     }
-  }, [moduleId, isAuthenticated, selectedModule]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduleId, isAuthenticated]);
 
   // Set selected step from URL when steps are loaded
   useEffect(() => {
@@ -158,13 +166,13 @@ function App() {
       return [module, ...filtered].slice(0, 5);
     });
 
-    navigate(`/modules/${module.id}`);
+    navigate(`/modules/${encodeURIComponent(module.id)}`);
   }, [navigate]);
 
   const handleSelectStep = useCallback((step: Step) => {
     setSelectedStep(step);
     if (selectedModule) {
-      navigate(`/modules/${selectedModule.id}/steps/${step.id}`);
+      navigate(`/modules/${encodeURIComponent(selectedModule.id)}/steps/${encodeURIComponent(step.id)}`);
     }
   }, [selectedModule, navigate]);
 
@@ -178,7 +186,7 @@ function App() {
   const handleBackToModuleDetails = useCallback(() => {
     setSelectedStep(null);
     if (selectedModule) {
-      navigate(`/modules/${selectedModule.id}`);
+      navigate(`/modules/${encodeURIComponent(selectedModule.id)}`);
     }
   }, [selectedModule, navigate]);
 
@@ -199,7 +207,9 @@ function App() {
     setPage(0);
     // Build SAS API filter string
     if (searchTerm.trim()) {
-      setFilter(`contains(name,'${searchTerm.trim()}')`);
+      // Escape single quotes by doubling them (SAS filter syntax)
+      const escaped = searchTerm.trim().replace(/'/g, "''");
+      setFilter(`contains(name,'${escaped}')`);
     } else {
       setFilter('');
     }
@@ -219,8 +229,9 @@ function App() {
     setSelectedStep(null);
     setRecentModules([]);
     navigate('/');
-    // Reload active connection info
+    // Reload active connection info and refresh cached Viya URL for deeplinks
     await loadActiveConnection();
+    await initViyaUrl();
     // Re-check auth for the new connection
     await checkAuth();
   }, [loadActiveConnection, checkAuth, navigate]);
@@ -299,7 +310,7 @@ function App() {
           return <Loading message="Loading step..." />;
         }
         // Step not found, go back to module details
-        navigate(`/modules/${moduleId}`);
+        navigate(`/modules/${encodeURIComponent(moduleId!)}`);
         return null;
       }
       return (

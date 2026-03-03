@@ -5,14 +5,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { SasAuthProvider } from './auth';
+import { initViyaUrl } from './config';
 import App from './App';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <HashRouter>
-      <SasAuthProvider>
-        <App />
-      </SasAuthProvider>
-    </HashRouter>
-  </React.StrictMode>
-);
+// Initialize cached Viya URL from Electron connection details (if applicable)
+// before rendering so getSasViyaUrl() returns the correct URL for deeplinks.
+initViyaUrl().then(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <HashRouter>
+        <SasAuthProvider>
+          <App />
+        </SasAuthProvider>
+      </HashRouter>
+    </React.StrictMode>
+  );
+});
