@@ -104,7 +104,7 @@ You have to import the [transfer packages](./SAS-Visual-Analytics-Integration.js
 - Change the URL in the Data Driven Content object of the report to correspond to the URL of your SAS Viya Server
 
 ### Getting Started
-This YouTube video showcases both how you can deploy both variants and how to use them - [MAS Module Scorer Overview](TBD).
+This YouTube video showcases both how you can deploy both variants and how to use them - [MAS Module Scorer Overview]([TBD](https://youtu.be/mSSoNryixUM)).
 
 ## Contributing
 Maintainers are accepting patches and contributions to this project.
