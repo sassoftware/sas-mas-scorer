@@ -5,6 +5,7 @@ import React from 'react';
 import { Header } from './Header';
 import { Sidebar, ViewType } from './Sidebar';
 import { Module } from '../../types';
+import { UIDefinitionSummary } from '../../types/uiBuilder';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +16,8 @@ interface LayoutProps {
   onSelectModule?: (module: Module) => void;
   onOpenSettings?: () => void;
   activeConnectionName?: string | null;
+  recentUIApps?: UIDefinitionSummary[];
+  onSelectUIApp?: (id: string) => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -26,6 +29,8 @@ export const Layout: React.FC<LayoutProps> = ({
   onSelectModule,
   onOpenSettings,
   activeConnectionName,
+  recentUIApps,
+  onSelectUIApp,
 }) => {
   return (
     <div className="sas-layout">
@@ -37,6 +42,8 @@ export const Layout: React.FC<LayoutProps> = ({
           selectedModule={selectedModule}
           recentModules={recentModules}
           onSelectModule={onSelectModule}
+          recentUIApps={recentUIApps}
+          onSelectUIApp={onSelectUIApp}
         />
         <main className="sas-layout__main">
           <div className="sas-layout__content">{children}</div>

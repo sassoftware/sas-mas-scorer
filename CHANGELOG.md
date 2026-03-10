@@ -2,6 +2,12 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [1.1.0] - 2026-03-10
+
+### Added
+
+- Ability to create small UIs on top of models with a score step and decisions with an execute step
+
 ## [1.0.3] - 2026-03-02
 
 ### Fixed

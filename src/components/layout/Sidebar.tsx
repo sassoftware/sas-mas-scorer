@@ -3,8 +3,9 @@
 
 import React from 'react';
 import { Module } from '../../types';
+import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -12,6 +13,8 @@ interface SidebarProps {
   selectedModule?: Module | null;
   recentModules?: Module[];
   onSelectModule?: (module: Module) => void;
+  recentUIApps?: UIDefinitionSummary[];
+  onSelectUIApp?: (id: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -20,7 +23,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedModule,
   recentModules = [],
   onSelectModule,
+  recentUIApps = [],
+  onSelectUIApp,
 }) => {
+  const isUIView = activeView.startsWith('ui-app');
+
   return (
     <aside className="sas-sidebar">
       <nav className="sas-sidebar__nav">
@@ -38,6 +45,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <path d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
                 <span>All Modules</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`sas-sidebar__menu-item ${
+                  isUIView || activeView === 'ui-apps' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('ui-apps')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                <span>UI Apps</span>
               </button>
             </li>
           </ul>
@@ -82,6 +105,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
+        {recentUIApps.length > 0 && (
+          <div className="sas-sidebar__section">
+            <h3 className="sas-sidebar__section-title">Recent UI Apps</h3>
+            <ul className="sas-sidebar__recent-list">
+              {recentUIApps.slice(0, 5).map((app) => (
+                <li key={app.id}>
+                  <button
+                    className="sas-sidebar__recent-item"
+                    onClick={() => onSelectUIApp?.(app.id)}
+                  >
+                    <span className="sas-sidebar__recent-name">{app.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {recentModules.length > 0 && (
           <div className="sas-sidebar__section">
             <h3 className="sas-sidebar__section-title">Recent Modules</h3>
@@ -102,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v1.0.3</div>
+        <div className="sas-sidebar__version">MAS Scorer v1.1.0</div>
       </div>
     </aside>
   );

@@ -4,14 +4,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Module, Step } from './types';
+import { UIDefinition, UIDefinitionSummary } from './types/uiBuilder';
 import { Layout, ViewType } from './components/layout';
 import { ModuleList } from './components/modules/ModuleList';
 import { ModuleDetails } from './components/modules/ModuleDetails';
 import { ScorePanel } from './components/scoring/ScorePanel';
+import { UIAppsList } from './components/uiApps/UIAppsList';
+import { UIBuilder } from './components/uiBuilder/UIBuilder';
+import { UIRunner } from './components/uiRunner/UIRunner';
 import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
+import { getUIDefinition, listUIDefinitions } from './storage/uiStorage';
 import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import './styles/index.css';
@@ -48,18 +53,30 @@ function App() {
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleError, setModuleError] = useState<string | null>(null);
 
+  // UI Apps state
+  const [recentUIApps, setRecentUIApps] = useState<UIDefinitionSummary[]>([]);
+  const [activeUIDefinition, setActiveUIDefinition] = useState<UIDefinition | null>(null);
+  const [uiLoading, setUILoading] = useState(false);
+
   // Parse route params from location
   const getRouteParams = () => {
     const hash = location.pathname; // In HashRouter, pathname contains the hash path
     const moduleMatch = hash.match(/^\/modules\/([^/]+)/);
     const stepMatch = hash.match(/^\/modules\/[^/]+\/steps\/([^/]+)/);
+    const uiAppRunMatch = hash.match(/^\/ui-apps\/([^/]+)$/);
+    const uiAppEditMatch = hash.match(/^\/ui-apps\/([^/]+)\/edit$/);
+    const uiAppNewMatch = hash.match(/^\/ui-apps\/new\/([^/]+)$/);
     return {
       moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
       stepId: stepMatch ? decodeURIComponent(stepMatch[1]) : null,
+      uiAppId: uiAppRunMatch ? decodeURIComponent(uiAppRunMatch[1]) : null,
+      uiAppEditId: uiAppEditMatch ? decodeURIComponent(uiAppEditMatch[1]) : null,
+      uiAppNewModuleId: uiAppNewMatch ? decodeURIComponent(uiAppNewMatch[1]) : null,
+      isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
     };
   };
 
-  const { moduleId, stepId } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -90,23 +107,33 @@ function App() {
     prevAuthRef.current = isAuthenticated;
   }, [isAuthenticated, refreshModules]);
 
+  // Load recent UI apps
+  const loadRecentUIApps = useCallback(async () => {
+    try {
+      const list = await listUIDefinitions();
+      setRecentUIApps(list.slice(0, 5));
+    } catch {
+      // Silent — not critical
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentUIApps();
+  }, [loadRecentUIApps]);
+
   // Use a ref to check selectedModule inside the effect without it being a dependency.
-  // This prevents the effect from re-running when selectedModule changes (which would
-  // cause an infinite loop when the module ID contains encoded characters).
   const selectedModuleRef = useRef<Module | null>(null);
   selectedModuleRef.current = selectedModule;
 
   // Load module from URL when needed
   useEffect(() => {
     if (moduleId && isAuthenticated) {
-      // If we don't have the module or it's a different one, fetch it
       if (!selectedModuleRef.current || selectedModuleRef.current.id !== moduleId) {
         setModuleLoading(true);
         setModuleError(null);
         getModule(moduleId)
           .then((module) => {
             setSelectedModule(module);
-            // Add to recent modules
             setRecentModules((prev) => {
               const filtered = prev.filter((m) => m.id !== module.id);
               return [module, ...filtered].slice(0, 5);
@@ -119,13 +146,26 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId) {
-      // Clear selection when navigating to modules list
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleId, isAuthenticated]);
+
+  // Load UI definition from URL when needed
+  useEffect(() => {
+    const targetId = uiAppId || uiAppEditId;
+    if (targetId) {
+      setUILoading(true);
+      getUIDefinition(targetId)
+        .then(def => setActiveUIDefinition(def))
+        .catch(() => setActiveUIDefinition(null))
+        .finally(() => setUILoading(false));
+    } else {
+      setActiveUIDefinition(null);
+    }
+  }, [uiAppId, uiAppEditId]);
 
   // Set selected step from URL when steps are loaded
   useEffect(() => {
@@ -141,6 +181,10 @@ function App() {
 
   // Determine active view from current route
   const getActiveView = (): ViewType => {
+    if (isUIAppsListView) return 'ui-apps';
+    if (uiAppNewModuleId) return 'ui-app-new';
+    if (uiAppEditId) return 'ui-app-edit';
+    if (uiAppId) return 'ui-app-run';
     if (stepId) return 'score';
     if (moduleId) return 'module-details';
     return 'modules';
@@ -153,19 +197,20 @@ function App() {
       setSelectedStep(null);
       resetModules();
       navigate('/');
+    } else if (view === 'ui-apps') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/ui-apps');
     }
   }, [resetModules, navigate]);
 
   const handleSelectModule = useCallback((module: Module) => {
     setSelectedModule(module);
     setSelectedStep(null);
-
-    // Add to recent modules
     setRecentModules((prev) => {
       const filtered = prev.filter((m) => m.id !== module.id);
       return [module, ...filtered].slice(0, 5);
     });
-
     navigate(`/modules/${encodeURIComponent(module.id)}`);
   }, [navigate]);
 
@@ -192,22 +237,16 @@ function App() {
 
   const handleDeleteModule = useCallback(async (moduleIdToDelete: string) => {
     await deleteModule(moduleIdToDelete);
-    // Clear selection and navigate back to modules list
     setSelectedModule(null);
     setSelectedStep(null);
-    // Remove from recent modules
     setRecentModules((prev) => prev.filter((m) => m.id !== moduleIdToDelete));
-    // Refresh the modules list
     refreshModules();
     navigate('/');
   }, [refreshModules, navigate]);
 
   const handleSearch = useCallback((searchTerm: string) => {
-    // Reset to first page when searching
     setPage(0);
-    // Build SAS API filter string
     if (searchTerm.trim()) {
-      // Escape single quotes by doubling them (SAS filter syntax)
       const escaped = searchTerm.trim().replace(/'/g, "''");
       setFilter(`contains(name,'${escaped}')`);
     } else {
@@ -216,29 +255,108 @@ function App() {
   }, [setFilter, setPage]);
 
   const handleSort = useCallback((field: string, direction: 'asc' | 'desc') => {
-    // Reset to first page when sorting
     setPage(0);
-    // Build SAS API sortBy string (field:ascending or field:descending)
     setSortBy(`${field}:${direction === 'asc' ? 'ascending' : 'descending'}`);
   }, [setSortBy, setPage]);
 
+  // UI App navigation handlers
+  const handleRunUIApp = useCallback((id: string) => {
+    navigate(`/ui-apps/${encodeURIComponent(id)}`);
+  }, [navigate]);
+
+  const handleEditUIApp = useCallback((id: string) => {
+    navigate(`/ui-apps/${encodeURIComponent(id)}/edit`);
+  }, [navigate]);
+
+  const handleBackToUIApps = useCallback(() => {
+    loadRecentUIApps();
+    navigate('/ui-apps');
+  }, [navigate, loadRecentUIApps]);
+
+  const handleBuildUI = useCallback((modId: string) => {
+    navigate(`/ui-apps/new/${encodeURIComponent(modId)}`);
+  }, [navigate]);
+
+  const handleUIAppSaved = useCallback((id: string) => {
+    loadRecentUIApps();
+    navigate(`/ui-apps/${encodeURIComponent(id)}`);
+  }, [navigate, loadRecentUIApps]);
+
+  const handleCreateNewUIApp = useCallback(() => {
+    // Navigate to modules list so user can pick a module
+    // For now, go to modules list with a note
+    navigate('/');
+  }, [navigate]);
+
   // Called when a connection is switched or deleted in settings
   const handleConnectionSwitch = useCallback(async () => {
-    // Reset app state
     setSelectedModule(null);
     setSelectedStep(null);
     setRecentModules([]);
     navigate('/');
-    // Reload active connection info and refresh cached Viya URL for deeplinks
     await loadActiveConnection();
     await initViyaUrl();
-    // Re-check auth for the new connection
     await checkAuth();
   }, [loadActiveConnection, checkAuth, navigate]);
 
   // Render content based on current view
   const renderContent = () => {
     const activeView = getActiveView();
+
+    // UI Apps List View
+    if (activeView === 'ui-apps') {
+      return (
+        <UIAppsList
+          onRun={handleRunUIApp}
+          onEdit={handleEditUIApp}
+          onCreateNew={handleCreateNewUIApp}
+        />
+      );
+    }
+
+    // UI App Runner View
+    if (activeView === 'ui-app-run') {
+      if (uiLoading) return <Loading message="Loading UI App..." />;
+      if (!activeUIDefinition) {
+        return (
+          <div className="error-message">
+            <p>UI App not found.</p>
+            <button onClick={handleBackToUIApps}>Back to UI Apps</button>
+          </div>
+        );
+      }
+      return (
+        <UIRunner
+          definition={activeUIDefinition}
+          onBack={handleBackToUIApps}
+          onEdit={() => handleEditUIApp(activeUIDefinition.id)}
+        />
+      );
+    }
+
+    // UI App Edit View
+    if (activeView === 'ui-app-edit') {
+      if (uiLoading) return <Loading message="Loading UI App..." />;
+      return (
+        <UIBuilder
+          definition={activeUIDefinition}
+          onBack={handleBackToUIApps}
+          onSaved={handleUIAppSaved}
+        />
+      );
+    }
+
+    // UI App New View
+    if (activeView === 'ui-app-new' && uiAppNewModuleId) {
+      return (
+        <UIBuilder
+          definition={null}
+          moduleId={uiAppNewModuleId}
+          onBack={handleBackToUIApps}
+          onSaved={handleUIAppSaved}
+        />
+      );
+    }
 
     // Module List View
     if (activeView === 'modules') {
@@ -290,6 +408,7 @@ function App() {
           onSelectStep={handleSelectStep}
           onBack={handleBackToModules}
           onDelete={handleDeleteModule}
+          onBuildUI={handleBuildUI}
         />
       );
     }
@@ -303,13 +422,10 @@ function App() {
         return <Loading message="Loading steps..." />;
       }
       if (!selectedStep) {
-        // Try to find the step
         const step = steps.find((s) => s.id === stepId);
         if (step) {
-          // Will be set by useEffect
           return <Loading message="Loading step..." />;
         }
-        // Step not found, go back to module details
         navigate(`/modules/${encodeURIComponent(moduleId!)}`);
         return null;
       }
@@ -357,6 +473,8 @@ function App() {
           onSelectModule={handleSelectModule}
           onOpenSettings={() => setShowSettings(true)}
           activeConnectionName={activeConnectionName}
+          recentUIApps={recentUIApps}
+          onSelectUIApp={handleRunUIApp}
         >
           {renderContent()}
         </Layout>
@@ -385,6 +503,8 @@ function App() {
       onSelectModule={handleSelectModule}
       onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
       activeConnectionName={activeConnectionName}
+      recentUIApps={recentUIApps}
+      onSelectUIApp={handleRunUIApp}
     >
       {renderContent()}
     </Layout>

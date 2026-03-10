@@ -22,6 +22,7 @@ interface ModuleDetailsProps {
   onSelectStep: (step: Step) => void;
   onBack: () => void;
   onDelete: (moduleId: string) => Promise<void>;
+  onBuildUI?: (moduleId: string) => void;
 }
 
 export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
@@ -33,6 +34,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   onSelectStep,
   onBack,
   onDelete,
+  onBuildUI,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -211,9 +213,16 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           { label: module.name },
         ]}
         actions={
-          <Button variant="tertiary" onClick={onBack}>
-            Back to List
-          </Button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onBuildUI && (moduleType === 'Model' || moduleType === 'Decision') && (
+              <Button variant="primary" onClick={() => onBuildUI(module.id)}>
+                Build UI
+              </Button>
+            )}
+            <Button variant="tertiary" onClick={onBack}>
+              Back to List
+            </Button>
+          </div>
         }
       />
 

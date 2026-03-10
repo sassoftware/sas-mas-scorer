@@ -1,0 +1,438 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* === UI Builder Styles === */
+
+.ui-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Toolbar */
+.ui-builder__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--sas-white, #fff);
+  border: 1px solid var(--sas-gray-200, #e0e0e0);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-builder__toolbar-left {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ui-builder__toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ui-builder__toolbar-right {
+  display: flex;
+  gap: 8px;
+}
+
+.ui-builder__name-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ui-builder__name-input {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.ui-builder__desc-input {
+  font-size: 0.85rem;
+  color: var(--sas-gray-600, #666);
+}
+
+.ui-builder__option-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.ui-builder__option-label {
+  font-weight: 500;
+  color: var(--sas-gray-600, #666);
+  white-space: nowrap;
+}
+
+.ui-builder__col-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--sas-gray-300, #ccc);
+  border-radius: 4px;
+  background: var(--sas-white, #fff);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--sas-gray-600, #666);
+}
+
+.ui-builder__col-btn--active {
+  background: var(--sas-blue, #1976d2);
+  color: #fff;
+  border-color: var(--sas-blue, #1976d2);
+}
+
+.ui-builder__select {
+  max-width: 140px;
+  font-size: 0.85rem;
+}
+
+.ui-builder__submit-input {
+  max-width: 120px;
+  font-size: 0.85rem;
+}
+
+/* Canvas */
+.ui-builder__canvas-wrapper {
+  display: flex;
+  gap: 16px;
+}
+
+.ui-builder__canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Section */
+.ui-builder__section {
+  background: var(--sas-white, #fff);
+  border: 1px solid var(--sas-gray-200, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ui-builder__section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--sas-gray-50, #f5f5f5);
+  border-bottom: 1px solid var(--sas-gray-200, #e0e0e0);
+}
+
+.ui-builder__section-title-input {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px dashed transparent;
+  background: transparent;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.ui-builder__section-title-input:hover {
+  border-color: var(--sas-gray-300, #ccc);
+  background: var(--sas-white, #fff);
+}
+
+.ui-builder__section-title-input:focus {
+  outline: none;
+  background: var(--sas-white, #fff);
+  border-color: var(--sas-blue, #1976d2);
+  border-style: solid;
+}
+
+.ui-builder__section-remove {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--sas-red, #d32f2f);
+  font-size: 1.2rem;
+  border-radius: 4px;
+}
+
+.ui-builder__section-remove:hover {
+  background: var(--sas-red-50, #fce4ec);
+}
+
+.ui-builder__section-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-builder__move-btn {
+  width: 24px;
+  height: 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--sas-gray-400, #999);
+  font-size: 0.65rem;
+  padding: 0;
+  line-height: 1;
+  border-radius: 2px;
+}
+
+.ui-builder__move-btn:hover:not(:disabled) {
+  color: var(--sas-blue, #1976d2);
+  background: var(--sas-blue-50, #e3f2fd);
+}
+
+.ui-builder__move-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Field List */
+.ui-builder__field-list {
+  padding: 4px;
+}
+
+.ui-builder__field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ui-builder__field-row:hover {
+  background: var(--sas-gray-50, #f5f5f5);
+}
+
+.ui-builder__field-row--selected {
+  background: var(--sas-blue-50, #e3f2fd);
+  border-color: var(--sas-blue, #1976d2);
+}
+
+.ui-builder__field-row--hidden {
+  opacity: 0.5;
+}
+
+.ui-builder__field-move {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-builder__field-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-builder__field-label {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.ui-builder__field-meta {
+  font-size: 0.75rem;
+  color: var(--sas-gray-500, #888);
+}
+
+.ui-builder__field-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.ui-builder__hidden-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  background: var(--sas-gray-200, #e0e0e0);
+  border-radius: 4px;
+  color: var(--sas-gray-600, #666);
+}
+
+.ui-builder__field-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--sas-gray-400, #999);
+  font-size: 0.85rem;
+}
+
+/* Config Panel */
+.ui-builder__config-panel {
+  width: 320px;
+  min-width: 320px;
+  background: var(--sas-white, #fff);
+  border: 1px solid var(--sas-gray-200, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+  align-self: flex-start;
+  position: sticky;
+  top: 16px;
+}
+
+.ui-builder__config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--sas-gray-50, #f5f5f5);
+  border-bottom: 1px solid var(--sas-gray-200, #e0e0e0);
+}
+
+.ui-builder__config-header h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ui-builder__config-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  color: var(--sas-gray-500, #888);
+  border-radius: 4px;
+}
+
+.ui-builder__config-close:hover {
+  background: var(--sas-gray-100, #eee);
+}
+
+.ui-builder__config-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ui-builder__config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ui-builder__config-field > label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--sas-gray-600, #666);
+}
+
+.ui-builder__config-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ui-builder__config-row .ui-builder__config-field {
+  flex: 1;
+}
+
+.ui-builder__option-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ui-builder__option-row .sas-input {
+  flex: 1;
+  font-size: 0.85rem;
+}
+
+.ui-builder__option-remove {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--sas-red, #d32f2f);
+  font-size: 1rem;
+}
+
+/* Config section titles */
+.ui-builder__config-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sas-gray-500, #888);
+  padding-top: 8px;
+  border-top: 1px solid var(--sas-gray-200, #e0e0e0);
+  margin-top: 4px;
+}
+
+.ui-builder__config-type-hint {
+  font-size: 0.75rem;
+  color: var(--sas-gray-500, #888);
+  font-style: italic;
+}
+
+/* Direction badges in field rows */
+.ui-builder__direction-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
+.ui-builder__direction-badge--input {
+  background: var(--sas-blue-50, #e3f2fd);
+  color: var(--sas-blue, #1976d2);
+}
+
+.ui-builder__direction-badge--output {
+  background: var(--sas-green-50, #e8f5e9);
+  color: var(--sas-green, #388e3c);
+}
+
+/* Markdown editor textarea */
+.ui-builder__markdown-editor {
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* Field list actions */
+.ui-builder__field-list-actions {
+  padding: 4px 12px 8px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Static direction badge */
+.ui-builder__direction-badge--static {
+  background: var(--sas-yellow-50, #fff8e1);
+  color: var(--sas-yellow-800, #f57f17);
+}
+
+/* Preview */
+.ui-builder__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ui-builder__preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--sas-yellow-50, #fff8e1);
+  border: 1px solid var(--sas-yellow, #f9a825);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--sas-gray-700, #555);
+}
