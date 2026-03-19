@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { UIField, UISection, WidgetType, FieldOption } from '../../types/uiBuilder';
+import { UIField, UISection, WidgetType, FieldOption, ValueMapping, GaugeColorStop } from '../../types/uiBuilder';
 import { StepParameter } from '../../types';
 import { getCompatibleWidgets, getDefaultWidget } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
@@ -91,12 +91,72 @@ export const FieldConfigPanel: React.FC<Props> = ({
 
   const handleOptionChange = (index: number, key: keyof FieldOption, val: string) => {
     const options = [...(field.validation?.options ?? [])];
-    options[index] = { ...options[index], [key]: val };
+    // Auto-coerce value to number if it looks numeric (for numeric parameter types)
+    const coerced = key === 'value' && val !== '' && !isNaN(Number(val)) ? Number(val) : val;
+    options[index] = { ...options[index], [key]: coerced };
     handleChange('validation', { ...field.validation, options });
+  };
+
+  const handleAddMapping = () => {
+    const mappings = field.validation?.valueMappings ?? [];
+    handleChange('validation', {
+      ...field.validation,
+      valueMappings: [...mappings, { from: '', to: '' }],
+    });
+  };
+
+  const handleRemoveMapping = (index: number) => {
+    const mappings = [...(field.validation?.valueMappings ?? [])];
+    mappings.splice(index, 1);
+    handleChange('validation', { ...field.validation, valueMappings: mappings });
+  };
+
+  const handleMappingChange = (index: number, key: keyof ValueMapping, val: string) => {
+    const mappings = [...(field.validation?.valueMappings ?? [])];
+    mappings[index] = { ...mappings[index], [key]: val };
+    handleChange('validation', { ...field.validation, valueMappings: mappings });
+  };
+
+  const handleAddColorStop = () => {
+    const stops = field.validation?.gaugeConfig?.colorStops ?? [];
+    const config = field.validation?.gaugeConfig ?? { min: 0, max: 100, colorStops: [] };
+    handleChange('validation', {
+      ...field.validation,
+      gaugeConfig: {
+        ...config,
+        colorStops: [...stops, { upTo: 100, color: '#1976d2' }],
+      },
+    });
+  };
+
+  const handleRemoveColorStop = (index: number) => {
+    const config = field.validation?.gaugeConfig;
+    if (!config) return;
+    const stops = [...config.colorStops];
+    stops.splice(index, 1);
+    handleChange('validation', {
+      ...field.validation,
+      gaugeConfig: { ...config, colorStops: stops },
+    });
+  };
+
+  const handleColorStopChange = (index: number, key: keyof GaugeColorStop, val: string) => {
+    const config = field.validation?.gaugeConfig;
+    if (!config) return;
+    const stops = [...config.colorStops];
+    stops[index] = { ...stops[index], [key]: key === 'upTo' ? Number(val) : val };
+    handleChange('validation', {
+      ...field.validation,
+      gaugeConfig: { ...config, colorStops: stops },
+    });
   };
 
   const showOptions = field.widget === 'dropdown' || field.widget === 'radio';
   const showMinMax = field.widget === 'slider' || field.widget === 'number';
+  const showStep = field.widget === 'slider';
+  const showGaugeConfig = field.widget === 'gauge';
+  const showOutputFormat = field.direction === 'output' && field.widget !== 'hidden';
+  const showValueMappings = field.direction === 'output' && (field.widget === 'badge' || field.widget === 'readonly');
 
   return (
     <div className="ui-builder__config-panel">
@@ -299,32 +359,52 @@ export const FieldConfigPanel: React.FC<Props> = ({
         )}
 
         {showMinMax && (
-          <div className="ui-builder__config-row">
-            <div className="ui-builder__config-field">
-              <label>Min</label>
-              <input
-                type="number"
-                className="sas-input"
-                value={field.validation?.min ?? ''}
-                onChange={(e) => handleChange('validation', {
-                  ...field.validation,
-                  min: e.target.value === '' ? undefined : Number(e.target.value),
-                })}
-              />
+          <>
+            <div className="ui-builder__config-row">
+              <div className="ui-builder__config-field">
+                <label>Min</label>
+                <input
+                  type="number"
+                  className="sas-input"
+                  value={field.validation?.min ?? ''}
+                  onChange={(e) => handleChange('validation', {
+                    ...field.validation,
+                    min: e.target.value === '' ? undefined : Number(e.target.value),
+                  })}
+                />
+              </div>
+              <div className="ui-builder__config-field">
+                <label>Max</label>
+                <input
+                  type="number"
+                  className="sas-input"
+                  value={field.validation?.max ?? ''}
+                  onChange={(e) => handleChange('validation', {
+                    ...field.validation,
+                    max: e.target.value === '' ? undefined : Number(e.target.value),
+                  })}
+                />
+              </div>
             </div>
-            <div className="ui-builder__config-field">
-              <label>Max</label>
-              <input
-                type="number"
-                className="sas-input"
-                value={field.validation?.max ?? ''}
-                onChange={(e) => handleChange('validation', {
-                  ...field.validation,
-                  max: e.target.value === '' ? undefined : Number(e.target.value),
-                })}
-              />
-            </div>
-          </div>
+            {showStep && (
+              <div className="ui-builder__config-field">
+                <label>Step Size</label>
+                <input
+                  type="number"
+                  className="sas-input"
+                  value={field.validation?.step ?? ''}
+                  placeholder="1"
+                  onChange={(e) => handleChange('validation', {
+                    ...field.validation,
+                    step: e.target.value === '' ? undefined : Number(e.target.value),
+                  })}
+                />
+                <span className="ui-builder__config-type-hint">
+                  Increment between values (e.g. 0.1, 1, 5)
+                </span>
+              </div>
+            )}
+          </>
         )}
 
         {showOptions && (
@@ -356,6 +436,149 @@ export const FieldConfigPanel: React.FC<Props> = ({
               Add Option
             </Button>
           </div>
+        )}
+
+        {/* === Output Formatting === */}
+        {showOutputFormat && (
+          <>
+            <div className="ui-builder__config-section-title">Output Formatting</div>
+
+            <div className="ui-builder__config-field">
+              <label>Decimal Places</label>
+              <input
+                type="number"
+                className="sas-input"
+                min="0"
+                max="10"
+                value={field.validation?.decimals ?? ''}
+                placeholder="Auto"
+                onChange={(e) => handleChange('validation', {
+                  ...field.validation,
+                  decimals: e.target.value === '' ? undefined : Number(e.target.value),
+                })}
+              />
+              <span className="ui-builder__config-type-hint">
+                Round numeric outputs to this many decimal places
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* === Value Mappings === */}
+        {showValueMappings && (
+          <>
+            <div className="ui-builder__config-section-title">Value Mappings</div>
+            <span className="ui-builder__config-type-hint" style={{ marginBottom: '8px', display: 'block' }}>
+              Map raw output values to display labels (e.g. 0 → Yes, 1 → No)
+            </span>
+
+            {(field.validation?.valueMappings ?? []).map((mapping, i) => (
+              <div key={i} className="ui-builder__option-row">
+                <input
+                  type="text"
+                  className="sas-input"
+                  placeholder="From value"
+                  value={mapping.from}
+                  onChange={(e) => handleMappingChange(i, 'from', e.target.value)}
+                />
+                <span className="ui-builder__mapping-arrow">→</span>
+                <input
+                  type="text"
+                  className="sas-input"
+                  placeholder="Display as"
+                  value={mapping.to}
+                  onChange={(e) => handleMappingChange(i, 'to', e.target.value)}
+                />
+                <button
+                  className="ui-builder__option-remove"
+                  onClick={() => handleRemoveMapping(i)}
+                >&times;</button>
+              </div>
+            ))}
+            <Button variant="tertiary" size="small" onClick={handleAddMapping}>
+              Add Mapping
+            </Button>
+          </>
+        )}
+
+        {/* === Gauge Configuration === */}
+        {showGaugeConfig && (
+          <>
+            <div className="ui-builder__config-section-title">Gauge Settings</div>
+
+            <div className="ui-builder__config-row">
+              <div className="ui-builder__config-field">
+                <label>Range Min</label>
+                <input
+                  type="number"
+                  className="sas-input"
+                  value={field.validation?.gaugeConfig?.min ?? 0}
+                  onChange={(e) => handleChange('validation', {
+                    ...field.validation,
+                    gaugeConfig: {
+                      min: Number(e.target.value),
+                      max: field.validation?.gaugeConfig?.max ?? 100,
+                      colorStops: field.validation?.gaugeConfig?.colorStops ?? [],
+                    },
+                  })}
+                />
+              </div>
+              <div className="ui-builder__config-field">
+                <label>Range Max</label>
+                <input
+                  type="number"
+                  className="sas-input"
+                  value={field.validation?.gaugeConfig?.max ?? 100}
+                  onChange={(e) => handleChange('validation', {
+                    ...field.validation,
+                    gaugeConfig: {
+                      min: field.validation?.gaugeConfig?.min ?? 0,
+                      max: Number(e.target.value),
+                      colorStops: field.validation?.gaugeConfig?.colorStops ?? [],
+                    },
+                  })}
+                />
+              </div>
+            </div>
+
+            <div className="ui-builder__config-field">
+              <label>Color Stops</label>
+              <span className="ui-builder__config-type-hint" style={{ marginBottom: '6px', display: 'block' }}>
+                Define color changes at percentage thresholds (0-100%)
+              </span>
+              {(field.validation?.gaugeConfig?.colorStops ?? []).map((stop, i) => (
+                <div key={i} className="ui-builder__option-row">
+                  <input
+                    type="number"
+                    className="sas-input"
+                    placeholder="Up to %"
+                    min="0"
+                    max="100"
+                    value={stop.upTo}
+                    onChange={(e) => handleColorStopChange(i, 'upTo', e.target.value)}
+                  />
+                  <input
+                    type="color"
+                    className="ui-builder__color-input"
+                    value={stop.color.startsWith('#') ? stop.color : '#1976d2'}
+                    onChange={(e) => handleColorStopChange(i, 'color', e.target.value)}
+                  />
+                  <button
+                    className="ui-builder__option-remove"
+                    onClick={() => handleRemoveColorStop(i)}
+                  >&times;</button>
+                </div>
+              ))}
+              {(field.validation?.gaugeConfig?.colorStops ?? []).length === 0 && (
+                <span className="ui-builder__config-type-hint">
+                  No custom stops — using defaults: red ≤30%, yellow ≤70%, green ≤100%
+                </span>
+              )}
+              <Button variant="tertiary" size="small" onClick={handleAddColorStop}>
+                Add Color Stop
+              </Button>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -41,16 +41,16 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, disabl
     case 'textarea':
       return <TextareaWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
     case 'readonly':
-      return <ReadonlyWidget value={value} />;
+      return <ReadonlyWidget field={field} value={value} />;
     case 'gauge':
-      return <GaugeWidget value={value} label={field.label} />;
+      return <GaugeWidget field={field} value={value} />;
     case 'badge':
-      return <BadgeWidget value={value} />;
+      return <BadgeWidget field={field} value={value} />;
     case 'markdown':
       return <MarkdownWidget content={String(field.defaultValue ?? '')} />;
     case 'hidden':
       return null;
     default:
-      return <ReadonlyWidget value={value} />;
+      return <ReadonlyWidget field={field} value={value} />;
   }
 };

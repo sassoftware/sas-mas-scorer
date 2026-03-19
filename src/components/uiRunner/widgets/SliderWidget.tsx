@@ -14,6 +14,7 @@ interface Props {
 export const SliderWidget: React.FC<Props> = ({ field, value, onChange, disabled }) => {
   const min = field.validation?.min ?? 0;
   const max = field.validation?.max ?? 100;
+  const step = field.validation?.step ?? 1;
   const numValue = typeof value === 'number' ? value : min;
 
   return (
@@ -23,7 +24,7 @@ export const SliderWidget: React.FC<Props> = ({ field, value, onChange, disabled
         className="ui-runner__slider-input"
         min={min}
         max={max}
-        step="any"
+        step={step}
         value={numValue}
         onChange={(e) => onChange(parseFloat(e.target.value))}
         disabled={disabled}

@@ -60,10 +60,10 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
 
   switch (type) {
     case 'decimal':
-      return ['number', 'slider', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'text', 'readonly', 'hidden'];
     case 'integer':
     case 'bigint':
-      return ['number', 'slider', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'text', 'readonly', 'hidden'];
     case 'string':
       return ['text', 'dropdown', 'radio', 'textarea', 'readonly', 'hidden'];
     case 'binary':

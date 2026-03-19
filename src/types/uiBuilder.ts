@@ -68,12 +68,32 @@ export type WidgetType =
 export interface FieldValidation {
   min?: number;
   max?: number;
+  step?: number;
+  decimals?: number;
   options?: FieldOption[];
+  valueMappings?: ValueMapping[];
+  gaugeConfig?: GaugeConfig;
 }
 
 export interface FieldOption {
   label: string;
   value: unknown;
+}
+
+export interface ValueMapping {
+  from: string;
+  to: string;
+}
+
+export interface GaugeConfig {
+  min: number;
+  max: number;
+  colorStops: GaugeColorStop[];
+}
+
+export interface GaugeColorStop {
+  upTo: number;
+  color: string;
 }
 
 export interface UISettings {

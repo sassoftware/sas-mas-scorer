@@ -2,6 +2,34 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [1.2.0] - 2026-03-19
+
+### Added
+
+- Markdown text blocks in UI Builder with inline image support (`![alt](url)`)
+- Move fields between sections via "Placement > Section" dropdown
+- Hidden inputs with default values sent silently on every execution
+- Output formatting: configurable decimal places for rounding numeric outputs
+- Output value mappings: translate raw values to display labels (e.g. 1 → Yes)
+- Gauge customization: configurable range (min/max) and color stop thresholds
+- Slider step size configuration
+- Dropdown widget support for numeric input parameters
+- SAS code example in View API Call (single row scoring using `proc json`, `proc http` with `oauth_bearer=sas_services`)
+- Parallel scoring code examples in View API Call for Python (ThreadPoolExecutor), JavaScript (worker pool), and SAS (`proc ds2` with threaded HTTP)
+- Single Row / Parallel toggle in View API Call to switch between code example modes
+
+### Changed
+
+- "Batch (CSV Upload)" execution mode renamed to "Parallel (CSV Upload)"
+- Section titles in the builder are now visually editable (hover/focus indicators)
+- Side-by-side layout no longer shows redundant "Input"/"Results" headings
+
+### Fixed
+
+- Text blocks not rendering in side-by-side layout mode
+- Reset clearing hidden input defaults
+- package-lock.json out of sync with package.json (caused CI build failures)
+
 ## [1.1.0] - 2026-03-10
 
 ### Added

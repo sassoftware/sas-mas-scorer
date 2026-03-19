@@ -345,6 +345,23 @@
 .ui-builder__option-row .sas-input {
   flex: 1;
   font-size: 0.85rem;
+  min-width: 0;
+}
+
+.ui-builder__mapping-arrow {
+  font-size: 1rem;
+  color: var(--sas-gray-500, #888);
+  flex-shrink: 0;
+}
+
+.ui-builder__color-input {
+  width: 36px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid var(--sas-gray-300, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .ui-builder__option-remove {

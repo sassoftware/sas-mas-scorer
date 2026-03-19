@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
+import { UIField } from '../../../types/uiBuilder';
 
 interface Props {
+  field: UIField;
   value: unknown;
 }
 
@@ -28,17 +30,36 @@ function getColor(val: string): string {
   return colorMap[lower] ?? 'var(--sas-blue, #1976d2)';
 }
 
-export const BadgeWidget: React.FC<Props> = ({ value }) => {
+export const BadgeWidget: React.FC<Props> = ({ field, value }) => {
   if (value === null || value === undefined) {
     return <span className="ui-runner__badge ui-runner__badge--null">--</span>;
   }
 
-  const text = String(value);
-  const bg = getColor(text);
+  const rawStr = String(value);
+  const mappings = field.validation?.valueMappings;
+
+  // Apply value mapping if defined
+  let displayText = rawStr;
+  let wasMapped = false;
+  if (mappings?.length) {
+    const match = mappings.find(m => m.from === rawStr);
+    if (match) {
+      displayText = match.to;
+      wasMapped = true;
+    }
+  }
+
+  // Apply decimal formatting for numeric values (only if not already mapped)
+  const decimals = field.validation?.decimals;
+  if (!wasMapped && decimals !== undefined && typeof value === 'number') {
+    displayText = value.toFixed(decimals);
+  }
+
+  const bg = getColor(displayText);
 
   return (
     <span className="ui-runner__badge" style={{ backgroundColor: bg }}>
-      {text}
+      {displayText}
     </span>
   );
 };
