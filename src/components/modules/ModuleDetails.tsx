@@ -11,7 +11,7 @@ import { Alert } from '../common/Alert';
 import { DataTable, Column } from '../common/DataTable';
 import { PageHeader } from '../layout/Layout';
 import { getSasViyaUrl } from '../../config';
-import { getEntries, Entry } from '../../api';
+import { getEntries, Entry, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
 
 interface ModuleDetailsProps {
   module: Module;
@@ -45,6 +45,12 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [entriesError, setEntriesError] = useState<string | null>(null);
 
+  // Decision source info state
+  const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
+
+  // Published model info state
+  const [modelInfo, setModelInfo] = useState<PublishedModelInfo | null>(null);
+
   // Determine module type
   const moduleType = useMemo(() => getModuleType(module), [module]);
 
@@ -52,6 +58,30 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   const sourceURI = useMemo(() => {
     return module.properties?.find(p => p.name === 'sourceURI')?.value ?? null;
   }, [module.properties]);
+
+  // Fetch decision source info for Decision type modules
+  useEffect(() => {
+    if (moduleType !== 'Decision' || !sourceURI) {
+      setDecisionInfo(null);
+      return;
+    }
+
+    getDecisionSourceInfo(sourceURI)
+      .then(setDecisionInfo)
+      .catch(() => setDecisionInfo(null));
+  }, [moduleType, sourceURI]);
+
+  // Fetch published model info for Model type modules
+  useEffect(() => {
+    if (moduleType !== 'Model') {
+      setModelInfo(null);
+      return;
+    }
+
+    getPublishedModelInfo(module.name)
+      .then(setModelInfo)
+      .catch(() => setModelInfo(null));
+  }, [moduleType, module.name]);
 
   // Fetch entries for Data type modules
   useEffect(() => {
@@ -86,7 +116,6 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
 
     // Check for Intelligent Decisioning source
     if (sourceURI.startsWith('/decisions/flows/')) {
-      // Format: /decisions/flows/{uuid}/revisions/{revisionUuid}
       const match = sourceURI.match(/\/decisions\/flows\/([a-f0-9-]+)/);
       if (match) {
         return {
@@ -98,18 +127,18 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
 
     // Check for Model Manager source
     if (sourceURI.startsWith('/modelRepository/models/')) {
-      // Format: /modelRepository/models/{uuid}
       const match = sourceURI.match(/\/modelRepository\/models\/([a-f0-9-]+)/);
       if (match) {
+        const versionSuffix = modelInfo?.modelVersionId ? `/versions/${modelInfo.modelVersionId}` : '';
         return {
-          url: `${baseUrl}/SASModelManager/models/${match[1]}`,
+          url: `${baseUrl}/SASModelManager/models/${match[1]}${versionSuffix}`,
           label: 'Open in SAS Model Manager',
         };
       }
     }
 
     return null;
-  }, [module.properties]);
+  }, [module.properties, modelInfo]);
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
@@ -250,10 +279,24 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
                   }>{moduleType}</Badge>
                 </dd>
               </div>
-              <div className="module-details__info-item">
-                <dt>Revision</dt>
-                <dd>v{module.revision}</dd>
-              </div>
+              {moduleType === 'Decision' && decisionInfo && (
+                <div className="module-details__info-item">
+                  <dt>Version</dt>
+                  <dd>{decisionInfo.majorRevision}.{decisionInfo.minorRevision}</dd>
+                </div>
+              )}
+              {moduleType === 'Model' && modelInfo && (
+                <div className="module-details__info-item">
+                  <dt>Version</dt>
+                  <dd>{modelInfo.modelVersionId}</dd>
+                </div>
+              )}
+              {moduleType === 'Decision' && decisionInfo?.description && (
+                <div className="module-details__info-item module-details__info-item--full">
+                  <dt>Description</dt>
+                  <dd className="module-details__description-text">{decisionInfo.description}</dd>
+                </div>
+              )}
               <div className="module-details__info-item">
                 <dt>Created</dt>
                 <dd>{new Date(module.creationTimeStamp).toLocaleString()}</dd>

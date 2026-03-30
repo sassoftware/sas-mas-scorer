@@ -42,6 +42,7 @@ export const getStep = async (moduleId: string, stepId: string): Promise<Step> =
 
 export interface ExecuteStepOptions {
   waitTime?: number;
+  timeout?: number;
 }
 
 export const executeStep = async (
@@ -50,11 +51,16 @@ export const executeStep = async (
   input: StepInput,
   options: ExecuteStepOptions = {}
 ): Promise<StepOutput> => {
+  // Default to 120s for scoring requests; decisions can take well beyond the
+  // standard 30s client timeout, which causes 499 (client closed) errors.
+  const timeout = options.timeout ?? 120000;
+
   const response = await apiClient.post<StepOutput>(
     `/modules/${moduleId}/steps/${stepId}`,
     input,
     {
       params: options.waitTime !== undefined ? { waitTime: options.waitTime } : {},
+      timeout,
       headers: {
         'Content-Type': SAS_CONTENT_TYPES.STEP_INPUT,
         Accept: SAS_CONTENT_TYPES.STEP_OUTPUT,

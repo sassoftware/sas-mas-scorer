@@ -2,6 +2,30 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [1.3.0] - 2026-03-20
+
+### Added
+
+- "Created By" column in the module list table
+- Type filter dropdown (All / Model / Decision) in the module list toolbar with server-aware filtering across all pages
+- "Filtered to X / Y modules" counter in the page header when search or type filter is active
+- Version display in Module Information for Decision modules (fetched from decision flow revision as majorRevision.minorRevision)
+- Version display in Module Information for Model modules (fetched from `/modelPublish/models` as modelVersionId)
+- Decision description field in Module Information with text wrapping and ellipsis
+- Source Link and Version columns in batch scoring CSV uploaded to CAS
+- Model Manager deeplinks now include the model version path (`/versions/{modelVersionId}`)
+- "Save as Scenario" button for Decision modules after a successful single score — saves input values and expected outputs as a score definition back to SAS Viya, with SAS Content folder browser, CAS output library selection, and automatic MAS-to-decision variable name mapping (fetches decision flow signature for case-correct names, strips trailing `_` suffix)
+
+### Changed
+
+- Removed Scope and Revision columns from the module list table
+- Removed Revision field from Module Information for Decision and Model type modules (replaced by Version)
+
+### Fixed
+
+- Increased scoring request timeout from 30s to 120s to prevent 499 (client closed) errors when decisions take longer to execute
+- Switching between Single Execution and Parallel (CSV Upload) modes now clears previous results
+
 ## [1.2.0] - 2026-03-19
 
 ### Added

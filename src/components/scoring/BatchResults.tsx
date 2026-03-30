@@ -33,6 +33,7 @@ interface BatchResultsProps {
   stats: BatchStats | null;
   onClear: () => void;
   onDownload: () => void;
+  onUploadToCas?: () => void;
 }
 
 // Format milliseconds to human-readable string
@@ -54,6 +55,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
   stats,
   onClear,
   onDownload,
+  onUploadToCas,
 }) => {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
@@ -78,6 +80,11 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
       <CardHeader
         actions={
           <div className="batch-results__actions">
+            {onUploadToCas && (
+              <Button variant="primary" size="small" onClick={onUploadToCas}>
+                Upload to CAS
+              </Button>
+            )}
             <Button variant="secondary" size="small" onClick={onDownload}>
               Download CSV
             </Button>
@@ -153,6 +160,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                 {outputParams.map(name => (
                   <th key={name}>{name}</th>
                 ))}
+                <th>Runtime</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -178,6 +186,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                         </td>
                       );
                     })}
+                    <td className="batch-results__value">{formatTime(result.executionTime)}</td>
                     <td>
                       <Button
                         variant="tertiary"
@@ -190,7 +199,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                   </tr>
                   {expandedRow === index && (
                     <tr className="batch-results__expanded-row">
-                      <td colSpan={outputParams.length + 3}>
+                      <td colSpan={outputParams.length + 4}>
                         <div className="batch-results__details">
                           <div className="batch-results__detail-section">
                             <h5>Input Values</h5>

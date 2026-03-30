@@ -4,3 +4,6 @@
 export * from './client';
 export * from './modules';
 export * from './steps';
+export * from './cas';
+export * from './folders';
+export * from './scoreDefinitions';

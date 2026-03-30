@@ -80,7 +80,6 @@ function App() {
 
   // Data hooks - only fetch when authenticated
   const {
-    modules,
     loading: loadingModules,
     error: modulesError,
     refresh: refreshModules,
@@ -90,8 +89,12 @@ function App() {
     setPage,
     setFilter,
     setSortBy,
+    setTypeFilter,
     reset: resetModules,
     sortBy,
+    typeFilter,
+    filteredCount,
+    displayModules,
   } = useModules({ enabled: isAuthenticated });
 
   const { steps, loading: loadingSteps } = useSteps(selectedModule?.id ?? null);
@@ -362,18 +365,21 @@ function App() {
     if (activeView === 'modules') {
       return (
         <ModuleList
-          modules={modules}
+          modules={displayModules}
           loading={loadingModules}
           error={modulesError}
           onSelectModule={handleSelectModule}
           onRefresh={refreshModules}
           totalCount={totalCount}
+          filteredCount={filteredCount}
           currentPage={currentPage}
           pageSize={pageSize}
           onPageChange={setPage}
           onSearch={handleSearch}
           onSort={handleSort}
+          onTypeFilter={setTypeFilter}
           sortBy={sortBy}
+          typeFilter={typeFilter}
         />
       );
     }

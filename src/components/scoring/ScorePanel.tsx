@@ -1,8 +1,8 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback } from 'react';
-import { Module, Step, ModuleSource, StepOutput } from '../../types';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { Module, Step, ModuleSource, StepOutput, getModuleType } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
@@ -13,8 +13,10 @@ import { InputForm } from './InputForm';
 import { OutputDisplay } from './OutputDisplay';
 import { CsvUpload } from './CsvUpload';
 import { BatchResults } from './BatchResults';
+import { CasUploadDialog } from './CasUploadDialog';
+import { SaveScenarioDialog } from './SaveScenarioDialog';
 import { useStepExecution } from '../../hooks';
-import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl } from '../../api';
+import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
 
 interface ScorePanelProps {
   module: Module;
@@ -66,6 +68,64 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const [batchExecuting, setBatchExecuting] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
+  const [showCasUpload, setShowCasUpload] = useState(false);
+  const [showSaveScenario, setShowSaveScenario] = useState(false);
+
+  // Decision/Model metadata for CAS upload columns
+  const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
+  const [modelInfo, setModelInfo] = useState<PublishedModelInfo | null>(null);
+  const moduleType = useMemo(() => getModuleType(module), [module]);
+
+  const sourceURI = useMemo(() => {
+    return module.properties?.find(p => p.name === 'sourceURI')?.value ?? null;
+  }, [module.properties]);
+
+  const sourceLink = useMemo(() => {
+    if (!sourceURI) return null;
+    const baseUrl = getSasViyaUrl();
+    if (sourceURI.startsWith('/decisions/flows/')) {
+      const match = sourceURI.match(/\/decisions\/flows\/([a-f0-9-]+)/);
+      if (match) return `${baseUrl}/SASDecisionManager/decisions/${match[1]}`;
+    }
+    if (sourceURI.startsWith('/modelRepository/models/')) {
+      const match = sourceURI.match(/\/modelRepository\/models\/([a-f0-9-]+)/);
+      if (match) {
+        const versionSuffix = modelInfo?.modelVersionId ? `/versions/${modelInfo.modelVersionId}` : '';
+        return `${baseUrl}/SASModelManager/models/${match[1]}${versionSuffix}`;
+      }
+    }
+    return null;
+  }, [sourceURI, modelInfo]);
+
+  useEffect(() => {
+    if (moduleType !== 'Decision' || !sourceURI) {
+      setDecisionInfo(null);
+      return;
+    }
+    getDecisionSourceInfo(sourceURI)
+      .then(setDecisionInfo)
+      .catch(() => setDecisionInfo(null));
+  }, [moduleType, sourceURI]);
+
+  useEffect(() => {
+    if (moduleType !== 'Model') {
+      setModelInfo(null);
+      return;
+    }
+    getPublishedModelInfo(module.name)
+      .then(setModelInfo)
+      .catch(() => setModelInfo(null));
+  }, [moduleType, module.name]);
+
+  const moduleVersion = useMemo(() => {
+    if (moduleType === 'Decision' && decisionInfo) {
+      return `${decisionInfo.majorRevision}.${decisionInfo.minorRevision}`;
+    }
+    if (moduleType === 'Model' && modelInfo) {
+      return modelInfo.modelVersionId;
+    }
+    return `${module.revision}`;
+  }, [moduleType, decisionInfo, modelInfo, module.revision]);
 
   const { output, executing, error, executionTime, executeWithValues, reset } =
     useStepExecution(module.id, step.id);
@@ -798,57 +858,57 @@ title;`;
     return { pythonCode, javascriptCode, sasCode };
   }, [module.id, step.id, step.inputs, step.outputs]);
 
-  // Download batch results as CSV
-  const handleDownloadResults = useCallback(() => {
-    if (batchResults.length === 0) return;
+  // Build CSV string from batch results
+  const buildResultsCsv = useCallback(() => {
+    if (batchResults.length === 0) return '';
 
-    // Get all output parameter names
     const outputParams = batchResults.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [];
     const inputParams = Object.keys(batchResults[0]?.input ?? {});
 
-    // Build CSV header
-    const headers = ['Row', 'Status', ...inputParams.map(p => `Input_${p}`), ...outputParams.map(p => `Output_${p}`), 'Error'];
+    const headers = ['Row', 'Status', ...inputParams.map(p => `Input_${p}`), ...outputParams.map(p => `Output_${p}`), 'Runtime_ms', 'Error', 'Source_Link', 'Version'];
 
-    // Build CSV rows
     const csvRows = batchResults.map(result => {
       const row: string[] = [
         String(result.rowIndex + 1),
         result.error ? 'Failed' : (result.output?.executionState ?? 'Unknown'),
       ];
 
-      // Add input values
       inputParams.forEach(param => {
         const value = result.input[param];
         row.push(value === null || value === undefined ? '' : String(value));
       });
 
-      // Add output values
       outputParams.forEach(param => {
         const outputVar = result.output?.outputs?.find(o => o.name === param);
         const value = outputVar?.value;
         row.push(value === null || value === undefined ? '' : String(value));
       });
 
-      // Add error
+      row.push(String(result.executionTime));
       row.push(result.error ?? '');
-
+      row.push(sourceLink ?? '');
+      row.push(moduleVersion);
       return row;
     });
 
-    // Create CSV content
-    const csvContent = [
+    return [
       headers.join(','),
       ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
+  }, [batchResults, sourceLink, moduleVersion]);
 
-    // Download
+  // Download batch results as CSV
+  const handleDownloadResults = useCallback(() => {
+    const csvContent = buildResultsCsv();
+    if (!csvContent) return;
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${module.name}_${step.id}_results.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
-  }, [batchResults, module.name, step.id]);
+  }, [buildResultsCsv, module.name, step.id]);
 
   return (
     <div className="score-panel">
@@ -994,13 +1054,13 @@ title;`;
       <div className="score-panel__mode-toggle">
         <Button
           variant={executionMode === 'single' ? 'primary' : 'tertiary'}
-          onClick={() => setExecutionMode('single')}
+          onClick={() => { setExecutionMode('single'); setBatchResults([]); setBatchStats(null); }}
         >
           Single Execution
         </Button>
         <Button
           variant={executionMode === 'batch' ? 'primary' : 'tertiary'}
-          onClick={() => setExecutionMode('batch')}
+          onClick={() => { setExecutionMode('batch'); reset(); }}
         >
           Parallel (CSV Upload)
         </Button>
@@ -1129,6 +1189,7 @@ title;`;
                 stats={batchStats}
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
+                onUploadToCas={() => setShowCasUpload(true)}
               />
             )}
           </>
@@ -1146,9 +1207,16 @@ title;`;
           <div className="score-panel__output-section">
             <div className="score-panel__output-header">
               <h3>Results</h3>
-              <Button variant="tertiary" size="small" onClick={handleClearOutputs}>
-                Clear Results
-              </Button>
+              <div className="score-panel__output-actions">
+                {moduleType === 'Decision' && executionMode === 'single' && output?.executionState === 'completed' && sourceURI && (
+                  <Button variant="secondary" size="small" onClick={() => setShowSaveScenario(true)}>
+                    Save as Scenario
+                  </Button>
+                )}
+                <Button variant="tertiary" size="small" onClick={handleClearOutputs}>
+                  Clear Results
+                </Button>
+              </div>
             </div>
             <OutputDisplay
               output={output}
@@ -1158,6 +1226,27 @@ title;`;
           </div>
         )}
       </div>
+
+      {/* CAS Upload Dialog */}
+      {showCasUpload && (
+        <CasUploadDialog
+          csvContent={buildResultsCsv()}
+          defaultTableName={`${module.name}_${step.id}_results`.replace(/[^a-zA-Z0-9_]/g, '_')}
+          onClose={() => setShowCasUpload(false)}
+        />
+      )}
+
+      {showSaveScenario && sourceURI && output && (
+        <SaveScenarioDialog
+          module={module}
+          sourceURI={sourceURI}
+          inputValues={inputValues}
+          inputParameters={step.inputs ?? []}
+          outputValues={output.outputs}
+          outputParameters={step.outputs ?? []}
+          onClose={() => setShowSaveScenario(false)}
+        />
+      )}
     </div>
   );
 };

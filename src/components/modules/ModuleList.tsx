@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Module, getModuleStepCount, getModuleType } from '../../types';
+import { Module, ModuleType, getModuleStepCount, getModuleType } from '../../types';
 import { DataTable, Column } from '../common/DataTable';
-import { Badge, StatusBadge } from '../common/Badge';
+import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
@@ -16,12 +16,15 @@ interface ModuleListProps {
   onSelectModule: (module: Module) => void;
   onRefresh: () => void;
   totalCount: number;
+  filteredCount: number;
   currentPage: number;
   pageSize: number;
   onPageChange: (page: number) => void;
   onSearch: (filter: string) => void;
   onSort: (field: string, direction: 'asc' | 'desc') => void;
+  onTypeFilter: (type: ModuleType | 'All') => void;
   sortBy: string;
+  typeFilter: ModuleType | 'All';
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -43,12 +46,15 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   onSelectModule,
   onRefresh,
   totalCount,
+  filteredCount,
   currentPage,
   pageSize,
   onPageChange,
   onSearch,
   onSort,
+  onTypeFilter,
   sortBy,
+  typeFilter,
 }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,6 +131,9 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     );
   };
 
+  const isFiltered = typeFilter !== 'All' || !!debouncedSearch;
+  const displayCount = typeFilter !== 'All' ? filteredCount : totalCount;
+
   const columns: Column<Module>[] = [
     {
       key: 'name',
@@ -136,12 +145,6 @@ export const ModuleList: React.FC<ModuleListProps> = ({
           <span className="module-name-cell__id">{module.id}</span>
         </div>
       ),
-    },
-    {
-      key: 'scope',
-      header: 'Scope',
-      width: '10%',
-      render: (module) => <StatusBadge status={module.scope} />,
     },
     {
       key: 'type',
@@ -167,11 +170,10 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       },
     },
     {
-      key: 'revision',
-      header: 'Revision',
-      width: '10%',
-      align: 'center',
-      render: (module) => <span>v{module.revision}</span>,
+      key: 'createdBy',
+      header: 'Created By',
+      width: '15%',
+      render: (module) => <span>{module.createdBy ?? ''}</span>,
     },
     {
       key: 'modifiedTimeStamp',
@@ -205,7 +207,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     },
   ];
 
-  const totalPages = Math.ceil(totalCount / pageSize);
+  const totalPages = Math.ceil(displayCount / pageSize);
 
   // Show login prompt when not authenticated
   if (!isAuthenticated && !authLoading) {
@@ -244,7 +246,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     <div className="module-list">
       <PageHeader
         title="Modules"
-        subtitle={`${totalCount} modules loaded`}
+        subtitle={isFiltered ? `Filtered to ${displayCount} / ${totalCount} modules` : `${totalCount} modules loaded`}
         actions={
           <Button variant="secondary" onClick={onRefresh}>
             Refresh
@@ -253,6 +255,19 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       />
 
       <div className="module-list__toolbar">
+        <div className="module-list__type-filter">
+          <label htmlFor="type-filter" className="module-list__type-filter-label">Type:</label>
+          <select
+            id="type-filter"
+            className="module-list__type-filter-select"
+            value={typeFilter}
+            onChange={(e) => onTypeFilter(e.target.value as ModuleType | 'All')}
+          >
+            <option value="All">All</option>
+            <option value="Model">Model</option>
+            <option value="Decision">Decision</option>
+          </select>
+        </div>
         <div className="module-list__search">
           <svg
             className="module-list__search-icon"
@@ -285,11 +300,6 @@ export const ModuleList: React.FC<ModuleListProps> = ({
             </button>
           )}
         </div>
-        {debouncedSearch && (
-          <span className="module-list__search-info">
-            Showing results for "{debouncedSearch}"
-          </span>
-        )}
       </div>
 
       {error && (
