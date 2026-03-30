@@ -5,7 +5,7 @@ import React from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'coverage';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -61,6 +61,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
                 <span>UI Apps</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`sas-sidebar__menu-item ${
+                  activeView === 'flows' || activeView === 'flow-detail' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('flows')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="6" cy="19" r="2" />
+                  <circle cx="18" cy="19" r="2" />
+                  <path d="M12 7v4M12 11l-6 6M12 11l6 6" />
+                </svg>
+                <span>View Flows</span>
               </button>
             </li>
             <li>

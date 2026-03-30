@@ -23,6 +23,7 @@ interface ModuleDetailsProps {
   onBack: () => void;
   onDelete: (moduleId: string) => Promise<void>;
   onBuildUI?: (moduleId: string) => void;
+  onViewFlow?: (flowId: string) => void;
 }
 
 export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
@@ -35,6 +36,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   onBack,
   onDelete,
   onBuildUI,
+  onViewFlow,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -58,6 +60,13 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   const sourceURI = useMemo(() => {
     return module.properties?.find(p => p.name === 'sourceURI')?.value ?? null;
   }, [module.properties]);
+
+  // Extract decision flow ID for "View Flow" navigation
+  const decisionFlowId = useMemo(() => {
+    if (moduleType !== 'Decision' || !sourceURI) return null;
+    const match = sourceURI.match(/\/decisions\/flows\/([a-f0-9-]+)/);
+    return match ? match[1] : null;
+  }, [moduleType, sourceURI]);
 
   // Fetch decision source info for Decision type modules
   useEffect(() => {
@@ -243,6 +252,11 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
         ]}
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
+            {onViewFlow && decisionFlowId && (
+              <Button variant="secondary" onClick={() => onViewFlow(decisionFlowId)}>
+                View Flow
+              </Button>
+            )}
             {onBuildUI && (moduleType === 'Model' || moduleType === 'Decision') && (
               <Button variant="primary" onClick={() => onBuildUI(module.id)}>
                 Build UI

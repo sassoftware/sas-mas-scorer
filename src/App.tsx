@@ -13,6 +13,8 @@ import { UIAppsList } from './components/uiApps/UIAppsList';
 import { UIBuilder } from './components/uiBuilder/UIBuilder';
 import { UIRunner } from './components/uiRunner/UIRunner';
 import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
+import FlowListPage from './components/flows/FlowListPage';
+import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
@@ -67,6 +69,7 @@ function App() {
     const uiAppRunMatch = hash.match(/^\/ui-apps\/([^/]+)$/);
     const uiAppEditMatch = hash.match(/^\/ui-apps\/([^/]+)\/edit$/);
     const uiAppNewMatch = hash.match(/^\/ui-apps\/new\/([^/]+)$/);
+    const flowDetailMatch = hash.match(/^\/flows\/([^/]+)$/);
     return {
       moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
       stepId: stepMatch ? decodeURIComponent(stepMatch[1]) : null,
@@ -75,10 +78,12 @@ function App() {
       uiAppNewModuleId: uiAppNewMatch ? decodeURIComponent(uiAppNewMatch[1]) : null,
       isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
+      isFlowsListView: hash === '/flows' || hash === '/flows/',
+      flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, flowDetailId } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -151,7 +156,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !flowDetailId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -186,6 +191,8 @@ function App() {
 
   // Determine active view from current route
   const getActiveView = (): ViewType => {
+    if (flowDetailId) return 'flow-detail';
+    if (isFlowsListView) return 'flows';
     if (isCoverageView) return 'coverage';
     if (isUIAppsListView) return 'ui-apps';
     if (uiAppNewModuleId) return 'ui-app-new';
@@ -207,6 +214,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/ui-apps');
+    } else if (view === 'flows') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/flows');
     } else if (view === 'coverage') {
       setSelectedModule(null);
       setSelectedStep(null);
@@ -287,6 +298,10 @@ function App() {
     navigate(`/ui-apps/new/${encodeURIComponent(modId)}`);
   }, [navigate]);
 
+  const handleViewFlow = useCallback((flowId: string) => {
+    navigate(`/flows/${encodeURIComponent(flowId)}`);
+  }, [navigate]);
+
   const handleUIAppSaved = useCallback((id: string) => {
     loadRecentUIApps();
     navigate(`/ui-apps/${encodeURIComponent(id)}`);
@@ -312,6 +327,14 @@ function App() {
   // Render content based on current view
   const renderContent = () => {
     const activeView = getActiveView();
+
+    // Flow Views
+    if (activeView === 'flows') {
+      return <FlowListPage />;
+    }
+    if (activeView === 'flow-detail' && flowDetailId) {
+      return <FlowDetailPage flowId={flowDetailId} />;
+    }
 
     // Coverage Analysis View
     if (activeView === 'coverage') {
@@ -427,6 +450,7 @@ function App() {
           onBack={handleBackToModules}
           onDelete={handleDeleteModule}
           onBuildUI={handleBuildUI}
+          onViewFlow={handleViewFlow}
         />
       );
     }
