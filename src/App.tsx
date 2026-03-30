@@ -12,6 +12,7 @@ import { ScorePanel } from './components/scoring/ScorePanel';
 import { UIAppsList } from './components/uiApps/UIAppsList';
 import { UIBuilder } from './components/uiBuilder/UIBuilder';
 import { UIRunner } from './components/uiRunner/UIRunner';
+import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
 import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
@@ -73,10 +74,11 @@ function App() {
       uiAppEditId: uiAppEditMatch ? decodeURIComponent(uiAppEditMatch[1]) : null,
       uiAppNewModuleId: uiAppNewMatch ? decodeURIComponent(uiAppNewMatch[1]) : null,
       isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
+      isCoverageView: hash === '/coverage' || hash === '/coverage/',
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -149,7 +151,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -184,6 +186,7 @@ function App() {
 
   // Determine active view from current route
   const getActiveView = (): ViewType => {
+    if (isCoverageView) return 'coverage';
     if (isUIAppsListView) return 'ui-apps';
     if (uiAppNewModuleId) return 'ui-app-new';
     if (uiAppEditId) return 'ui-app-edit';
@@ -204,6 +207,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/ui-apps');
+    } else if (view === 'coverage') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/coverage');
     }
   }, [resetModules, navigate]);
 
@@ -305,6 +312,11 @@ function App() {
   // Render content based on current view
   const renderContent = () => {
     const activeView = getActiveView();
+
+    // Coverage Analysis View
+    if (activeView === 'coverage') {
+      return <CoverageAnalysis />;
+    }
 
     // UI Apps List View
     if (activeView === 'ui-apps') {

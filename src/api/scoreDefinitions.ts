@@ -37,6 +37,34 @@ export interface ScoreDefinitionResponse {
   creationTimeStamp: string;
 }
 
+// Summary item returned by the collection endpoint
+export interface ScoreDefinitionSummary {
+  id: string;
+  name: string;
+  description?: string;
+  createdBy: string;
+  creationTimeStamp: string;
+  modifiedBy: string;
+  modifiedTimeStamp: string;
+}
+
+// Full score definition detail (individual GET)
+export interface ScoreDefinitionDetail {
+  id: string;
+  name: string;
+  description?: string;
+  createdBy: string;
+  creationTimeStamp: string;
+  objectDescriptor?: {
+    name: string;
+    type: string;
+    uri: string;
+  };
+  inputData?: { type: string };
+  mappings: ScoreDefinitionMapping[];
+  properties?: Record<string, string>;
+}
+
 // --- API ---
 
 export const createScoreDefinition = async (
@@ -54,5 +82,38 @@ export const createScoreDefinition = async (
       },
     }
   );
+  return response.data;
+};
+
+/**
+ * List scenario-type score definitions for a specific decision flow.
+ * Uses the advanced filter to find Scenario input types that aren't trashed.
+ */
+export const listDecisionScenarios = async (
+  decisionFlowId: string
+): Promise<ScoreDefinitionSummary[]> => {
+  const filter = `and(contains(objectDescriptor.uri,'/decisions/flows/${decisionFlowId}'),or(isNull(folderType),ne(folderType,'trashFolder')),eq(inputData.type,'Scenario'))`;
+
+  const response = await sasViyaClient.get('/scoreDefinitions/definitions', {
+    params: { filter, limit: 100 },
+    headers: {
+      Accept: 'application/vnd.sas.collection+json, application/json',
+      'Accept-Item': 'application/vnd.sas.score.definition+json',
+    },
+  });
+
+  return response.data.items ?? [];
+};
+
+/**
+ * Fetch the full detail of a single score definition (including mappings).
+ */
+export const getScoreDefinition = async (
+  id: string
+): Promise<ScoreDefinitionDetail> => {
+  const response = await sasViyaClient.get(`/scoreDefinitions/definitions/${id}`, {
+    headers: { Accept: 'application/vnd.sas.score.definition+json' },
+  });
+
   return response.data;
 };

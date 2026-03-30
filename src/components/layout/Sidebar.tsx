@@ -5,7 +5,7 @@ import React from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'coverage';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -61,6 +61,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
                 <span>UI Apps</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`sas-sidebar__menu-item ${
+                  activeView === 'coverage' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('coverage')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span>Test Coverage</span>
               </button>
             </li>
           </ul>
@@ -143,7 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v1.3.0</div>
+        <div className="sas-sidebar__version">MAS Scorer v2.0.0</div>
       </div>
     </aside>
   );

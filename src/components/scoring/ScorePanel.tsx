@@ -15,6 +15,7 @@ import { CsvUpload } from './CsvUpload';
 import { BatchResults } from './BatchResults';
 import { CasUploadDialog } from './CasUploadDialog';
 import { SaveScenarioDialog } from './SaveScenarioDialog';
+import { LoadScenarioDialog } from './LoadScenarioDialog';
 import { useStepExecution } from '../../hooks';
 import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
 
@@ -70,6 +71,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const [showCasUpload, setShowCasUpload] = useState(false);
   const [showSaveScenario, setShowSaveScenario] = useState(false);
+  const [showLoadScenario, setShowLoadScenario] = useState(false);
 
   // Decision/Model metadata for CAS upload columns
   const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
@@ -1121,6 +1123,11 @@ title;`;
               <CardHeader
                 actions={
                   <div className="score-panel__input-actions">
+                    {moduleType === 'Decision' && sourceURI && (
+                      <Button variant="tertiary" size="small" onClick={() => setShowLoadScenario(true)}>
+                        Load Scenario
+                      </Button>
+                    )}
                     <Button variant="tertiary" size="small" onClick={handleAutoFill}>
                       Auto-fill Defaults
                     </Button>
@@ -1233,6 +1240,15 @@ title;`;
           csvContent={buildResultsCsv()}
           defaultTableName={`${module.name}_${step.id}_results`.replace(/[^a-zA-Z0-9_]/g, '_')}
           onClose={() => setShowCasUpload(false)}
+        />
+      )}
+
+      {showLoadScenario && sourceURI && (
+        <LoadScenarioDialog
+          sourceURI={sourceURI}
+          inputParameters={step.inputs ?? []}
+          onLoad={(values) => setInputValues(prev => ({ ...prev, ...values }))}
+          onClose={() => setShowLoadScenario(false)}
         />
       )}
 
