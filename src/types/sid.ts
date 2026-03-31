@@ -165,7 +165,27 @@ export interface DecisionFlow {
   hasWarningsInSubDecisions?: boolean;
   subjectId?: { id: string; name: string };
   subjectLevel?: string;
+  workflowDefinitionId?: string;
   properties?: Record<string, unknown>;
+}
+
+export interface WorkflowHistoryItem {
+  statusChangedFrom: string;
+  statusChangedTo: string;
+  modifiedTimeStamp: number;
+  modifiedBy: string;
+  version: string;
+  versionId: string;
+  comments: string | null;
+  workflowName: string;
+  workflowVersion: number;
+  workflowProcessId: string;
+}
+
+export interface WorkflowHistoryResponse {
+  items: WorkflowHistoryItem[];
+  revisions: string[];
+  count: number;
 }
 
 export interface SidPaginatedResponse<T> {

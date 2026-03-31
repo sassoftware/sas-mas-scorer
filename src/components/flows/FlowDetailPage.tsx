@@ -9,6 +9,7 @@ import FlowHeader from './FlowHeader';
 import FlowDiagram from './FlowDiagram';
 import FlowSidePanel from './FlowSidePanel';
 import FlowCodeModal from './FlowCodeModal';
+import WorkflowHistoryModal from './WorkflowHistoryModal';
 
 interface FlowDetailPageProps {
   flowId: string;
@@ -30,6 +31,9 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
 
   // Code modal
   const [codeModal, setCodeModal] = useState<{ href: string; language: string } | null>(null);
+
+  // Workflow history modal
+  const [showWorkflowHistory, setShowWorkflowHistory] = useState(false);
 
   // Fetch main decision
   useEffect(() => {
@@ -116,7 +120,11 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
         Back to list
       </button>
 
-      <FlowHeader flow={flow} subDecisionCache={subDecisionCache} />
+      <FlowHeader
+        flow={flow}
+        subDecisionCache={subDecisionCache}
+        onShowWorkflowHistory={() => setShowWorkflowHistory(true)}
+      />
 
       {subDecisionsLoading && (
         <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--sas-gray-400)', marginBottom: '8px' }}>
@@ -143,6 +151,14 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
           href={codeModal.href}
           language={codeModal.language}
           onClose={() => setCodeModal(null)}
+        />
+      )}
+
+      {showWorkflowHistory && flow && (
+        <WorkflowHistoryModal
+          decisionId={flow.id}
+          workflowName={flow.properties?.workflowName as string | undefined}
+          onClose={() => setShowWorkflowHistory(false)}
         />
       )}
     </div>

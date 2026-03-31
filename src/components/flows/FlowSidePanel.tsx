@@ -7,9 +7,10 @@ import { NODE_COLORS, NODE_TYPE_LABELS, CODE_TYPE_LABELS } from '../../flow/cons
 import { buildConditionExpression } from '../../utils/classify';
 import { directionLabel } from '../../utils/direction';
 import { buildDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../../utils/deepLinks';
+import { getSasViyaUrl } from '../../config';
 import { getRuleSet, getRuleSetRules, type RuleSetDetail, type BusinessRule } from '../../api/rulesets';
 import { getSidModel, type SidModelDetail } from '../../api/sidModels';
-import { getCodeFileDetail, getFileContent, stripLeadingJsonComment, type CodeFileDetail } from '../../api/codeFiles';
+import { getCodeFileDetail, type CodeFileDetail } from '../../api/codeFiles';
 import { getTreatmentDefinitionByRevision, getTreatmentGroupByUri, type TreatmentDefinitionDetail, type TreatmentGroupDetail } from '../../api/treatments';
 import { getDecisionNodeType, type DecisionNodeTypeDetail } from '../../api/nodeTypes';
 import { getSegmentationTree, type SegmentationTreeDetail, type SegTreeNode } from '../../api/segmentationTrees';
@@ -24,13 +25,38 @@ function extractIdFromUri(uri: string): string {
   return parts[parts.length - 1] ?? uri;
 }
 
+/** Map a SAS API URI to a deep-linkable asset type.
+ *  Patterns use UUID boundary to avoid matching sub-resource paths
+ *  (e.g. /decisions/flows/{id}/revisions/… should NOT match as a decision).
+ *  Custom object step links are not deep-linkable. */
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const URI_ASSET_MAP: [RegExp, string][] = [
+  [new RegExp(`/decisions/flows/${UUID}$`), 'decision'],
+  [new RegExp(`/decisions/codeFiles/${UUID}`), 'codeFile'],
+  [new RegExp(`/decisions/ruleSets/${UUID}`), 'ruleset'],
+  [new RegExp(`/decisions/decisionNodeTypes/${UUID}`), 'dntStatic'],
+  [new RegExp(`/decisions/treatmentGroups/${UUID}`), 'treatmentGroup'],
+  [new RegExp(`/decisions/treatments/${UUID}`), 'treatment'],
+  [new RegExp(`/decisions/segmentationTrees/${UUID}`), 'segmentationTree'],
+  [new RegExp(`/modelRepository/models/${UUID}`), 'model'],
+];
+
+function buildDeepLinkFromUri(uri: string) {
+  for (const [re, assetType] of URI_ASSET_MAP) {
+    if (re.test(uri)) return buildDeepLink(assetType, uri);
+  }
+  return null;
+}
+
 function isTreatmentGroup(type?: string): boolean {
   return type === 'treatmentGroup';
 }
 
-function displayLength(length?: number): string {
-  if (length === undefined || length === null) return '';
-  return String(length);
+function displayLength(length?: number, dataType?: string): string {
+  if (length !== undefined && length !== null) return String(length);
+  const t = (dataType ?? '').toLowerCase();
+  if (t === 'decimal' || t === 'integer' || t === 'number' || t === 'numeric') return '8';
+  return '100';
 }
 
 function directionBadgeClass(direction?: string): string {
@@ -69,7 +95,7 @@ function VariableTable({ variables }: { variables: { name: string; direction?: s
       </thead>
       <tbody>
         {variables.map((v, i) => (
-          <tr key={i}>
+          <tr key={i} title={v.description || undefined}>
             <td>{v.name}</td>
             <td>
               <span className={directionBadgeClass(v.direction)}>
@@ -77,7 +103,7 @@ function VariableTable({ variables }: { variables: { name: string; direction?: s
               </span>
             </td>
             <td>{v.dataType ?? ''}</td>
-            <td>{displayLength(v.length)}</td>
+            <td>{displayLength(v.length, v.dataType)}</td>
           </tr>
         ))}
       </tbody>
@@ -133,7 +159,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
   const [ruleSetRules, setRuleSetRules] = useState<BusinessRule[]>([]);
   const [modelDetail, setModelDetail] = useState<SidModelDetail | null>(null);
   const [codeFileDetail, setCodeFileDetail] = useState<CodeFileDetail | null>(null);
-  const [codeFileContent, setCodeFileContent] = useState<string | null>(null);
+  const [codeFileHref, setCodeFileHref] = useState<string>('');
   const [treatmentDefs, setTreatmentDefs] = useState<TreatmentDefinitionDetail[]>([]);
   const [treatmentEligibilityRuleSets, setTreatmentEligibilityRuleSets] = useState<Map<string, RuleSetDetail>>(new Map());
   const [treatmentGroup, setTreatmentGroup] = useState<TreatmentGroupDetail | null>(null);
@@ -160,7 +186,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
       setRuleSetRules([]);
       setModelDetail(null);
       setCodeFileDetail(null);
-      setCodeFileContent(null);
+      setCodeFileHref('');
       setTreatmentDefs([]);
       setTreatmentEligibilityRuleSets(new Map());
       setTreatmentGroup(null);
@@ -204,15 +230,9 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
             const href = codeFileLink?.href ?? codeFileLink?.uri ?? currentStep.customObject?.uri ?? '';
             if (href) {
               const detail = await getCodeFileDetail(href);
-              if (!cancelled) setCodeFileDetail(detail);
-
-              if (detail.fileUri) {
-                try {
-                  const content = await getFileContent(detail.fileUri);
-                  if (!cancelled) setCodeFileContent(content);
-                } catch (e) {
-                  errs.push(`Code content: ${e instanceof Error ? e.message : String(e)}`);
-                }
+              if (!cancelled) {
+                setCodeFileDetail(detail);
+                setCodeFileHref(href);
               }
             }
           } catch (e) {
@@ -317,10 +337,6 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
   /* ---- Derived values ---- */
   const conditionExpr = step ? buildConditionExpression(step) : '';
   const codeLanguage = step?.customObject?.type ? (CODE_TYPE_LABELS[step.customObject.type] ?? '') : '';
-
-  const codePreview = codeFileContent
-    ? stripLeadingJsonComment(codeFileContent)
-    : null;
 
   /* ---- JSX ---- */
   return (
@@ -542,10 +558,10 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
         {/* 10. Code File */}
         {codeFileDetail && (
           <Section title="Code File">
-            {onViewCode && codeFileDetail.fileUri && (
+            {onViewCode && codeFileHref && (
               <button
-                className="flow-sp-preview__view-btn"
-                onClick={() => onViewCode(codeFileDetail.fileUri!, codeLanguage || 'text')}
+                className="flow-sp-view-code-btn"
+                onClick={() => onViewCode(codeFileHref, codeLanguage || 'text')}
               >
                 View Full Code
               </button>
@@ -583,18 +599,6 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
                 <h5 className="flow-side-panel__section-title">Signature</h5>
                 <VariableTable variables={codeFileDetail.signature} />
               </>
-            )}
-            {codePreview && codePreview.code && (
-              <div className="flow-sp-preview">
-                <h5 className="flow-side-panel__section-title">Code Preview</h5>
-                {codePreview.headerJson && (
-                  <details className="flow-sp-raw-json">
-                    <summary>Header JSON</summary>
-                    <pre>{JSON.stringify(codePreview.headerJson, null, 2)}</pre>
-                  </details>
-                )}
-                <pre className="flow-sp-code">{codePreview.code.slice(0, 2000)}{codePreview.code.length > 2000 ? '\n...(truncated)' : ''}</pre>
-              </div>
             )}
           </Section>
         )}
@@ -798,11 +802,11 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
                   </thead>
                   <tbody>
                     {modelDetail.inputVariables.map((v, i) => (
-                      <tr key={i}>
+                      <tr key={i} title={v.description || undefined}>
                         <td>{v.name}</td>
                         <td>{v.role ?? ''}</td>
                         <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length)}</td>
+                        <td>{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -823,11 +827,11 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
                   </thead>
                   <tbody>
                     {modelDetail.outputVariables.map((v, i) => (
-                      <tr key={i}>
+                      <tr key={i} title={v.description || undefined}>
                         <td>{v.name}</td>
                         <td>{v.role ?? ''}</td>
                         <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length)}</td>
+                        <td>{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -998,22 +1002,31 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
         {/* 17. API Links */}
         {step?.links && step.links.length > 0 && (
           <Section title="API Links">
-            <table className="flow-sp-table">
-              <thead>
-                <tr>
-                  <th>Rel</th>
-                  <th>URI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {step.links.map((link, i) => (
-                  <tr key={i}>
-                    <td>{link.rel}</td>
-                    <td className="flow-sp-code">{link.uri || link.href}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="flow-sp-links-list">
+              {step.links.map((link, i) => {
+                const uri = link.uri || link.href;
+                const deepLink = uri ? buildDeepLinkFromUri(uri) : null;
+                return (
+                  <div key={i} className="flow-sp-link-item">
+                    {deepLink && <FlowDeepLink url={deepLink.url} label={deepLink.label} />}
+                    {uri && (
+                      <a
+                        href={uri}
+                        className="flow-sp-link-uri"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.open(uri.startsWith('http') ? uri : `${getSasViyaUrl()}${uri}`, '_blank');
+                        }}
+                      >
+                        {uri}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </Section>
         )}
 

@@ -237,6 +237,179 @@
   border-radius: var(--radius-full);
 }
 
+/* ─── Workflow ─── */
+
+.flow-header__workflow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.flow-header__workflow-meta {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+}
+
+.flow-wf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-full);
+}
+
+.flow-wf-badge--none {
+  background: var(--sas-gray-100);
+  color: var(--sas-gray-500);
+}
+
+.flow-wf-badge--developing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.flow-wf-badge--reviewready {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.flow-wf-badge--approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.flow-wf-badge--deploymentready {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.flow-wf-history-btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-blue-600, #2563eb);
+  background: transparent;
+  border: 1px solid var(--sas-blue-600, #2563eb);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.flow-wf-history-btn:hover {
+  background: var(--sas-blue-600, #2563eb);
+  color: #fff;
+}
+
+/* ─── Workflow History Modal ─── */
+
+.flow-wf-history__dialog {
+  background: var(--sas-gray-900, #111827);
+  border-radius: var(--radius-lg, 12px);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+.flow-wf-history__dialog .flow-code-modal__header {
+  border-bottom-color: var(--sas-gray-700, #374151);
+}
+
+.flow-wf-history__dialog .flow-code-modal__title {
+  color: var(--sas-gray-100, #f3f4f6);
+}
+
+.flow-wf-history__dialog .flow-code-modal__close-btn {
+  color: var(--sas-gray-300, #d1d5db);
+}
+
+.flow-wf-history__body {
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.flow-wf-history__title {
+  margin: 0 0 var(--space-3, 12px);
+  font-size: var(--font-size-base, 16px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--sas-gray-100, #f3f4f6);
+}
+
+.flow-wf-history__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 20px;
+}
+
+.flow-wf-history__timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--sas-gray-600, #4b5563);
+}
+
+.flow-wf-history__entry {
+  position: relative;
+  padding: var(--space-2) 0;
+}
+
+.flow-wf-history__dot {
+  position: absolute;
+  left: -18px;
+  top: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sas-blue-600, #2563eb);
+  border: 2px solid var(--sas-gray-900, #111827);
+}
+
+.flow-wf-history__content {
+  padding-left: var(--space-2);
+}
+
+.flow-wf-history__transition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm, 14px);
+}
+
+.flow-wf-history__state {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--sas-gray-700, #374151);
+  color: var(--sas-gray-100, #f3f4f6);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.flow-wf-history__arrow {
+  color: var(--sas-gray-400, #9ca3af);
+}
+
+.flow-wf-history__meta {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--sas-gray-400, #9ca3af);
+  margin-top: var(--space-1, 4px);
+}
+
+.flow-wf-history__comment {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--sas-gray-300, #d1d5db);
+  margin-top: var(--space-1, 4px);
+  font-style: italic;
+}
+
 .flow-header__vars-toggle {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -464,6 +637,25 @@
   overflow-x: auto;
 }
 
+.flow-sp-view-code-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #ffffff;
+  background-color: var(--sas-blue-600, #2563eb);
+  border: 2px solid var(--sas-blue-700, #1d4ed8);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-bottom: var(--space-3);
+}
+
+.flow-sp-view-code-btn:hover {
+  background-color: var(--sas-blue-700, #1d4ed8);
+}
+
 .flow-sp-detail {
   display: flex;
   justify-content: space-between;
@@ -579,6 +771,7 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+  table-layout: fixed;
 }
 
 .flow-sp-var-table th {
@@ -595,6 +788,77 @@
   padding: var(--space-2) var(--space-3);
   color: var(--sas-gray-800);
   border-bottom: 1px solid var(--sas-gray-100);
+}
+
+.flow-sp-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.flow-sp-link-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--sas-gray-100);
+}
+
+.flow-sp-link-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.flow-sp-link-uri {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--sas-blue-600, #2563eb);
+  word-break: break-all;
+  text-decoration: none;
+}
+
+.flow-sp-link-uri:hover {
+  text-decoration: underline;
+}
+
+/* ─── Variable table columns (shared by header + side panel) ─── */
+
+.flow-var-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  table-layout: fixed;
+}
+
+.flow-var-table__table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--sas-gray-50);
+  color: var(--sas-gray-600);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.flow-var-table__table td {
+  padding: var(--space-2) var(--space-3);
+  color: var(--sas-gray-800);
+  border-bottom: 1px solid var(--sas-gray-100);
+  vertical-align: top;
+}
+
+.flow-var-table__col-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-var-table__col-desc {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ─── Code Modal ─── */

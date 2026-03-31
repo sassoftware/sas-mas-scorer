@@ -2,6 +2,33 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.0.0] - 2026-03-30
+
+### Added
+
+- **View Flows** page — new primary navigation entry for exploring SAS Intelligent Decisioning decision flows as interactive diagrams
+  - Paginated, searchable decision list with sortable Name column, client-side case-insensitive filtering on name and description, and full API pagination to fetch all decisions
+  - Interactive flow diagram (React Flow + Dagre auto-layout) with all node types: sub-decisions, rule sets, models, code files, conditions, assignments, A/B tests, parallel processes, record contacts, treatment groups, and segmentation trees
+  - Sub-decision recursive expansion up to depth 3 with color-coded group boxes
+  - Node inspection side panel with rich API-fetched metadata for rule sets (rules, conditions, actions), models (algorithm, variables, properties), code files (inline preview, syntax-highlighted viewer via Prism.js), treatment groups (member definitions, attributes, eligibility), segmentation trees (split conditions, outcomes, decision tree), and variable assignments/mappings
+  - Markdown + Mermaid diagram export with enriched node details
+  - Deep links to SAS Intelligent Decisioning for all asset types
+  - Clickable API links in side panel with deep links to SAS Intelligent Decisioning / SAS Model Manager where applicable
+  - Workflow status display in flow header showing current state, last modified by/date, or "No Workflow" when unassigned
+  - Workflow history popup with timeline view of all state transitions (from/to, who, when, comments)
+  - Workflow information included in Markdown export (state, history table)
+  - Code viewer popup with Prism.js syntax highlighting for Python, DS2, SQL, and Query code files (ESC to dismiss)
+  - Legend, minimap, and zoom controls on the flow diagram
+- **View Flow** button on Module Details page for Decision-type modules — navigates directly to the flow diagram
+- **Flow diagram icon** on Test Coverage page for decision items — links to the in-app flow viewer
+- **Test Coverage Analysis** page — new primary navigation entry that collects all Decisions, Business Rules, Code Files, Treatment Definitions, and Segmentation Trees from SAS Viya, links them to Score Definition test scenarios, and visualises coverage
+  - Real-time progress indicator showing collection status across all 5 asset types + score definitions
+  - Summary dashboard with circular coverage gauge, stat cards (total/covered/uncovered), and horizontal bar charts per asset type color-coded by coverage level
+  - Filterable, sortable detail table of all assets with search, type filter, and coverage filter
+  - Deep links to SAS Intelligent Decisioning for each asset type (Decisions, Business Rules, Code Files, Treatment Definitions, Segmentation Trees)
+  - Export to Markdown report and CSV
+- **Load Scenario** for Decision modules in single scoring mode — loads saved test scenarios from Score Definitions back into the input form, with reverse variable name mapping (decision names → MAS parameter names) and automatic value unwrapping for dates, datetimes, and datagrid types
+
 ## [1.3.0] - 2026-03-20
 
 ### Added

@@ -61,6 +61,14 @@ export default function FlowCodeModal({ href, language, onClose }: CodeModalProp
     if (code) Prism.highlightAll();
   }, [code]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const prismLang = PRISM_LANG_MAP[language] ?? 'clike';
 
   return (

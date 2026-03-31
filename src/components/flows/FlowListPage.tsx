@@ -1,14 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listDecisions } from '../../api/decisions';
+import { listAllDecisions } from '../../api/decisions';
 import type { DecisionFlow } from '../../types/sid';
 import { formatTimestamp, truncate } from '../../utils/formatters';
 
 const PAGE_SIZE = 20;
-const FETCH_LIMIT = 10000;
 
 type SortDir = 'asc' | 'desc';
 
@@ -20,15 +19,15 @@ export default function FlowListPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
-  const fetchDecisions = useCallback(async (searchTerm: string, sort: SortDir) => {
+
+  const fetchDecisions = useCallback(async (sort: SortDir) => {
     setLoading(true);
     setError('');
     try {
       const sortBy = `name:${sort === 'asc' ? 'ascending' : 'descending'}`;
-      const result = await listDecisions(searchTerm || undefined, 0, FETCH_LIMIT, sortBy);
-      setAllDecisions(result.items ?? []);
+      const items = await listAllDecisions(undefined, sortBy);
+      setAllDecisions(items);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -36,24 +35,34 @@ export default function FlowListPage() {
     }
   }, []);
 
-  // Debounced search + sort changes
+  // Fetch all decisions when sort changes
   useEffect(() => {
-    clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {
-      setPage(0);
-      fetchDecisions(search, sortDir);
-    }, 300);
-    return () => clearTimeout(searchTimeout.current);
-  }, [search, sortDir, fetchDecisions]);
+    fetchDecisions(sortDir);
+  }, [sortDir, fetchDecisions]);
 
-  const total = allDecisions.length;
+  // Reset page when search changes
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
+
+  // Client-side case-insensitive filter on name and description
+  const filtered = useMemo(() => {
+    if (!search.trim()) return allDecisions;
+    const term = search.trim().toLowerCase();
+    return allDecisions.filter((d) =>
+      (d.name ?? '').toLowerCase().includes(term) ||
+      (d.description ?? '').toLowerCase().includes(term),
+    );
+  }, [allDecisions, search]);
+
+  const total = filtered.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = page + 1;
 
   const displayDecisions = useMemo(() => {
     const start = page * PAGE_SIZE;
-    return allDecisions.slice(start, start + PAGE_SIZE);
-  }, [allDecisions, page]);
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
   const toggleSort = () => {
     setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));

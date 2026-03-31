@@ -17,7 +17,7 @@ import { getCodeFileDetail, getFileContent, stripLeadingJsonComment, type CodeFi
 import { getTreatmentGroupByUri, getTreatmentDefinitionByRevision, type TreatmentGroupDetail, type TreatmentDefinitionDetail } from '../api/treatments';
 import { getDecisionNodeType, type DecisionNodeTypeDetail } from '../api/nodeTypes';
 import { getSegmentationTree, type SegmentationTreeDetail } from '../api/segmentationTrees';
-import { getDecisionRevision } from '../api/decisions';
+import { getDecisionRevision, getWorkflowHistory } from '../api/decisions';
 
 /* ================================================================== */
 /*  Mermaid diagram generation (with subgraph support)                 */
@@ -1018,6 +1018,7 @@ export async function generateMarkdownExport(
   // Table of Contents
   let toc = '## Table of Contents\n\n';
   toc += '- [Overview](#overview)\n';
+  toc += '  - [Workflow](#workflow)\n';
   if (inputs.length > 0 || outputs.length > 0) toc += '- [Variables](#variables)\n';
   toc += '- [Flow Diagram](#flow-diagram)\n';
   if (nodes.length > 0) {
@@ -1045,6 +1046,39 @@ export async function generateMarkdownExport(
   md += `- **Modified**: ${flow.modifiedTimeStamp}\n`;
   if (flow.validationStatus) md += `- **Validation Status**: ${flow.validationStatus}\n`;
   if (flow.description) md += `\n${flow.description}\n`;
+
+  // Workflow
+  const NULL_WF_ID = 'WF00000000-0000-0000-0000-000000000000';
+  const wfId = flow.workflowDefinitionId ?? (flow.properties?.workflowDefinitionId as string | undefined);
+  const hasWorkflow = !!wfId && wfId !== NULL_WF_ID;
+  md += '\n### Workflow\n\n';
+  if (hasWorkflow) {
+    const wfState = flow.properties?.workflowState as string | undefined;
+    const wfModifiedBy = flow.properties?.workflowModifiedBy as string | undefined;
+    const wfModifiedTs = flow.properties?.workflowModifiedTimeStamp as string | undefined;
+    if (wfState) md += `- **State**: ${wfState}\n`;
+    if (wfModifiedBy) md += `- **Modified by**: ${wfModifiedBy}\n`;
+    if (wfModifiedTs) md += `- **Modified**: ${wfModifiedTs}\n`;
+    md += `- **Workflow Definition ID**: \`${wfId}\`\n`;
+
+    try {
+      onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching workflow history...' });
+      const history = await getWorkflowHistory(flow.id);
+      if (history.items && history.items.length > 0) {
+        md += '\n#### Workflow History\n\n';
+        md += '| From | To | Changed By | Date | Version | Comments |\n';
+        md += '|------|----|-----------|------|---------|----------|\n';
+        for (const h of history.items) {
+          const date = new Date(h.modifiedTimeStamp).toLocaleString();
+          md += `| ${h.statusChangedFrom} | ${h.statusChangedTo} | ${h.modifiedBy} | ${date} | ${h.version} | ${h.comments ?? ''} |\n`;
+        }
+      }
+    } catch {
+      // Workflow history not available — skip
+    }
+  } else {
+    md += 'No workflow is assigned to this decision.\n';
+  }
 
   // Variables
   if (inputs.length > 0 || outputs.length > 0) {

@@ -11,6 +11,15 @@ import FlowExportButton from './FlowExportButton';
 interface FlowHeaderProps {
   flow: DecisionFlow;
   subDecisionCache?: Map<string, DecisionFlow>;
+  onShowWorkflowHistory?: () => void;
+}
+
+const NULL_WF_ID = 'WF00000000-0000-0000-0000-000000000000';
+
+function defaultLength(dataType?: string): number {
+  const t = (dataType ?? '').toLowerCase();
+  if (t === 'decimal' || t === 'integer' || t === 'number' || t === 'numeric') return 8;
+  return 100;
 }
 
 /** Map direction → BEM modifier class */
@@ -44,9 +53,10 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
       <table className="flow-var-table__table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Type</th>
+            <th className="flow-var-table__col-name">Name</th>
+            <th className="flow-var-table__col-desc">Description</th>
             <th>Direction</th>
+            <th>Type</th>
             <th>Length</th>
             <th>Default</th>
           </tr>
@@ -54,15 +64,16 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
         <tbody>
           {vars.map((v) => (
             <tr key={v.id}>
-              <td>{v.name}</td>
-              <td>{v.dataType}</td>
+              <td className="flow-var-table__col-name" title={v.name}>{v.name}</td>
+              <td className="flow-var-table__col-desc" title={v.description ?? ''}>{v.description ?? ''}</td>
               <td>
                 <span className={directionBadgeClass(v.direction)}>
                   {directionLabel(v.direction)}
                 </span>
               </td>
-              <td>{v.length ?? '—'}</td>
-              <td>{v.defaultValue != null ? String(v.defaultValue) : '—'}</td>
+              <td>{v.dataType}</td>
+              <td>{v.length ?? defaultLength(v.dataType)}</td>
+              <td>{v.defaultValue != null ? String(v.defaultValue) : ''}</td>
             </tr>
           ))}
         </tbody>
@@ -71,12 +82,18 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
   );
 }
 
-export default function FlowHeader({ flow, subDecisionCache }: FlowHeaderProps) {
+export default function FlowHeader({ flow, subDecisionCache, onShowWorkflowHistory }: FlowHeaderProps) {
   const sig = flow.signature ?? [];
   const inputs = sig.filter((v) => v.direction === 'input' || v.direction === 'inOut');
   const outputs = sig.filter((v) => v.direction === 'output' || v.direction === 'inOut');
   const temps = sig.filter((v) => v.direction === 'none');
   const decisionLink = buildDecisionDeepLink(flow.id);
+
+  const wfId = flow.workflowDefinitionId ?? (flow.properties?.workflowDefinitionId as string | undefined);
+  const hasWorkflow = !!wfId && wfId !== NULL_WF_ID;
+  const wfState = hasWorkflow ? (flow.properties?.workflowState as string | undefined) : undefined;
+  const wfModifiedBy = hasWorkflow ? (flow.properties?.workflowModifiedBy as string | undefined) : undefined;
+  const wfModifiedTs = hasWorkflow ? (flow.properties?.workflowModifiedTimeStamp as string | undefined) : undefined;
 
   return (
     <div className="flow-header__card">
@@ -88,6 +105,30 @@ export default function FlowHeader({ flow, subDecisionCache }: FlowHeaderProps) 
         </div>
         <FlowExportButton flow={flow} subDecisionCache={subDecisionCache} />
       </div>
+
+      {/* Workflow status */}
+      <div className="flow-header__workflow">
+        {hasWorkflow ? (
+          <>
+            <span className={`flow-wf-badge flow-wf-badge--${(wfState ?? '').toLowerCase().replace(/\s+/g, '-')}`}>
+              {wfState ?? 'Active'}
+            </span>
+            {wfModifiedBy && (
+              <span className="flow-header__workflow-meta">
+                by {wfModifiedBy}{wfModifiedTs ? ` on ${formatTimestamp(wfModifiedTs)}` : ''}
+              </span>
+            )}
+            {onShowWorkflowHistory && (
+              <button className="flow-wf-history-btn" onClick={onShowWorkflowHistory}>
+                View History
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="flow-wf-badge flow-wf-badge--none">No Workflow</span>
+        )}
+      </div>
+
       <div className="flow-header__meta">
         <MetaItem label="ID" value={flow.id} mono />
         <MetaItem label="Version" value={`${flow.majorRevision}.${flow.minorRevision}`} />
