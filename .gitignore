@@ -39,3 +39,7 @@ yarn-error.log*
 
 # Testing
 coverage/
+
+# Claude
+.claude/
+docs/

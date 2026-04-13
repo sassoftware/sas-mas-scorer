@@ -15,7 +15,7 @@ function formatTs(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
-export default function WorkflowHistoryModal({ decisionId, workflowName, onClose }: WorkflowHistoryModalProps) {
+export default function WorkflowHistoryModal({ decisionId, onClose }: WorkflowHistoryModalProps) {
   const [items, setItems] = useState<WorkflowHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

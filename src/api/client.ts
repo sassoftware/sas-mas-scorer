@@ -72,6 +72,9 @@ const addErrorInterceptor = (client: AxiosInstance): void => {
         }
       }
 
+      if (error.response?.status === 403) {
+        return Promise.reject(new Error('Access denied (403). This operation requires SAS Administrator privileges.'));
+      }
       if (error.response?.status === 401) {
         return Promise.reject(new Error('Authentication required. Please log in.'));
       }

@@ -16,8 +16,6 @@ const LINK_MAP: Record<string, { path: string; app: string }> = {
   decisionSQLCodeFile:   { path: 'SASDecisionManager/codeFiles',         app: 'SAS Intelligent Decisioning' },
   decisionQueryFile:     { path: 'SASDecisionManager/codeFiles',         app: 'SAS Intelligent Decisioning' },
   codeFile:              { path: 'SASDecisionManager/codeFiles',         app: 'SAS Intelligent Decisioning' },
-  dntStatic:             { path: 'SASDecisionManager/customFunctions',   app: 'SAS Intelligent Decisioning' },
-  customFunction:        { path: 'SASDecisionManager/customFunctions',   app: 'SAS Intelligent Decisioning' },
   treatmentGroup:        { path: 'SASDecisionManager/treatmentGroups',   app: 'SAS Intelligent Decisioning' },
   treatment:             { path: 'SASDecisionManager/treatments',        app: 'SAS Intelligent Decisioning' },
   segmentationTree:      { path: 'SASDecisionManager/segmentationTrees', app: 'SAS Intelligent Decisioning' },

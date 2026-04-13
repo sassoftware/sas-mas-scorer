@@ -29,6 +29,10 @@ All notable changes to the SAS MAS Scorer will be documented in this file.
   - Export to Markdown report and CSV
 - **Load Scenario** for Decision modules in single scoring mode — loads saved test scenarios from Score Definitions back into the input form, with reverse variable name mapping (decision names → MAS parameter names) and automatic value unwrapping for dates, datetimes, and datagrid types
 
+### Changed
+
+-   Improved the setup instructions in the main README.md
+
 ## [1.3.0] - 2026-03-20
 
 ### Added

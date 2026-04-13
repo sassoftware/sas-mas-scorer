@@ -34,7 +34,6 @@ const URI_ASSET_MAP: [RegExp, string][] = [
   [new RegExp(`/decisions/flows/${UUID}$`), 'decision'],
   [new RegExp(`/decisions/codeFiles/${UUID}`), 'codeFile'],
   [new RegExp(`/decisions/ruleSets/${UUID}`), 'ruleset'],
-  [new RegExp(`/decisions/decisionNodeTypes/${UUID}`), 'dntStatic'],
   [new RegExp(`/decisions/treatmentGroups/${UUID}`), 'treatmentGroup'],
   [new RegExp(`/decisions/treatments/${UUID}`), 'treatment'],
   [new RegExp(`/decisions/segmentationTrees/${UUID}`), 'segmentationTree'],
@@ -72,11 +71,15 @@ function directionBadgeClass(direction?: string): string {
 /*  Internal sub-components                                            */
 /* ------------------------------------------------------------------ */
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="flow-side-panel__section">
-      <h4 className="flow-side-panel__section-title">{title}</h4>
-      {children}
+      <button className="flow-side-panel__section-toggle" onClick={() => setOpen(o => !o)}>
+        <span className="flow-side-panel__section-arrow">{open ? '▾' : '▸'}</span>
+        <h4 className="flow-side-panel__section-title">{title}</h4>
+      </button>
+      {open && children}
     </div>
   );
 }
@@ -167,6 +170,14 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
   const [segTreeDetail, setSegTreeDetail] = useState<SegmentationTreeDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const step = nodeData.step;
   const colors = NODE_COLORS[nodeData.nodeType] ?? NODE_COLORS.unknown;
@@ -341,22 +352,20 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
   /* ---- JSX ---- */
   return (
     <div className="flow-side-panel">
-      {/* 1. Header */}
+      <button className="flow-side-panel__close" onClick={onClose} title="Close panel">
+        &#x2715; Close
+      </button>
+      {/* Header */}
       <div
         className="flow-side-panel__header"
         style={{ backgroundColor: colors.bg, borderBottomColor: colors.border }}
       >
-        <div className="flow-side-panel__header-top">
-          <span
-            className="flow-side-panel__type-badge"
-            style={{ backgroundColor: colors.border, color: '#fff' }}
-          >
-            {NODE_TYPE_LABELS[nodeData.nodeType] ?? nodeData.nodeType}
-          </span>
-          <button className="flow-side-panel__close" onClick={onClose} title="Close panel">
-            &times;
-          </button>
-        </div>
+        <span
+          className="flow-side-panel__type-badge"
+          style={{ backgroundColor: colors.border, color: '#fff' }}
+        >
+          {NODE_TYPE_LABELS[nodeData.nodeType] ?? nodeData.nodeType}
+        </span>
         <div className="flow-side-panel__title">{nodeData.label}</div>
         {step?.customObject?.name && step.customObject.name !== nodeData.label && (
           <div className="flow-side-panel__subtitle">{step.customObject.name}</div>
@@ -365,7 +374,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
 
       {/* Scrollable content */}
       <div className="flow-side-panel__content">
-        {/* 2. Loading spinner */}
+        {/* Loading spinner */}
         {loading && (
           <div className="flow-side-panel__loading">
             <div className="flow-side-panel__spinner" />
@@ -373,7 +382,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </div>
         )}
 
-        {/* 3. Errors */}
+        {/* Errors */}
         {errors.length > 0 && (
           <div className="flow-side-panel__errors">
             {errors.map((err, i) => (
@@ -382,38 +391,16 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </div>
         )}
 
-        {/* 4. Condition expression */}
+        {/* ---- Asset Descriptions ---- */}
+
+        {/* Condition expression */}
         {(nodeData.nodeType === 'condition' || nodeData.nodeType === 'cond_expr') && conditionExpr && (
           <Section title="Condition">
             <div className="flow-sp-code">{conditionExpr}</div>
           </Section>
         )}
 
-        {/* 5. Variable Assignments */}
-        {step?.assignments && step.assignments.length > 0 && (
-          <Section title="Variable Assignments">
-            <table className="flow-sp-table">
-              <thead>
-                <tr>
-                  <th>Variable</th>
-                  <th>Value</th>
-                  <th>Type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {step.assignments.map((a: VariableAssignment) => (
-                  <tr key={a.id}>
-                    <td>{a.variableName}</td>
-                    <td className="flow-sp-code">{a.value ?? ''}</td>
-                    <td>{a.dataType ?? ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-        )}
-
-        {/* 6. A/B Test */}
+        {/* A/B Test */}
         {step?.abTestCases && step.abTestCases.length > 0 && (
           <Section title="A/B Test">
             {step.abTestType && (
@@ -443,7 +430,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 7. Parallel Process */}
+        {/* Parallel Process */}
         {step?.nodes && step.nodes.length > 0 && (
           <Section title="Parallel Nodes">
             {step.nodes.map((pn) => (
@@ -460,7 +447,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 8. Record Contact */}
+        {/* Record Contact */}
         {step?.recordContact && (
           <Section title="Record Contact">
             {step.recordContact.name && (
@@ -502,7 +489,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 9. Segmentation Tree */}
+        {/* Segmentation Tree */}
         {segTreeDetail && (
           <Section title="Segmentation Tree">
             <div className="flow-sp-detail">
@@ -555,7 +542,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 10. Code File */}
+        {/* Code File */}
         {codeFileDetail && (
           <Section title="Code File">
             {onViewCode && codeFileHref && (
@@ -603,7 +590,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 11. Sub-Decision */}
+        {/* Sub-Decision */}
         {nodeData.subDecisionId && (
           <Section title="Sub-Decision">
             <div className="flow-sp-detail">
@@ -617,41 +604,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 12. Mappings */}
-        {step?.mappings && step.mappings.length > 0 && (
-          <Section title="Mappings">
-            {step.mappingDataGridName && (
-              <div className="flow-sp-detail">
-                <span className="flow-sp-detail__label">Data Grid:</span>
-                <span className="flow-sp-detail__value">{step.mappingDataGridName}</span>
-              </div>
-            )}
-            <table className="flow-sp-table">
-              <thead>
-                <tr>
-                  <th>Decision Term</th>
-                  <th>Direction</th>
-                  <th>Step Term</th>
-                </tr>
-              </thead>
-              <tbody>
-                {step.mappings.map((m: StepMapping, i: number) => (
-                  <tr key={m.id ?? i}>
-                    <td>{m.targetDecisionTermName}</td>
-                    <td>
-                      <span className={directionBadgeClass(m.direction)}>
-                        {directionLabel(m.direction)}
-                      </span>
-                    </td>
-                    <td>{m.stepTermName}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Section>
-        )}
-
-        {/* 13. Rule Set */}
+        {/* Rule Set */}
         {ruleSetDetail && (
           <Section title="Rule Set">
             {(() => {
@@ -727,7 +680,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 14. Model */}
+        {/* Model */}
         {modelDetail && (
           <Section title="Model">
             {(() => {
@@ -862,7 +815,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 15. Treatment Group */}
+        {/* Treatment Group */}
         {treatmentGroup && (
           <Section title="Treatment Group">
             {(() => {
@@ -963,7 +916,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 16. Decision Node Type */}
+        {/* Decision Node Type */}
         {nodeTypeDetail && (
           <Section title="Decision Node Type">
             <div className="flow-sp-detail">
@@ -999,40 +952,96 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           </Section>
         )}
 
-        {/* 17. API Links */}
+        {/* API Links (merged into asset descriptions) */}
         {step?.links && step.links.length > 0 && (
-          <Section title="API Links">
-            <div className="flow-sp-links-list">
-              {step.links.map((link, i) => {
-                const uri = link.uri || link.href;
-                const deepLink = uri ? buildDeepLinkFromUri(uri) : null;
-                return (
-                  <div key={i} className="flow-sp-link-item">
-                    {deepLink && <FlowDeepLink url={deepLink.url} label={deepLink.label} />}
-                    {uri && (
-                      <a
-                        href={uri}
-                        className="flow-sp-link-uri"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          window.open(uri.startsWith('http') ? uri : `${getSasViyaUrl()}${uri}`, '_blank');
-                        }}
-                      >
-                        {uri}
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          <div className="flow-sp-links-list">
+            {step.links.map((link, i) => {
+              const uri = link.uri || link.href;
+              const deepLink = uri ? buildDeepLinkFromUri(uri) : null;
+              return (
+                <div key={i} className="flow-sp-link-item">
+                  {deepLink && <FlowDeepLink url={deepLink.url} label={deepLink.label} />}
+                  {uri && (
+                    <a
+                      href={uri}
+                      className="flow-sp-link-uri"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.open(uri.startsWith('http') ? uri : `${getSasViyaUrl()}${uri}`, '_blank');
+                      }}
+                    >
+                      {uri}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ---- Mappings ---- */}
+        {step?.mappings && step.mappings.length > 0 && (
+          <Section title="Mappings">
+            {step.mappingDataGridName && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Data Grid:</span>
+                <span className="flow-sp-detail__value">{step.mappingDataGridName}</span>
+              </div>
+            )}
+            <table className="flow-sp-table">
+              <thead>
+                <tr>
+                  <th>Decision Term</th>
+                  <th>Direction</th>
+                  <th>Step Term</th>
+                </tr>
+              </thead>
+              <tbody>
+                {step.mappings.map((m: StepMapping, i: number) => (
+                  <tr key={m.id ?? i}>
+                    <td>{m.targetDecisionTermName}</td>
+                    <td>
+                      <span className={directionBadgeClass(m.direction)}>
+                        {directionLabel(m.direction)}
+                      </span>
+                    </td>
+                    <td>{m.stepTermName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </Section>
         )}
 
-        {/* 18. Raw JSON */}
+        {/* ---- Variable Assignments ---- */}
+        {step?.assignments && step.assignments.length > 0 && (
+          <Section title="Variable Assignments">
+            <table className="flow-sp-table">
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Value</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                {step.assignments.map((a: VariableAssignment) => (
+                  <tr key={a.id}>
+                    <td>{a.variableName}</td>
+                    <td className="flow-sp-code">{a.value ?? ''}</td>
+                    <td>{a.dataType ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Section>
+        )}
+
+        {/* ---- Raw JSON ---- */}
         {step && (
-          <Section title="Raw JSON">
+          <Section title="Raw JSON" defaultOpen={false}>
             <details className="flow-sp-raw-json">
               <summary>Show step JSON</summary>
               <pre className="flow-sp-code">{JSON.stringify(step, null, 2)}</pre>

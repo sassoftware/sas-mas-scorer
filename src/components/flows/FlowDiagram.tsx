@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow, Controls, MiniMap, Background, BackgroundVariant, Panel,
   useNodesState, useEdgesState, type Node,
@@ -38,6 +38,7 @@ interface FlowDiagramProps {
 }
 
 export default function FlowDiagram({ flow, subDecisionCache, onNodeClick }: FlowDiagramProps) {
+  const [legendOpen, setLegendOpen] = useState(true);
   const { initialNodes, initialEdges, groupBoxes } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges, groups } = convertFlowToGraph(flow, subDecisionCache ?? new Map());
     const { nodes: layoutedNodes, edges: layoutedEdges, groupBoxes: boxes } = layoutGraph(rawNodes, rawEdges, groups);
@@ -81,27 +82,31 @@ export default function FlowDiagram({ flow, subDecisionCache, onNodeClick }: Flo
         <GroupBoxes groupBoxes={groupBoxes} />
         <Panel position="top-left">
           <div className="flow-diagram__legend">
-            <div className="flow-diagram__legend-title">Legend</div>
-            <div className="flow-diagram__legend-items">
-              {([
-                ['decision', 'Sub-Decision'], ['custom', 'Custom Node'],
-                ['ruleset', 'Rule Set'], ['model', 'Model'],
-                ['code_file', 'Code File'], ['condition', 'Condition'],
-                ['assignment', 'Assignment'], ['abtest', 'A/B Test'],
-                ['parallel', 'Parallel Process'], ['record_contact', 'Record Contact'],
-                ['treatment_group', 'Treatment Group'], ['segmentation_tree', 'Segmentation Tree'],
-              ] as const).map(([type, label]) => (
-                <div key={type} className="flow-diagram__legend-item">
-                  <div className="flow-diagram__legend-swatch"
-                    style={{ backgroundColor: NODE_COLORS[type].bg, borderColor: NODE_COLORS[type].border }} />
-                  {label}
+            <button className="flow-diagram__legend-toggle" onClick={() => setLegendOpen(o => !o)}>
+              Legend {legendOpen ? '▾' : '▸'}
+            </button>
+            {legendOpen && (
+              <div className="flow-diagram__legend-items">
+                {([
+                  ['decision', 'Sub-Decision'], ['custom', 'Custom Node'],
+                  ['ruleset', 'Rule Set'], ['model', 'Model'],
+                  ['code_file', 'Code File'], ['condition', 'Branch'],
+                  ['assignment', 'Assignment'], ['abtest', 'A/B Test'],
+                  ['parallel', 'Parallel Process'], ['record_contact', 'Record Contact'],
+                  ['treatment_group', 'Treatment Group'], ['segmentation_tree', 'Segmentation Tree'],
+                ] as const).map(([type, label]) => (
+                  <div key={type} className="flow-diagram__legend-item">
+                    <div className="flow-diagram__legend-swatch"
+                      style={{ backgroundColor: NODE_COLORS[type].bg, borderColor: NODE_COLORS[type].border }} />
+                    {label}
+                  </div>
+                ))}
+                <div className="flow-diagram__legend-item">
+                  <div className="flow-diagram__legend-crosslink" />
+                  Cross-link
                 </div>
-              ))}
-              <div className="flow-diagram__legend-item">
-                <div className="flow-diagram__legend-crosslink" />
-                Cross-link
               </div>
-            </div>
+            )}
           </div>
         </Panel>
       </ReactFlow>
