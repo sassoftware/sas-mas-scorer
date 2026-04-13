@@ -38,7 +38,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 # Testing
-coverage/
+/coverage/
 
 # Claude
 .claude/
