@@ -2,7 +2,7 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
-## [2.0.0] - 2026-03-30
+## [2.0.0] - 2026-04-13
 
 ### Added
 
