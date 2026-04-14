@@ -28,6 +28,7 @@ All notable changes to the SAS MAS Scorer will be documented in this file.
 - **Replace Module** in the UI Apps builder — swap the underlying module of an existing UI app with a two-step dialog
   - Browse and search modules with Model/Decision type indicator and type filter
   - Parameter mapping screen with auto-match by name, data types displayed for orientation, and per-field dropdown to remap or remove fields
+- **User Guide** — added `USER-GUIDE.md` covering all application features, from getting connected through scoring, UI Apps, View Flows, and Test Coverage Analysis
 
 ### Fixed
 

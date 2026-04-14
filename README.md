@@ -127,7 +127,9 @@ See the [SAS Viya Authentication documentation](https://go.documentation.sas.com
 
 ### Getting Started
 
-This YouTube video showcases how to deploy and use the application — [MAS Module Scorer Overview](https://youtu.be/mSSoNryixUM).
+Check out the [User Guide](./USER-GUIDE.md) included in this repository.
+
+[MAS Module Scorer Playlist (YouTube)](https://youtube.com/playlist?list=PLncvHGGelzhUHszGZ39TPMCxNYjNTAp7B&si=9Y2iL7Kzk_iRQn1r) — Video walkthrough and update videos of the application.
 
 ## Building from Source
 
@@ -183,3 +185,4 @@ This project is licensed under the [Apache 2.0 License](LICENSE).
 ## Additional Resources
 
 * [MAS API Documentation](https://developer.sas.com/rest-apis/microanalyticScore)
+* [MAS Module Scorer Playlist (YouTube)](https://youtube.com/playlist?list=PLncvHGGelzhUHszGZ39TPMCxNYjNTAp7B&si=9Y2iL7Kzk_iRQn1r) — Video walkthrough and update videos of the application
