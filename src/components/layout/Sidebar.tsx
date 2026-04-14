@@ -172,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v2.0.0</div>
+        <div className="sas-sidebar__version">MAS Scorer v2.1.0</div>
       </div>
     </aside>
   );

@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useState } from 'react';
 import { UIDefinition, UISettings } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
 
@@ -13,6 +13,7 @@ interface Props {
   onColumnsChange: (cols: 1 | 2 | 3) => void;
   onSave: () => void;
   onPreview: () => void;
+  onReplaceModule?: () => void;
   saving: boolean;
   isPreview: boolean;
 }
@@ -25,9 +26,25 @@ export const BuilderToolbar: React.FC<Props> = ({
   onColumnsChange,
   onSave,
   onPreview,
+  onReplaceModule,
   saving,
   isPreview,
 }) => {
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyStandaloneLink = async () => {
+    const base = window.location.origin + window.location.pathname;
+    const link = `${base}#/ui-apps/${encodeURIComponent(definition.id)}?standalone=true`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Fallback for sandboxed iframes
+      window.prompt('Copy this standalone link:', link);
+    }
+  };
+
   return (
     <div className="ui-builder__toolbar">
       <div className="ui-builder__toolbar-left">
@@ -91,6 +108,14 @@ export const BuilderToolbar: React.FC<Props> = ({
         </div>
       </div>
       <div className="ui-builder__toolbar-right">
+        <Button variant="tertiary" onClick={handleCopyStandaloneLink}>
+          {linkCopied ? 'Link Copied!' : 'Copy Standalone Link'}
+        </Button>
+        {onReplaceModule && (
+          <Button variant="tertiary" onClick={onReplaceModule}>
+            Replace Module
+          </Button>
+        )}
         <Button
           variant={isPreview ? 'primary' : 'secondary'}
           onClick={onPreview}

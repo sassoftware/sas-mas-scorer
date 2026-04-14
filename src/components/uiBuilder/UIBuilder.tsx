@@ -10,6 +10,7 @@ import { Alert } from '../common/Alert';
 import { BuilderToolbar } from './BuilderToolbar';
 import { BuilderCanvas } from './BuilderCanvas';
 import { BuilderPreview } from './BuilderPreview';
+import { ReplaceModuleDialog } from './ReplaceModuleDialog';
 import { useSteps } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { saveUIDefinition } from '../../storage/uiStorage';
@@ -41,6 +42,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isPreview, setIsPreview] = useState(false);
+  const [showReplaceModule, setShowReplaceModule] = useState(false);
 
   const { steps } = useSteps(effectiveModuleId);
 
@@ -137,6 +139,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         onColumnsChange={(cols) => setDef({ ...def, layout: { ...def.layout, columns: cols } })}
         onSave={handleSave}
         onPreview={() => setIsPreview(!isPreview)}
+        onReplaceModule={initialDef ? () => setShowReplaceModule(true) : undefined}
         saving={saving}
         isPreview={isPreview}
       />
@@ -148,6 +151,21 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
           definition={def}
           step={step}
           onChange={setDef}
+        />
+      )}
+
+      {showReplaceModule && (
+        <ReplaceModuleDialog
+          definition={def}
+          currentModule={module}
+          currentStep={step}
+          onReplace={(newDef, newMod, newStp) => {
+            setDef(newDef);
+            setModule(newMod);
+            setStep(newStp);
+            setShowReplaceModule(false);
+          }}
+          onClose={() => setShowReplaceModule(false)}
         />
       )}
     </div>

@@ -2,6 +2,37 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.1.0] - 2026-04-14
+
+### Added
+
+- **Parallel scoring from CAS tables** — browse CAS servers, caslibs, and tables, map columns to step inputs, and score with configurable row limits (default 1,000) and concurrency controls
+  - Server → Caslib → Table browser with filtering (tables with 0 rows hidden)
+  - Column-to-parameter mapping with auto-match
+  - 5-row data preview from the selected table
+  - Editable row limit with option to score the full table
+- **Save as Test** for CAS table scoring — save the CAS table and column mapping setup as a Test (score definition) back to SAS Intelligent Decisioning
+  - Maps input parameters to CAS table columns using `datasource` mapping type
+  - Configurable name, description, SAS Content folder, and CAS output library
+  - Column mapping summary displayed in the save dialog for review
+- **Stop batch scoring** — abort button for both CSV and CAS Table parallel scoring modes; partial results are displayed immediately
+- **Save batch results as scenarios** — select rows from parallel scoring results and save them as SAS Decision test scenarios (score definitions)
+  - Checkbox column with select-all and shift+click range selection
+  - Shared folder, description, and CAS output library across all scenarios
+  - Sequential naming (`{baseName}_1`, `{baseName}_2`, …) with progress bar
+- **Standalone UI Apps mode** — run a UI app without the sidebar, header, or navigation chrome via a `?standalone=true` query parameter
+  - "Standalone" button in the UI App runner header to enter standalone mode
+  - "Exit Standalone" bar to return to the full application
+  - "Copy Standalone Link" button in the UI Builder toolbar to copy a shareable direct link
+- **Clear cached results** when switching between Single Execution, Parallel (CSV), and Parallel (CAS Table) modes
+- **Replace Module** in the UI Apps builder — swap the underlying module of an existing UI app with a two-step dialog
+  - Browse and search modules with Model/Decision type indicator and type filter
+  - Parameter mapping screen with auto-match by name, data types displayed for orientation, and per-field dropdown to remap or remove fields
+
+### Fixed
+
+- **UI Apps Delete and Export buttons** now work inside sandboxed iframes (SAS Visual Analytics Job Definition mode) — replaced `window.confirm()` with an inline confirmation banner and added clipboard fallback for export when programmatic downloads are blocked
+
 ## [2.0.0] - 2026-04-13
 
 ### Added

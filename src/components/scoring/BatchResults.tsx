@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { StepOutput, StepParameter } from '../../types';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
@@ -34,6 +34,7 @@ interface BatchResultsProps {
   onClear: () => void;
   onDownload: () => void;
   onUploadToCas?: () => void;
+  onSaveAsScenarios?: (selectedIndices: number[]) => void;
 }
 
 // Format milliseconds to human-readable string
@@ -56,11 +57,60 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
   onClear,
   onDownload,
   onUploadToCas,
+  onSaveAsScenarios,
 }) => {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const lastClickedRef = useRef<number | null>(null);
 
   const successCount = results.filter(r => r.output && !r.error).length;
   const errorCount = results.filter(r => r.error).length;
+
+  // Only successful rows can be saved as scenarios
+  const successIndices = results
+    .map((r, i) => (r.output && !r.error ? i : -1))
+    .filter(i => i !== -1);
+  const successSet = new Set(successIndices);
+
+  const allSuccessSelected = successIndices.length > 0 && successIndices.every(i => selectedRows.has(i));
+
+  const toggleSelectAll = () => {
+    if (allSuccessSelected) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(successIndices));
+    }
+    lastClickedRef.current = null;
+  };
+
+  const handleRowSelect = (index: number, shiftKey: boolean) => {
+    const lastClicked = lastClickedRef.current;
+    lastClickedRef.current = index;
+
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+
+      if (shiftKey && lastClicked !== null) {
+        // Range select: add all successful rows between last click and this click
+        const from = Math.min(lastClicked, index);
+        const to = Math.max(lastClicked, index);
+        for (let i = from; i <= to; i++) {
+          if (successSet.has(i)) {
+            next.add(i);
+          }
+        }
+      } else {
+        // Single toggle
+        if (next.has(index)) {
+          next.delete(index);
+        } else {
+          next.add(index);
+        }
+      }
+
+      return next;
+    });
+  };
 
   // Get output parameter names from first successful result
   const outputParams = results.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [];
@@ -80,8 +130,18 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
       <CardHeader
         actions={
           <div className="batch-results__actions">
+            {onSaveAsScenarios && (
+              <Button
+                variant="primary"
+                size="small"
+                onClick={() => onSaveAsScenarios(Array.from(selectedRows).sort((a, b) => a - b))}
+                disabled={selectedRows.size === 0}
+              >
+                Save as Scenarios ({selectedRows.size})
+              </Button>
+            )}
             {onUploadToCas && (
-              <Button variant="primary" size="small" onClick={onUploadToCas}>
+              <Button variant="secondary" size="small" onClick={onUploadToCas}>
                 Upload to CAS
               </Button>
             )}
@@ -155,6 +215,16 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
           <table className="batch-results__table">
             <thead>
               <tr>
+                {onSaveAsScenarios && (
+                  <th className="batch-results__checkbox-cell">
+                    <input
+                      type="checkbox"
+                      checked={allSuccessSelected}
+                      onChange={toggleSelectAll}
+                      title="Select all successful rows"
+                    />
+                  </th>
+                )}
                 <th>Row</th>
                 <th>Status</th>
                 {outputParams.map(name => (
@@ -168,6 +238,26 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
               {results.map((result, index) => (
                 <React.Fragment key={index}>
                   <tr className={result.error ? 'batch-results__row--error' : ''}>
+                    {onSaveAsScenarios && (
+                      <td
+                        className="batch-results__checkbox-cell"
+                        style={{ cursor: result.output && !result.error ? 'pointer' : 'default' }}
+                        onClick={(e) => {
+                          if (result.output && !result.error) {
+                            handleRowSelect(index, e.shiftKey);
+                          }
+                        }}
+                      >
+                        {result.output && !result.error && (
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.has(index)}
+                            onChange={() => {}}
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td>{result.rowIndex + 1}</td>
                     <td>
                       {result.error ? (
@@ -199,7 +289,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                   </tr>
                   {expandedRow === index && (
                     <tr className="batch-results__expanded-row">
-                      <td colSpan={outputParams.length + 4}>
+                      <td colSpan={outputParams.length + 4 + (onSaveAsScenarios ? 1 : 0)}>
                         <div className="batch-results__details">
                           <div className="batch-results__detail-section">
                             <h5>Input Values</h5>

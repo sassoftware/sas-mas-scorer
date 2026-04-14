@@ -1,6 +1,6 @@
 {
   "name": "mas-scorer",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "SAS Micro Analytic Score Module Scorer Application",
   "type": "module",
   "main": "electron/dist/main.js",

@@ -679,7 +679,189 @@
   color: var(--sas-blue-light);
 }
 
+/* CAS Table Score */
+.cas-table-score__browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cas-table-score__selectors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.cas-table-score__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cas-table-score__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+}
+
+.cas-table-score__select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background-color: var(--sas-white);
+  color: var(--sas-gray-900);
+}
+
+.cas-table-score__select:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 2px rgba(0, 93, 171, 0.15);
+}
+
+.cas-table-score__loading-text {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-500);
+  font-style: italic;
+  padding: var(--space-2) 0;
+}
+
+.cas-table-score__empty {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-500);
+  font-style: italic;
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.cas-table-score__table-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cas-table-score__table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cas-table-score__filter {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  width: 240px;
+}
+
+.cas-table-score__filter:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 2px rgba(0, 93, 171, 0.15);
+}
+
+.cas-table-score__table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-2);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  background-color: var(--sas-gray-50);
+}
+
+.cas-table-score__table-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-sm);
+  background-color: var(--sas-white);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  font-family: inherit;
+}
+
+.cas-table-score__table-item:hover {
+  border-color: var(--sas-blue-primary);
+  background-color: var(--sas-blue-light);
+}
+
+.cas-table-score__table-item--selected {
+  border-color: var(--sas-blue-primary);
+  background-color: var(--sas-blue-light);
+  box-shadow: 0 0 0 2px rgba(0, 93, 171, 0.15);
+}
+
+.cas-table-score__table-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cas-table-score__table-rows {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+}
+
+.cas-table-score__mapping-section {
+  margin-top: var(--space-4);
+}
+
+.cas-table-score__options {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cas-table-score__footer-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.cas-table-score__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.cas-table-score__checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sas-blue-primary);
+}
+
+.cas-table-score__row-limit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* Batch Results */
+.batch-results__checkbox-cell {
+  width: 32px;
+  text-align: center;
+  user-select: none;
+}
+
+.batch-results__checkbox-cell input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sas-blue-primary);
+  cursor: pointer;
+}
+
 .batch-results__header {
   display: flex;
   align-items: center;
@@ -1166,6 +1348,24 @@
   border-top: 1px solid var(--sas-gray-200);
 }
 
+.save-scenario-dialog__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.save-scenario-dialog__progress-text {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  text-align: center;
+}
+
+.save-scenario-dialog__description-text {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  margin: 0;
+}
+
 .save-scenario-dialog__success {
   display: flex;
   flex-direction: column;
@@ -1197,6 +1397,65 @@
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
   font-family: var(--font-family-mono);
+}
+
+.save-scenario-dialog__readonly-value {
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  color: var(--sas-gray-700);
+  background: var(--sas-gray-50);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.save-scenario-dialog__mapping-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1);
+}
+
+.save-scenario-dialog__mapping-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  border-radius: var(--radius-sm);
+  background: var(--sas-gray-50);
+}
+
+.save-scenario-dialog__mapping-row--unmapped {
+  color: var(--sas-gray-400);
+  background: transparent;
+}
+
+.save-scenario-dialog__mapping-var {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-scenario-dialog__mapping-arrow {
+  color: var(--sas-gray-400);
+  flex-shrink: 0;
+}
+
+.save-scenario-dialog__mapping-col {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
 }
 
 /* Load Scenario */

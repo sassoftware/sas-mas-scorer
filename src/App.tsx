@@ -64,6 +64,7 @@ function App() {
   // Parse route params from location
   const getRouteParams = () => {
     const hash = location.pathname; // In HashRouter, pathname contains the hash path
+    const searchParams = new URLSearchParams(location.search);
     const moduleMatch = hash.match(/^\/modules\/([^/]+)/);
     const stepMatch = hash.match(/^\/modules\/[^/]+\/steps\/([^/]+)/);
     const uiAppRunMatch = hash.match(/^\/ui-apps\/([^/]+)$/);
@@ -80,10 +81,11 @@ function App() {
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
       isFlowsListView: hash === '/flows' || hash === '/flows/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
+      isStandalone: searchParams.get('standalone') === 'true',
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, flowDetailId } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, flowDetailId, isStandalone } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -368,6 +370,7 @@ function App() {
           definition={activeUIDefinition}
           onBack={handleBackToUIApps}
           onEdit={() => handleEditUIApp(activeUIDefinition.id)}
+          standalone={isStandalone}
         />
       );
     }
@@ -533,6 +536,15 @@ function App() {
           </div>
         </div>
       </>
+    );
+  }
+
+  // Standalone mode: render content without Layout chrome
+  if (isStandalone && uiAppId) {
+    return (
+      <div className="sas-standalone">
+        {renderContent()}
+      </div>
     );
   }
 

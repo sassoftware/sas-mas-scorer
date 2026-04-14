@@ -30,6 +30,30 @@ export interface ScoreDefinitionPayload {
   mappings: ScoreDefinitionMapping[];
 }
 
+export interface TestScoreDefinitionPayload {
+  name: string;
+  description?: string;
+  inputData: {
+    type: 'CASTable';
+    serverName: string;
+    libraryName: string;
+    tableName: string;
+  };
+  properties: {
+    outputLibraryName: string;
+    outputServerName: string;
+    tableBaseName: string;
+    test: 'true';
+    version: string;
+  };
+  objectDescriptor: {
+    name: string;
+    type: 'decision';
+    uri: string;
+  };
+  mappings: ScoreDefinitionMapping[];
+}
+
 export interface ScoreDefinitionResponse {
   id: string;
   name: string;
@@ -68,7 +92,7 @@ export interface ScoreDefinitionDetail {
 // --- API ---
 
 export const createScoreDefinition = async (
-  payload: ScoreDefinitionPayload,
+  payload: ScoreDefinitionPayload | TestScoreDefinitionPayload,
   parentFolderUri: string
 ): Promise<ScoreDefinitionResponse> => {
   const response = await sasViyaClient.post(

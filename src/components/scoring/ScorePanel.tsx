@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Module, Step, ModuleSource, StepOutput, getModuleType } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
@@ -12,9 +12,12 @@ import { PageHeader } from '../layout/Layout';
 import { InputForm } from './InputForm';
 import { OutputDisplay } from './OutputDisplay';
 import { CsvUpload } from './CsvUpload';
+import { CasTableScore, CasTableTestInfo } from './CasTableScore';
 import { BatchResults } from './BatchResults';
 import { CasUploadDialog } from './CasUploadDialog';
 import { SaveScenarioDialog } from './SaveScenarioDialog';
+import { SaveBatchScenariosDialog } from './SaveBatchScenariosDialog';
+import { SaveTestDialog } from './SaveTestDialog';
 import { LoadScenarioDialog } from './LoadScenarioDialog';
 import { useStepExecution } from '../../hooks';
 import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
@@ -26,7 +29,7 @@ interface ScorePanelProps {
   onSelectAnotherStep: () => void;
 }
 
-type ExecutionMode = 'single' | 'batch';
+type ExecutionMode = 'single' | 'batch' | 'casTable';
 
 interface BatchResult {
   rowIndex: number;
@@ -69,9 +72,14 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const [batchExecuting, setBatchExecuting] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
+  const batchAbortRef = useRef(false);
   const [showCasUpload, setShowCasUpload] = useState(false);
   const [showSaveScenario, setShowSaveScenario] = useState(false);
   const [showLoadScenario, setShowLoadScenario] = useState(false);
+  const [showBatchScenarios, setShowBatchScenarios] = useState(false);
+  const [selectedBatchIndices, setSelectedBatchIndices] = useState<number[]>([]);
+  const [showSaveTest, setShowSaveTest] = useState(false);
+  const [casTableTestInfo, setCasTableTestInfo] = useState<CasTableTestInfo | null>(null);
 
   // Decision/Model metadata for CAS upload columns
   const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
@@ -238,6 +246,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
   // Batch execution handler with configurable concurrency
   const handleBatchExecute = useCallback(async (rows: Record<string, unknown>[], concurrency: number) => {
+    batchAbortRef.current = false;
     setBatchExecuting(true);
     setBatchProgress({ current: 0, total: rows.length });
     setBatchResults([]);
@@ -252,7 +261,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
       let currentIndex = 0;
 
       const processNext = async (): Promise<void> => {
-        while (currentIndex < rows.length) {
+        while (currentIndex < rows.length && !batchAbortRef.current) {
           const index = currentIndex++;
           const input = rows[index];
 
@@ -282,38 +291,56 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     const batchEndTime = performance.now();
     const totalRuntime = batchEndTime - batchStartTime;
 
-    // Sort final results by row index
-    const sortedResults = [...results].sort((a, b) => a.rowIndex - b.rowIndex);
+    // Sort final results (may be partial if stopped early)
+    const sortedResults = results.filter(r => r !== undefined).sort((a, b) => a.rowIndex - b.rowIndex);
     setBatchResults(sortedResults);
 
-    // Calculate statistics
-    const executionTimes = sortedResults.map(r => r.executionTime);
-    const sortedTimes = [...executionTimes].sort((a, b) => a - b);
-    const successCount = sortedResults.filter(r => r.output && !r.error).length;
-    const errorCount = sortedResults.filter(r => r.error).length;
+    // Calculate statistics on completed results
+    if (sortedResults.length > 0) {
+      const executionTimes = sortedResults.map(r => r.executionTime);
+      const sortedTimes = [...executionTimes].sort((a, b) => a - b);
+      const successCount = sortedResults.filter(r => r.output && !r.error).length;
+      const errorCount = sortedResults.filter(r => r.error).length;
 
-    const stats: BatchStats = {
-      totalRuntime,
-      avgRequestTime: executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length,
-      successRate: (successCount / sortedResults.length) * 100,
-      fastestResponse: Math.min(...executionTimes),
-      slowestResponse: Math.max(...executionTimes),
-      medianResponse: sortedTimes.length % 2 === 0
-        ? (sortedTimes[sortedTimes.length / 2 - 1] + sortedTimes[sortedTimes.length / 2]) / 2
-        : sortedTimes[Math.floor(sortedTimes.length / 2)],
-      totalRequests: sortedResults.length,
-      successCount,
-      errorCount,
-    };
+      const stats: BatchStats = {
+        totalRuntime,
+        avgRequestTime: executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length,
+        successRate: (successCount / sortedResults.length) * 100,
+        fastestResponse: Math.min(...executionTimes),
+        slowestResponse: Math.max(...executionTimes),
+        medianResponse: sortedTimes.length % 2 === 0
+          ? (sortedTimes[sortedTimes.length / 2 - 1] + sortedTimes[sortedTimes.length / 2]) / 2
+          : sortedTimes[Math.floor(sortedTimes.length / 2)],
+        totalRequests: sortedResults.length,
+        successCount,
+        errorCount,
+      };
 
-    setBatchStats(stats);
+      setBatchStats(stats);
+    }
     setBatchExecuting(false);
   }, [executeRow]);
+
+  const handleStopBatch = useCallback(() => {
+    batchAbortRef.current = true;
+  }, []);
 
   // Clear batch results
   const handleClearBatchResults = useCallback(() => {
     setBatchResults([]);
     setBatchStats(null);
+  }, []);
+
+  // Save selected batch rows as scenarios
+  const handleSaveAsScenarios = useCallback((selectedIndices: number[]) => {
+    setSelectedBatchIndices(selectedIndices);
+    setShowBatchScenarios(true);
+  }, []);
+
+  // Save CAS table setup as a test
+  const handleSaveAsTest = useCallback((info: CasTableTestInfo) => {
+    setCasTableTestInfo(info);
+    setShowSaveTest(true);
   }, []);
 
   // Generate API call code examples
@@ -1056,15 +1083,21 @@ title;`;
       <div className="score-panel__mode-toggle">
         <Button
           variant={executionMode === 'single' ? 'primary' : 'tertiary'}
-          onClick={() => { setExecutionMode('single'); setBatchResults([]); setBatchStats(null); }}
+          onClick={() => { setExecutionMode('single'); setBatchResults([]); setBatchStats(null); reset(); }}
         >
           Single Execution
         </Button>
         <Button
           variant={executionMode === 'batch' ? 'primary' : 'tertiary'}
-          onClick={() => { setExecutionMode('batch'); reset(); }}
+          onClick={() => { setExecutionMode('batch'); setBatchResults([]); setBatchStats(null); reset(); }}
         >
           Parallel (CSV Upload)
+        </Button>
+        <Button
+          variant={executionMode === 'casTable' ? 'primary' : 'tertiary'}
+          onClick={() => { setExecutionMode('casTable'); setBatchResults([]); setBatchStats(null); reset(); }}
+        >
+          Parallel (CAS Table)
         </Button>
       </div>
 
@@ -1183,6 +1216,9 @@ title;`;
                         style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
                       />
                     </div>
+                    <Button variant="danger" size="small" onClick={handleStopBatch}>
+                      Stop
+                    </Button>
                   </div>
                 </CardBody>
               </Card>
@@ -1197,6 +1233,53 @@ title;`;
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
                 onUploadToCas={() => setShowCasUpload(true)}
+                onSaveAsScenarios={moduleType === 'Decision' && sourceURI ? handleSaveAsScenarios : undefined}
+              />
+            )}
+          </>
+
+        )}
+
+        {/* CAS Table Execution Mode */}
+        {executionMode === 'casTable' && (
+          <>
+            <CasTableScore
+              parameters={step.inputs ?? []}
+              onExecuteBatch={handleBatchExecute}
+              executing={batchExecuting}
+              onSaveAsTest={moduleType === 'Decision' && sourceURI ? handleSaveAsTest : undefined}
+            />
+
+            {/* Batch Progress */}
+            {batchExecuting && (
+              <Card className="score-panel__progress-card">
+                <CardBody>
+                  <div className="score-panel__progress">
+                    <Loading message={`Processing row ${batchProgress.current} of ${batchProgress.total}...`} />
+                    <div className="score-panel__progress-bar">
+                      <div
+                        className="score-panel__progress-fill"
+                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+                      />
+                    </div>
+                    <Button variant="danger" size="small" onClick={handleStopBatch}>
+                      Stop
+                    </Button>
+                  </div>
+                </CardBody>
+              </Card>
+            )}
+
+            {/* Batch Results */}
+            {batchResults.length > 0 && !batchExecuting && (
+              <BatchResults
+                results={batchResults}
+                parameters={step.outputs ?? []}
+                stats={batchStats}
+                onClear={handleClearBatchResults}
+                onDownload={handleDownloadResults}
+                onUploadToCas={() => setShowCasUpload(true)}
+                onSaveAsScenarios={moduleType === 'Decision' && sourceURI ? handleSaveAsScenarios : undefined}
               />
             )}
           </>
@@ -1261,6 +1344,30 @@ title;`;
           outputValues={output.outputs}
           outputParameters={step.outputs ?? []}
           onClose={() => setShowSaveScenario(false)}
+        />
+      )}
+
+      {showBatchScenarios && sourceURI && (
+        <SaveBatchScenariosDialog
+          module={module}
+          sourceURI={sourceURI}
+          rows={selectedBatchIndices
+            .map(i => batchResults[i])
+            .filter(r => r?.output != null)
+            .map(r => ({ input: r.input, output: r.output! }))}
+          inputParameters={step.inputs ?? []}
+          outputParameters={step.outputs ?? []}
+          onClose={() => setShowBatchScenarios(false)}
+        />
+      )}
+
+      {showSaveTest && sourceURI && casTableTestInfo && (
+        <SaveTestDialog
+          module={module}
+          sourceURI={sourceURI}
+          casTableInfo={casTableTestInfo}
+          inputParameters={step.inputs ?? []}
+          onClose={() => setShowSaveTest(false)}
         />
       )}
     </div>

@@ -15,6 +15,23 @@
   gap: 8px;
 }
 
+.ui-runner__standalone-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--sas-white, #fff);
+  border: 1px solid var(--sas-gray-200, #e0e0e0);
+  border-radius: 8px;
+  margin-bottom: 0;
+}
+
+.ui-runner__standalone-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--sas-gray-900, #222);
+}
+
 .ui-runner__content {
   display: flex;
   flex-direction: column;

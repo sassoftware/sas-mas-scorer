@@ -27,6 +27,8 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadApps = useCallback(async () => {
     setLoading(true);
@@ -42,9 +44,14 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
 
   useEffect(() => { loadApps(); }, [loadApps]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this UI App?')) return;
-    await deleteUIDefinition(id);
+  const handleDelete = (id: string) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    await deleteUIDefinition(confirmDeleteId);
+    setConfirmDeleteId(null);
     await loadApps();
   };
 
@@ -57,12 +64,28 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
   const handleExport = async (id: string) => {
     const json = await exportUIDefinition(id);
     if (!json) return;
-    const blob = new Blob([json], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `ui-app-${id}.json`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+
+    // In a sandboxed iframe, programmatic downloads are silently blocked.
+    // Detect sandbox: if we're in an iframe without allow-downloads, use clipboard.
+    const isSandboxed = window !== window.top;
+
+    if (!isSandboxed) {
+      const blob = new Blob([json], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `ui-app-${id}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } else {
+      try {
+        await navigator.clipboard.writeText(json);
+        setSuccessMessage('JSON copied to clipboard (download not available in sandboxed mode).');
+      } catch {
+        setError('Export failed — clipboard access is blocked. Try running the app outside of SAS Visual Analytics.');
+      }
+    }
   };
 
   const handleImport = async () => {
@@ -106,6 +129,22 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
       {error && (
         <Alert variant="error" title="Error" dismissible onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert variant="success" title="Success" dismissible onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      )}
+
+      {confirmDeleteId && (
+        <Alert variant="warning" title="Confirm Delete">
+          <p>Delete this UI App?</p>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <Button variant="danger" size="small" onClick={confirmDelete}>Delete</Button>
+            <Button variant="tertiary" size="small" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+          </div>
         </Alert>
       )}
 
