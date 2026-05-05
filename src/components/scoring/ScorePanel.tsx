@@ -11,7 +11,7 @@ import { Loading } from '../common/Loading';
 import { PageHeader } from '../layout/Layout';
 import { InputForm } from './InputForm';
 import { OutputDisplay } from './OutputDisplay';
-import { CsvUpload } from './CsvUpload';
+import { FileUpload } from './FileUpload';
 import { CasTableScore, CasTableTestInfo } from './CasTableScore';
 import { BatchResults } from './BatchResults';
 import { CasUploadDialog } from './CasUploadDialog';
@@ -1091,7 +1091,7 @@ title;`;
           variant={executionMode === 'batch' ? 'primary' : 'tertiary'}
           onClick={() => { setExecutionMode('batch'); setBatchResults([]); setBatchStats(null); reset(); }}
         >
-          Parallel (CSV Upload)
+          Parallel (File Upload)
         </Button>
         <Button
           variant={executionMode === 'casTable' ? 'primary' : 'tertiary'}
@@ -1198,7 +1198,7 @@ title;`;
         {/* Batch Execution Mode */}
         {executionMode === 'batch' && (
           <>
-            <CsvUpload
+            <FileUpload
               parameters={step.inputs ?? []}
               onExecuteBatch={handleBatchExecute}
               executing={batchExecuting}

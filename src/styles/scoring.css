@@ -460,6 +460,63 @@
   color: var(--sas-gray-500);
 }
 
+.csv-upload__sheet-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.csv-upload__sheet-picker label {
+  font-weight: 600;
+}
+
+.csv-upload__delimiter-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.csv-upload__delimiter-label {
+  font-weight: 600;
+}
+
+.csv-upload__delimiter-chip {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  background: var(--sas-white);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.csv-upload__delimiter-chip:hover:not(:disabled) {
+  background: var(--sas-gray-100);
+}
+
+.csv-upload__delimiter-chip--active {
+  background: var(--sas-blue-100, #e6f0ff);
+  border-color: var(--sas-blue-500, #1e88e5);
+  color: var(--sas-blue-700, #1565c0);
+  font-weight: 600;
+}
+
+.csv-upload__delimiter-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.csv-upload__delimiter-input {
+  width: 80px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+
 .csv-upload__mapping-section {
   display: flex;
   flex-direction: column;

@@ -377,11 +377,6 @@
   background: var(--sas-gray-100);
 }
 
-.sas-table__sort-indicator {
-  font-size: var(--font-size-xs);
-  opacity: 0.7;
-}
-
 /* ─── Expandable Rows ─── */
 
 .coverage-row--expandable {
@@ -452,7 +447,6 @@
   color: var(--sas-gray-600);
   border-bottom: 1px solid var(--sas-gray-200);
   font-size: var(--font-size-xs);
-  text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 

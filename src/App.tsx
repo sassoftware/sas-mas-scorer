@@ -13,6 +13,7 @@ import { UIAppsList } from './components/uiApps/UIAppsList';
 import { UIBuilder } from './components/uiBuilder/UIBuilder';
 import { UIRunner } from './components/uiRunner/UIRunner';
 import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
+import { PublishingOverview } from './components/publishing';
 import FlowListPage from './components/flows/FlowListPage';
 import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
@@ -80,12 +81,13 @@ function App() {
       isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
       isFlowsListView: hash === '/flows' || hash === '/flows/',
+      isPublishingView: hash === '/publishing' || hash === '/publishing/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
       isStandalone: searchParams.get('standalone') === 'true',
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, flowDetailId, isStandalone } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, flowDetailId, isStandalone } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -158,7 +160,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !flowDetailId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !flowDetailId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -196,6 +198,7 @@ function App() {
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
     if (isCoverageView) return 'coverage';
+    if (isPublishingView) return 'publishing-overview';
     if (isUIAppsListView) return 'ui-apps';
     if (uiAppNewModuleId) return 'ui-app-new';
     if (uiAppEditId) return 'ui-app-edit';
@@ -224,6 +227,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/coverage');
+    } else if (view === 'publishing-overview') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/publishing');
     }
   }, [resetModules, navigate]);
 
@@ -341,6 +348,20 @@ function App() {
     // Coverage Analysis View
     if (activeView === 'coverage') {
       return <CoverageAnalysis />;
+    }
+
+    // Publishing Overview View
+    if (activeView === 'publishing-overview') {
+      return (
+        <PublishingOverview
+          onNavigateToModule={(id) => {
+            setSelectedModule(null);
+            setSelectedStep(null);
+            navigate(`/modules/${encodeURIComponent(id)}`);
+          }}
+          onNavigateToFlow={handleViewFlow}
+        />
+      );
     }
 
     // UI Apps List View

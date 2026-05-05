@@ -2,6 +2,33 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.2.0] - 2026-05-05
+
+### Added
+
+- **Publishing Overview** page — new primary navigation entry providing a cross-environment view of published models and decisions
+  - Summary cards showing total publishing destinations, models deployed, and decisions deployed (counts derived from the deduplicated completed-publish list)
+  - Destinations panel listing every publishing destination with name, type badge, description, and a collapsible block of type-specific details (CAS server/library/table, SingleStore host/port/schema, Git repo URL/branch/folder, private Docker base repo/kube URL, ESP target container, MAS, etc.)
+  - Searchable and filterable table of completed publishes with filters for Kind (Model/Decision), Destination, and Code Type plus debounced free-text search
+  - Dedup logic — for any `destinationName + publishName` pair, only the most recent `creationTimeStamp` is retained
+  - Icon-based row actions: "View Flow Diagram" (in-app flow viewer for decisions), "Open in SAS Model Manager / Intelligent Decisioning" (deeplink), and "Execute Score" (in-app scoring for MAS-deployed items)
+- **Multi-format batch file upload** — parallel scoring now accepts TSV, JSON/JSONL, Excel (`.xlsx`), and Parquet files in addition to CSV
+  - TSV / tab-delimited files (`.tsv`, `.tab`)
+  - JSON arrays and JSON Lines (`.json`, `.jsonl`, `.ndjson`) — headers inferred from the union of keys across the first 100 records
+  - Excel workbooks (`.xlsx`) with multi-sheet support — a sheet picker appears when the workbook has more than one sheet
+  - Parquet files (`.parquet`) with native type preservation (no string-to-number coercion guesswork)
+- **Format badge** shown next to the uploaded file name indicating which parser was used
+- **File format adapter architecture** (`src/utils/fileFormats/`) — adapters implement a common interface so new formats can be added without changing the scoring, mapping, or result pipeline
+- **Lazy-loaded parsers** — Excel (`read-excel-file`) and Parquet (`hyparquet`) libraries are loaded on demand, keeping the main bundle size unchanged
+- **Custom delimiter override** for CSV / TSV uploads — pick a preset (Comma, Tab, Semicolon, Pipe) or type any character in the free-text field to re-parse the file. Useful for European-locale CSVs that use `;` or for pipe-delimited exports
+
+### Changed
+
+- **"Parallel (CSV Upload)" renamed to "Parallel (File Upload)"** in the scoring panel mode toggle to reflect the broader format support
+- `CsvUpload` component renamed to `FileUpload`
+- Column auto-mapping, data preview, parallel dispatch, and result export behave identically across all supported formats
+- **Session-level caching for Publishing Overview and Test Coverage** — navigating away from either page and returning no longer triggers a refetch or re-run. Data persists in memory for the session; the explicit Refresh / Re-run Analysis buttons still force a fresh fetch, and caches are cleared automatically on logout
+
 ## [2.1.0] - 2026-04-14
 
 ### Added

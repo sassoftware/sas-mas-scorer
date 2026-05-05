@@ -12,7 +12,7 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 4. [Browsing Modules](#4-browsing-modules)
 5. [Module Details](#5-module-details)
 6. [Scoring — Single Execution](#6-scoring--single-execution)
-7. [Scoring — Parallel (CSV Upload)](#7-scoring--parallel-csv-upload)
+7. [Scoring — Parallel (File Upload)](#7-scoring--parallel-file-upload)
 8. [Scoring — Parallel (CAS Table)](#8-scoring--parallel-cas-table)
 9. [Scenarios and Tests](#9-scenarios-and-tests)
 10. [View API Call](#10-view-api-call)
@@ -31,7 +31,7 @@ The SAS Micro Analytic Score (MAS) service hosts published models and decisions 
 The SAS MAS Scorer gives you a visual interface to:
 
 - Browse all published modules and inspect their inputs, outputs, and source code.
-- Score individual rows by filling in a form, or score thousands of rows in parallel from a CSV file or CAS table.
+- Score individual rows by filling in a form, or score thousands of rows in parallel from an uploaded file (CSV, TSV, JSON/JSONL, Excel, or Parquet) or a CAS table.
 - Save scoring setups back to SAS Intelligent Decisioning as **Scenarios** (static input/expected output pairs) or **Tests** (CAS table-backed batch tests).
 - Build lightweight custom UIs on top of any module so that business users can score without seeing the underlying technical details.
 - Visualize SAS Intelligent Decisioning flows as interactive diagrams.
@@ -177,7 +177,7 @@ If the module contains submodules (common for complex decision flows), they are 
 The scoring panel is where you execute a module step. At the top of the page you will see a mode toggle with three options:
 
 - **Single Execution** — Score one row at a time by filling in a form.
-- **Parallel (CSV Upload)** — Score many rows from a CSV file.
+- **Parallel (File Upload)** — Score many rows from an uploaded file (CSV, TSV, JSON/JSONL, Excel, or Parquet).
 - **Parallel (CAS Table)** — Score many rows from a CAS table.
 
 This section covers Single Execution. The other modes are covered in the next two sections.
@@ -221,23 +221,43 @@ After a successful execution, a results section appears below the input form sho
 
 ---
 
-## 7. Scoring — Parallel (CSV Upload)
+## 7. Scoring — Parallel (File Upload)
 
-Switch to the **Parallel (CSV Upload)** tab to score many rows at once from a CSV file.
+Switch to the **Parallel (File Upload)** tab to score many rows at once from a file on your machine.
 
-### Uploading a CSV
+### Supported File Formats
 
-Drag and drop a `.csv` file onto the upload area, or click to browse. The file is parsed client-side — nothing is uploaded to a server.
+| Format | Extensions | Notes |
+|--------|------------|-------|
+| CSV | `.csv` | Comma-delimited, quoted fields supported |
+| TSV | `.tsv`, `.tab` | Tab-delimited |
+| JSON / JSONL | `.json`, `.jsonl`, `.ndjson` | Either a single JSON array of objects or one JSON object per line. Headers are inferred from the union of keys in the first 100 records |
+| Excel | `.xlsx` | Workbooks with multiple sheets are supported — a sheet picker appears after upload |
+| Parquet | `.parquet` | Native column types are preserved (numbers stay numbers, dates stay dates) — no string coercion |
+
+The file format is detected automatically from the extension, and a badge next to the file name confirms which parser was used. Excel and Parquet parsers are loaded on demand the first time you pick one of those formats.
+
+### Uploading a File
+
+Click the file picker and choose a file in one of the supported formats, or drag and drop onto the upload area. The file is parsed entirely in the browser — nothing is uploaded to a server.
+
+### Custom Delimiter (CSV / TSV only)
+
+For delimited text formats, a **Delimiter** control appears above the column mapping section with preset chips for Comma, Tab, Semicolon, and Pipe, plus a free-text field for any custom character (e.g. `^`, `#`). This is useful when a file uses a non-standard separator despite its `.csv` extension — a common pitfall with European locale exports that use `;`. Changing the delimiter re-parses the file immediately.
+
+### Sheet Picker (Excel only)
+
+If the uploaded workbook contains more than one sheet, a **Sheet** dropdown appears above the column mapping section. Pick the sheet you want to score; the preview and mapping refresh automatically.
 
 ### Column Mapping
 
-After the CSV is parsed, a mapping interface shows each module input parameter on the left and a dropdown of CSV column names on the right. The app automatically maps columns by name (case-insensitive, ignoring underscores, spaces, and hyphens). You can adjust any mapping manually.
+After the file is parsed, a mapping interface shows each module input parameter on the left and a dropdown of column names on the right. The app automatically maps columns by name (case-insensitive, ignoring underscores, spaces, and hyphens). You can adjust any mapping manually.
 
 A badge shows how many parameters are mapped (e.g. "8/8 mapped"). All parameters must be mapped before you can run.
 
 ### Data Preview
 
-A preview table shows the first few rows of your CSV data so you can verify the data looks correct.
+A preview table shows the first few rows of your data so you can verify it looks correct.
 
 ### Configuring the Run
 
@@ -294,7 +314,7 @@ Switch to the **Parallel (CAS Table)** tab to score rows directly from a CAS tab
 
 ### Column Mapping
 
-Once you select a table, the app loads its column metadata and shows the mapping interface — the same as CSV upload. Columns are auto-matched by name. Adjust any mapping manually using the dropdowns.
+Once you select a table, the app loads its column metadata and shows the mapping interface — the same as the file upload mode. Columns are auto-matched by name. Adjust any mapping manually using the dropdowns.
 
 ### Data Preview
 
@@ -303,7 +323,7 @@ A 5-row preview of the table is shown so you can verify the data and column type
 ### Configuring the Run
 
 - **Score full table** — Check this to score every row in the table. When unchecked, a **Row Limit** field lets you cap how many rows to score (default: 1,000).
-- **Parallel Requests** — Same concurrency control as CSV mode.
+- **Parallel Requests** — Same concurrency control as the file upload mode.
 
 ### Save as Test
 
@@ -311,7 +331,7 @@ For Decision modules, a **Save as Test** button appears next to **Run All**. Thi
 
 ### Running and Results
 
-Click **Run All** to start the batch. The results interface is identical to the CSV upload mode, with the same statistics, table, selection, and export capabilities.
+Click **Run All** to start the batch. The results interface is identical to the file upload mode, with the same statistics, table, selection, and export capabilities.
 
 ---
 
@@ -656,7 +676,7 @@ Each asset row has a link icon that opens the asset in SAS Intelligent Decisioni
 - **Escape** closes the code viewer modal in the View Flows page.
 - **Tab** moves between input fields in the scoring form.
 - The scoring panel **remembers your last-used folder and CAS library** when saving scenarios and tests, so you do not need to re-select them each time.
-- Switching between Single Execution, Parallel (CSV), and Parallel (CAS Table) modes **clears previous results** to avoid confusion.
+- Switching between Single Execution, Parallel (File Upload), and Parallel (CAS Table) modes **clears previous results** to avoid confusion.
 - In the folder browser dialogs, you must click the **"Select current folder"** link at the bottom to confirm your folder choice. Simply navigating into a folder does not select it.
 
 ---

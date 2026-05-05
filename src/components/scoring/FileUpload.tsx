@@ -7,87 +7,25 @@ import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge, TypeBadge } from '../common/Badge';
+import {
+  FileFormatAdapter,
+  ParsedTable,
+  acceptAttribute,
+  adapters,
+  convertValue,
+  findAdapter,
+} from '../../utils/fileFormats';
 
-interface CsvUploadProps {
+interface FileUploadProps {
   parameters: StepParameter[];
   onExecuteBatch: (rows: Record<string, unknown>[], concurrency: number) => void;
   executing: boolean;
 }
 
-interface CsvData {
-  headers: string[];
-  rows: string[][];
-}
-
 interface ColumnMapping {
-  [paramName: string]: string | null; // paramName -> csvHeader
+  [paramName: string]: string | null;
 }
 
-// Simple CSV parser
-const parseCsv = (text: string): CsvData => {
-  const lines = text.split(/\r?\n/).filter(line => line.trim());
-  if (lines.length === 0) {
-    return { headers: [], rows: [] };
-  }
-
-  const parseRow = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    result.push(current.trim());
-    return result;
-  };
-
-  const headers = parseRow(lines[0]);
-  const rows = lines.slice(1).map(parseRow);
-
-  return { headers, rows };
-};
-
-// Convert string value to appropriate type based on parameter type
-const convertValue = (value: string, type: string): unknown => {
-  if (value === '' || value === null || value === undefined) {
-    return null;
-  }
-
-  switch (type) {
-    case 'decimal':
-      return parseFloat(value) || 0;
-    case 'integer':
-    case 'bigint':
-      return parseInt(value, 10) || 0;
-    case 'string':
-      return value;
-    case 'decimalArray':
-      return value.split(';').map(v => parseFloat(v.trim()) || 0);
-    case 'integerArray':
-    case 'bigintArray':
-      return value.split(';').map(v => parseInt(v.trim(), 10) || 0);
-    case 'stringArray':
-      return value.split(';').map(v => v.trim());
-    default:
-      return value;
-  }
-};
-
-// Auto-match CSV headers to parameters
 const autoMapColumns = (
   headers: string[],
   parameters: StepParameter[]
@@ -98,10 +36,8 @@ const autoMapColumns = (
   parameters.forEach(param => {
     const normalizedParam = param.name.toLowerCase().replace(/[_\s-]/g, '');
 
-    // Try exact match first
     let matchIndex = normalizedHeaders.findIndex(h => h === normalizedParam);
 
-    // Try contains match
     if (matchIndex === -1) {
       matchIndex = normalizedHeaders.findIndex(h =>
         h.includes(normalizedParam) || normalizedParam.includes(h)
@@ -114,80 +50,135 @@ const autoMapColumns = (
   return mapping;
 };
 
-export const CsvUpload: React.FC<CsvUploadProps> = ({
+const formatCell = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const DELIMITER_PRESETS: { label: string; value: string }[] = [
+  { label: 'Comma', value: ',' },
+  { label: 'Tab', value: '\t' },
+  { label: 'Semicolon', value: ';' },
+  { label: 'Pipe', value: '|' },
+];
+
+export const FileUpload: React.FC<FileUploadProps> = ({
   parameters,
   onExecuteBatch,
   executing,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [csvData, setCsvData] = useState<CsvData | null>(null);
+  const [table, setTable] = useState<ParsedTable | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping>({});
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [formatLabel, setFormatLabel] = useState<string | null>(null);
   const [concurrency, setConcurrency] = useState<number>(2);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [currentAdapter, setCurrentAdapter] = useState<FileFormatAdapter | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [delimiter, setDelimiter] = useState<string | null>(null);
+  const [customDelimiter, setCustomDelimiter] = useState<string>('');
 
-  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const runAdapter = useCallback(async (
+    adapter: FileFormatAdapter,
+    file: File,
+    opts?: { sheetName?: string; delimiter?: string },
+  ) => {
+    setLoading(true);
+    try {
+      const parsed = await adapter.parse(file, opts);
+
+      if (parsed.headers.length === 0) {
+        setError('File is empty or invalid');
+        setTable(null);
+        return;
+      }
+
+      setTable(parsed);
+      setFormatLabel(adapter.label);
+      setMapping(autoMapColumns(parsed.headers, parameters));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to parse file';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [parameters]);
+
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setError(null);
     setFileName(file.name);
+    setFormatLabel(null);
+    setTable(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        const data = parseCsv(text);
+    const adapter = findAdapter(file.name);
+    if (!adapter) {
+      const supported = adapters.map(a => a.label).join(', ');
+      setError(`Unsupported file type. Supported formats: ${supported}`);
+      setCurrentFile(null);
+      setCurrentAdapter(null);
+      return;
+    }
 
-        if (data.headers.length === 0) {
-          setError('CSV file is empty or invalid');
-          return;
-        }
+    setCurrentFile(file);
+    setCurrentAdapter(adapter);
+    setDelimiter(adapter.defaultDelimiter ?? null);
+    setCustomDelimiter('');
+    await runAdapter(adapter, file);
+  }, [runAdapter]);
 
-        setCsvData(data);
+  const handleSheetChange = useCallback(async (sheetName: string) => {
+    if (!currentFile || !currentAdapter) return;
+    setError(null);
+    await runAdapter(currentAdapter, currentFile, { sheetName });
+  }, [currentFile, currentAdapter, runAdapter]);
 
-        // Auto-map columns
-        const autoMapping = autoMapColumns(data.headers, parameters);
-        setMapping(autoMapping);
-      } catch (err) {
-        setError('Failed to parse CSV file');
-      }
-    };
-    reader.onerror = () => {
-      setError('Failed to read file');
-    };
-    reader.readAsText(file);
-  }, [parameters]);
+  const handleDelimiterChange = useCallback(async (next: string) => {
+    if (!currentFile || !currentAdapter || !next) return;
+    setDelimiter(next);
+    setError(null);
+    await runAdapter(currentAdapter, currentFile, { delimiter: next });
+  }, [currentFile, currentAdapter, runAdapter]);
 
-  const handleMappingChange = useCallback((paramName: string, csvHeader: string | null) => {
+  const handleMappingChange = useCallback((paramName: string, header: string | null) => {
     setMapping(prev => ({
       ...prev,
-      [paramName]: csvHeader,
+      [paramName]: header,
     }));
   }, []);
 
   const handleClear = useCallback(() => {
-    setCsvData(null);
+    setTable(null);
     setMapping({});
     setFileName(null);
+    setFormatLabel(null);
     setError(null);
+    setCurrentFile(null);
+    setCurrentAdapter(null);
+    setDelimiter(null);
+    setCustomDelimiter('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   }, []);
 
   const handleRunAll = useCallback(() => {
-    if (!csvData) return;
+    if (!table) return;
 
-    const rows: Record<string, unknown>[] = csvData.rows.map(row => {
+    const rows: Record<string, unknown>[] = table.rows.map(row => {
       const rowData: Record<string, unknown> = {};
 
       parameters.forEach(param => {
-        const csvHeader = mapping[param.name];
-        if (csvHeader) {
-          const headerIndex = csvData.headers.indexOf(csvHeader);
+        const header = mapping[param.name];
+        if (header) {
+          const headerIndex = table.headers.indexOf(header);
           if (headerIndex !== -1) {
-            rowData[param.name] = convertValue(row[headerIndex] || '', param.type);
+            rowData[param.name] = convertValue(row[headerIndex], param.type);
           }
         }
       });
@@ -196,9 +187,8 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
     });
 
     onExecuteBatch(rows, concurrency);
-  }, [csvData, mapping, parameters, onExecuteBatch, concurrency]);
+  }, [table, mapping, parameters, onExecuteBatch, concurrency]);
 
-  // Check if all required parameters are mapped
   const unmappedParams = parameters.filter(p => !mapping[p.name]);
   const allMapped = unmappedParams.length === 0;
   const mappedCount = parameters.length - unmappedParams.length;
@@ -206,25 +196,25 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
   return (
     <Card className="csv-upload">
       <CardHeader>
-        <h3>CSV Batch Upload</h3>
+        <h3>Batch File Upload</h3>
       </CardHeader>
       <CardBody>
-        {/* File Upload Section */}
         <div className="csv-upload__file-section">
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept={acceptAttribute()}
             onChange={handleFileSelect}
             className="csv-upload__file-input"
-            id="csv-file-input"
+            id="file-upload-input"
           />
-          <label htmlFor="csv-file-input" className="csv-upload__file-label">
+          <label htmlFor="file-upload-input" className="csv-upload__file-label">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
             </svg>
-            <span>{fileName || 'Choose CSV file...'}</span>
+            <span>{fileName || 'Choose file...'}</span>
           </label>
+          {formatLabel && <Badge variant="info">{formatLabel}</Badge>}
           {fileName && (
             <Button variant="tertiary" size="small" onClick={handleClear}>
               Clear
@@ -238,8 +228,68 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
           </Alert>
         )}
 
-        {/* Mapping Section */}
-        {csvData && (
+        {loading && !table && (
+          <Alert variant="info" title="Parsing file...">
+            Reading {fileName}
+          </Alert>
+        )}
+
+        {table && currentAdapter?.defaultDelimiter !== undefined && (
+          <div className="csv-upload__delimiter-picker">
+            <span className="csv-upload__delimiter-label">Delimiter:</span>
+            {DELIMITER_PRESETS.map(preset => (
+              <button
+                key={preset.label}
+                type="button"
+                className={`csv-upload__delimiter-chip ${delimiter === preset.value ? 'csv-upload__delimiter-chip--active' : ''}`}
+                onClick={() => handleDelimiterChange(preset.value)}
+                disabled={loading || executing}
+              >
+                {preset.label}
+              </button>
+            ))}
+            <input
+              type="text"
+              className="csv-upload__delimiter-input"
+              placeholder="Custom"
+              value={customDelimiter}
+              maxLength={4}
+              onChange={(e) => setCustomDelimiter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && customDelimiter) {
+                  e.preventDefault();
+                  handleDelimiterChange(customDelimiter);
+                }
+              }}
+              onBlur={() => {
+                if (customDelimiter && customDelimiter !== delimiter) {
+                  handleDelimiterChange(customDelimiter);
+                }
+              }}
+              disabled={loading || executing}
+              aria-label="Custom delimiter"
+            />
+          </div>
+        )}
+
+        {table && table.sheetNames && table.sheetNames.length > 1 && (
+          <div className="csv-upload__sheet-picker">
+            <label htmlFor="sheet-select">Sheet:</label>
+            <select
+              id="sheet-select"
+              value={table.activeSheet ?? ''}
+              onChange={(e) => handleSheetChange(e.target.value)}
+              disabled={loading || executing}
+              className="csv-upload__select"
+            >
+              {table.sheetNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {table && (
           <div className="csv-upload__mapping-section">
             <div className="csv-upload__mapping-header">
               <h4>Column Mapping</h4>
@@ -270,7 +320,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
                     className={`csv-upload__select ${mapping[param.name] ? 'csv-upload__select--mapped' : 'csv-upload__select--unmapped'}`}
                   >
                     <option value="">-- Select column --</option>
-                    {csvData.headers.map(header => (
+                    {table.headers.map(header => (
                       <option key={header} value={header}>
                         {header}
                       </option>
@@ -280,32 +330,31 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
               ))}
             </div>
 
-            {/* Data Preview */}
             <div className="csv-upload__preview">
-              <h4>Data Preview ({csvData.rows.length} rows)</h4>
+              <h4>Data Preview ({table.rows.length} rows)</h4>
               <div className="csv-upload__preview-table-wrapper">
                 <table className="csv-upload__preview-table">
                   <thead>
                     <tr>
                       <th>#</th>
-                      {csvData.headers.map(header => (
+                      {table.headers.map(header => (
                         <th key={header}>{header}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {csvData.rows.slice(0, 5).map((row, index) => (
+                    {table.rows.slice(0, 5).map((row, index) => (
                       <tr key={index}>
                         <td>{index + 1}</td>
                         {row.map((cell, cellIndex) => (
-                          <td key={cellIndex}>{cell}</td>
+                          <td key={cellIndex}>{formatCell(cell)}</td>
                         ))}
                       </tr>
                     ))}
-                    {csvData.rows.length > 5 && (
+                    {table.rows.length > 5 && (
                       <tr className="csv-upload__preview-more">
-                        <td colSpan={csvData.headers.length + 1}>
-                          ... and {csvData.rows.length - 5} more rows
+                        <td colSpan={table.headers.length + 1}>
+                          ... and {table.rows.length - 5} more rows
                         </td>
                       </tr>
                     )}
@@ -317,7 +366,7 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
         )}
       </CardBody>
 
-      {csvData && (
+      {table && (
         <CardFooter>
           <div className="csv-upload__run-controls">
             <div className="csv-upload__concurrency">
@@ -355,10 +404,10 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
               variant="primary"
               size="large"
               onClick={handleRunAll}
-              disabled={!allMapped || executing || csvData.rows.length === 0}
+              disabled={!allMapped || executing || table.rows.length === 0}
               loading={executing}
             >
-              {executing ? 'Executing...' : `Run All (${csvData.rows.length} rows)`}
+              {executing ? 'Executing...' : `Run All (${table.rows.length} rows)`}
             </Button>
           </div>
           {!allMapped && (
@@ -372,4 +421,4 @@ export const CsvUpload: React.FC<CsvUploadProps> = ({
   );
 };
 
-export default CsvUpload;
+export default FileUpload;

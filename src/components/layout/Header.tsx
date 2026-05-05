@@ -4,6 +4,8 @@
 import React from 'react';
 import { useSasAuth } from '../../auth';
 import { Button } from '../common/Button';
+import { clearPublishingOverviewCache } from '../../hooks/usePublishingOverview';
+import { clearCoverageAnalysisCache } from '../coverage/CoverageAnalysis';
 
 // Check build mode at runtime
 const isJobDefBuild = typeof __BUILD_MODE__ !== 'undefined' && __BUILD_MODE__ === 'jobdef';
@@ -24,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
     try {
       if (isAuthenticated) {
         await logout();
+        clearPublishingOverviewCache();
+        clearCoverageAnalysisCache();
       } else {
         await login();
       }

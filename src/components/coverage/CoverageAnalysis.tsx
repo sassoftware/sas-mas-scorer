@@ -20,8 +20,14 @@ import { ContentType, CollectionProgress, CoverageResult } from '../../types/cov
 type FilterType = 'all' | ContentType;
 type CoverageFilter = 'all' | 'covered' | 'uncovered';
 
+let cachedResult: CoverageResult | null = null;
+
+export const clearCoverageAnalysisCache = (): void => {
+  cachedResult = null;
+};
+
 export const CoverageAnalysis: React.FC = () => {
-  const [result, setResult] = useState<CoverageResult | null>(null);
+  const [result, setResult] = useState<CoverageResult | null>(() => cachedResult);
   const [progress, setProgress] = useState<CollectionProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,6 +58,7 @@ export const CoverageAnalysis: React.FC = () => {
     try {
       const coverageResult = await collectCoverage((p) => setProgress({ ...p }));
       setResult(coverageResult);
+      cachedResult = coverageResult;
       setProgress(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to collect coverage data');
@@ -486,18 +493,28 @@ interface SortHeaderProps {
   align?: 'left' | 'center' | 'right';
 }
 
-const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onSort, width, align = 'left' }) => (
-  <th
-    className="sas-table__th sas-table__th--sortable"
-    style={{ width, textAlign: align, cursor: 'pointer' }}
-    onClick={() => onSort(field as never)}
-  >
-    {label}
-    {current === field && (
-      <span className="sas-table__sort-indicator">{dir === 'asc' ? ' \u25B2' : ' \u25BC'}</span>
-    )}
-  </th>
-);
+const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onSort, width, align = 'left' }) => {
+  const isActive = current === field;
+  const justify = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
+  return (
+    <th
+      className="sas-table__th sas-table__th--sortable"
+      style={{ width, textAlign: align, cursor: 'pointer' }}
+      onClick={() => onSort(field as never)}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: justify }}>
+        {label}
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth={2}
+          opacity={isActive ? 1 : 0.3}
+        >
+          <path d={isActive && dir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
+        </svg>
+      </span>
+    </th>
+  );
+};
 
 // Helpers
 

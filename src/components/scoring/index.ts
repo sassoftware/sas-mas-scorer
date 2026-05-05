@@ -4,5 +4,5 @@
 export * from './InputForm';
 export * from './OutputDisplay';
 export * from './ScorePanel';
-export * from './CsvUpload';
+export * from './FileUpload';
 export * from './BatchResults';

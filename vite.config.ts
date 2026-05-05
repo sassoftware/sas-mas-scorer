@@ -27,13 +27,22 @@ function goTemplateSafeScripts(): Plugin {
       for (const file of Object.values(bundle)) {
         if (file.type === 'asset' && file.fileName.endsWith('.html')) {
           let html = typeof file.source === 'string' ? file.source : new TextDecoder().decode(file.source);
+          // Prepend UTF-8 BOM so the browser detects encoding correctly even
+          // when SAS Job Execution / Visual Analytics serves the HTML with a
+          // wrong (e.g. Windows-1252) Content-Type header. BOM outranks the
+          // HTTP charset per the HTML encoding sniffing algorithm.
+          if (!html.startsWith('﻿')) html = '﻿' + html;
           // Replace each inline <script> block with a base64-decoded eval
           html = html.replace(
             /<script([^>]*)>([\s\S]*?)<\/script>/gi,
             (match, attrs: string, code: string) => {
               // Skip empty scripts or scripts with src attributes (not inline)
               if (!code.trim() || /\bsrc\s*=/i.test(attrs)) return match;
-              const encoded = Buffer.from(code, 'utf-8').toString('base64');
+              // new Function() runs code in classic (non-module) context, where
+              // import.meta is a SyntaxError. Substitute a safe equivalent — the
+              // value is unused in singlefile mode (no real preload happens).
+              const safeCode = code.replace(/\bimport\.meta\.url\b/g, 'document.baseURI');
+              const encoded = Buffer.from(safeCode, 'utf-8').toString('base64');
               return `<script>document.addEventListener("DOMContentLoaded",function(){new Function(atob("${encoded}"))()});</script>`;
             }
           );

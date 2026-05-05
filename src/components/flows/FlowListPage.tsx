@@ -93,7 +93,12 @@ export default function FlowListPage() {
                 onClick={toggleSort}
                 style={{ cursor: 'pointer', userSelect: 'none' }}
               >
-                Name {sortDir === 'asc' ? '▲' : '▼'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  Name
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
+                  </svg>
+                </span>
               </th>
               <th>Description</th>
               <th style={{ width: '144px' }}>Modified</th>

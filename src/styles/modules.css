@@ -302,7 +302,6 @@
   background-color: var(--sas-gray-50);
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-700);
-  text-transform: uppercase;
   font-size: var(--font-size-xs);
 }
 
