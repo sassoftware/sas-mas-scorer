@@ -2,6 +2,27 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.3.0] - 2026-05-11
+
+### Added
+
+- **Job Monitoring** page — new primary navigation entry for tracking SAS Viya Job Execution jobs in real time
+  - KPI cards (Total Jobs, Active, Completed, Failed/Other, Avg Runtime) populated by walking `/jobExecution/jobs` page-by-page and bucketing each item locally — the unreliable envelope `count` is never trusted
+  - Running panel with one card per active job, pulsing state badge, and a live elapsed timer that ticks every second; auto-refreshes every 5 s
+  - History table covering every finished job with debounced server-side search, state filter chips (All / Completed / Failed / Canceled / Timed Out), 50-per-page pagination, and click-to-detail rows with hover underline and a right-edge chevron
+  - Per-job detail page at `/jobs/:id` with **Log**, **Listing**, **Code**, and **Parameters** tabs
+    - **Log** live-tails via the Compute API while the job runs (3 s polling, drains up to 5 pages per tick), then switches to the saved `.log.txt` file when terminal. Per-line colour coding by type (error / warning / note / source / title / fatal / message / byline / footnote / highlighted) with tinted backgrounds and coloured left borders. The file-format `<type>: <line>` prefix is parsed off before display
+    - **Listing** handles the matching `/listing` endpoint and `.lst` file with a `title > highlighted > normal` font-size hierarchy
+    - **Code** renders `jobDefinition.code` via Prism with a line-number gutter (display-only)
+    - **Parameters** lists declared parameters next to submitted arguments with **overridden** / **extra** tags
+  - **Copy** to clipboard + **Download** controls on each tab — `<JobName>-<8charId>.log` from the Log tab, `.lst` from Listing, `<JobName>.sas` from Code (line numbers excluded from the download)
+  - **Cancel Job** (red button, double-confirm modal) for any non-terminal job. Issues `PUT /jobExecution/jobs/<id>/state` with body `canceled` *first*, then `DELETE /compute/sessions/<sessionId>` (best-effort, swallows 404s / missing sessions). Order matters: deleting the session first races with Job Execution flipping the state to `failed`, after which the field becomes immutable. Cache is updated locally so the monitoring page counts stay in sync without a re-walk
+  - **Delete Job** (red button, double-confirm modal) for any terminal job. Issues `DELETE /jobExecution/jobs/<id>` (removing the record, log, listing, and result files), drops the entry from the in-memory cache, and navigates back to the Job Monitoring overview
+  - Incremental refresh — an in-memory `jobsById` map persists across navigations within the session, so clicking Refresh walks pages from the top and stops on the first full page of unchanged jobs (typically a single HTTP call)
+  - Per-section error backoff: when a fetch fails, that section's polling pauses until manual retry; the page shows a single "Auto-refresh paused due to errors from SAS Viya — Retry" banner
+  - Shared 5xx response-interceptor handling — 502 / 503 / 504 now surface as "SAS Viya service is temporarily unavailable" instead of falling through to a generic error
+- **Per-destination deployment count badges** on the Publishing Overview page — each destination card now shows badges next to its name indicating how many models and decisions are deployed there (e.g., "3 models", "1 decision"). Destinations with no deployed content show a "0" badge. Counts are derived from the same deduplicated completed-publish list as the summary cards
+
 ## [2.2.0] - 2026-05-05
 
 ### Added

@@ -15,10 +15,16 @@ export interface PublishingStats {
   decisionCount: number;
 }
 
+export interface DestinationCounts {
+  models: number;
+  decisions: number;
+}
+
 interface UsePublishingOverviewReturn {
   destinations: PublishDestination[];
   dedupedItems: PublishedItem[];
   stats: PublishingStats;
+  destinationCounts: Record<string, DestinationCounts>;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -87,6 +93,21 @@ export const usePublishingOverview = (
 
   const dedupedItems = useMemo(() => dedupPublishedItems(rawItems), [rawItems]);
 
+  const destinationCounts = useMemo<Record<string, DestinationCounts>>(() => {
+    const counts: Record<string, DestinationCounts> = {};
+    for (const item of dedupedItems) {
+      const key = item.destinationName;
+      if (!key) continue;
+      const kind = getPublishedKind(item.sourceUri);
+      if (kind !== 'model' && kind !== 'decision') continue;
+      const entry = counts[key] ?? { models: 0, decisions: 0 };
+      if (kind === 'model') entry.models++;
+      else entry.decisions++;
+      counts[key] = entry;
+    }
+    return counts;
+  }, [dedupedItems]);
+
   const stats = useMemo<PublishingStats>(() => {
     let models = 0;
     let decisions = 0;
@@ -106,6 +127,7 @@ export const usePublishingOverview = (
     destinations,
     dedupedItems,
     stats,
+    destinationCounts,
     loading,
     error,
     refresh: fetchAll,

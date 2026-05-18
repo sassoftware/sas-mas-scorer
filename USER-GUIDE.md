@@ -20,7 +20,8 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 12. [UI Apps](#12-ui-apps)
 13. [View Flows](#13-view-flows)
 14. [Test Coverage Analysis](#14-test-coverage-analysis)
-15. [Keyboard and Interaction Tips](#15-keyboard-and-interaction-tips)
+15. [Job Monitoring](#15-job-monitoring)
+16. [Keyboard and Interaction Tips](#16-keyboard-and-interaction-tips)
 
 ---
 
@@ -91,6 +92,7 @@ The left sidebar is the primary navigation. It contains four main pages and a co
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
 | **Test Coverage** | Analyze test scenario coverage across all assets |
+| **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code |
 
 ### Current Module Section
 
@@ -670,7 +672,141 @@ Each asset row has a link icon that opens the asset in SAS Intelligent Decisioni
 
 ---
 
-## 15. Keyboard and Interaction Tips
+## 15. Job Monitoring
+
+The **Job Monitoring** page gives you a live view of every job executed by the SAS Viya Job Execution service. Use it to watch active runs as they happen, drill into a job's log or final output, and search the full history.
+
+### The Overview Page
+
+**KPI Cards** sit at the top:
+
+- **Total Jobs** — every job the scan window has seen. Shows a `+` suffix when there are more than 10,000 in the tenant.
+- **Active** — currently running and pending jobs. Always live (updates every 5 seconds with the running panel).
+- **Completed** — successful jobs.
+- **Failed / Other** — failures plus cancelled, timed-out, and other terminal states.
+- **Avg Runtime** — average elapsed time across the most recent 50 completed jobs.
+
+When you open the page (or click Refresh), a "Loading jobs…" banner under the header shows the scan progress, and the counts tick up as each page of jobs is processed.
+
+**Running Panel** shows one card per active job with:
+
+- The job name and a state badge (pulsing for `running` / `pending`).
+- Description, creator, type, start time, and a live elapsed timer that ticks every second.
+- A **Monitor** button that opens the job's detail page.
+
+This panel auto-refreshes every 5 seconds.
+
+**History Table** lists every finished job, with:
+
+- A debounced search box that filters on the server by job name.
+- State filter chips: **All**, **Completed**, **Failed**, **Canceled**, **Timed Out**.
+- 50 jobs per page, with **Previous** / **Next** buttons. The table walks as deep as the Job Execution API allows; the envelope `count` field is intentionally ignored because it can underreport on a busy tenant.
+- Hover affordance on each row (the job name turns blue and underlined, a right-edge chevron slides in). Click anywhere on a row to open its details.
+
+When you're on page 1 with no filter or search, the history table also auto-refreshes every 30 seconds. As soon as you apply a filter or page deeper, that auto-refresh pauses so the rug isn't pulled out from under you.
+
+### Manual Refresh
+
+Click **Refresh** in the page header to force-update all three sections. Stats refresh is **incremental** — it walks pages from the top and stops at the first full page where every job's ID and state match what was scanned previously. In the steady state, a refresh is just one HTTP call.
+
+### Error Backoff
+
+If the Viya gateway returns server errors (502 / 503), each section's background polling pauses and the page shows a single banner:
+
+> *Auto-refresh paused due to errors from SAS Viya. Last error: …*
+
+Click **Retry** in the banner (or the page-level **Refresh**) to resume polling.
+
+### Job Detail Page
+
+Selecting a job opens its detail page at `/jobs/<id>`. The header shows:
+
+- Job name and a state badge.
+- Creator, type, start time, ID, and a live elapsed counter (running jobs).
+- End timestamp and final elapsed (terminal jobs).
+- A **← Back to Job Monitoring** link.
+- A **Refresh** button that re-fetches the job record and log/listing for this one job.
+- A red **Cancel Job** or **Delete Job** button (see *Cancelling or Deleting a Job* below).
+
+#### Cancelling or Deleting a Job
+
+The detail page exposes a single destructive action whose label depends on the job's current state. Both actions open a confirmation dialog before anything is sent to SAS Viya — clicking the red button alone never causes the action to fire.
+
+**Cancel Job** — appears for any non-terminal job (`running`, `pending`, `paused`).
+
+1. Click the red **Cancel Job** button.
+2. A dialog appears: *"Cancel this job? You're about to cancel `<JobName>`. This will terminate the SAS session backing the job (if one is active) and mark the job record as canceled. This cannot be undone."*
+3. Click **Cancel job** to proceed, or **Keep running** / press Esc to dismiss.
+4. The app PUTs `state = canceled` on the Job Execution record *first*, then deletes the Compute session that's hosting the SAS process. (Doing the session delete first would cause Job Execution to mark the job as `failed` before our `canceled` PUT lands, and the state would be locked in.)
+5. If the compute session is already gone, that step is skipped silently. Any other failure surfaces an inline red error in the dialog so you can retry.
+6. On success the dialog closes, the page header flips to `canceled`, and the Log tab swaps from live tail to the saved log file.
+
+**Delete Job** — appears for any terminal job (`completed`, `failed`, `canceled`, `timedOut`).
+
+1. Click the red **Delete Job** button.
+2. A dialog appears: *"Delete this job? You're about to permanently delete `<JobName>` from SAS Viya. The job record, its log, its listing, and any attached result files will be removed. This cannot be undone."*
+3. Click **Delete job** to proceed, or **Keep job** / press Esc to dismiss.
+4. The app issues `DELETE /jobExecution/jobs/<id>`. The record and all its attached files are removed from the tenant.
+5. On success the app navigates you back to the Job Monitoring overview. The deleted job is also dropped from the in-memory cache so the KPI counts reflect the change immediately, without forcing a full re-walk of the job list.
+
+Both dialogs are dismiss-blocking while the underlying request is in flight — you can't accidentally close them mid-request — and surface a red error banner if SAS Viya returns a failure.
+
+The page has four tabs:
+
+#### Log
+
+Shows the SAS log output:
+
+- **While the job is running** — live tail via the Compute API every 3 seconds. The viewer drains up to 5 pages per tick to absorb bursty output. Auto-scroll keeps you pinned to the bottom; scroll up to read older lines and auto-scroll pauses, scroll back near the bottom and it resumes.
+- **Once the job finishes** — the saved `.log.txt` file from the Files service is shown instead.
+
+Each line is colour-coded by type, with a tinted background and a coloured left border:
+
+| Type | Colour |
+|------|--------|
+| **Error** | Red |
+| **Fatal** | Red, bolder |
+| **Warning** | Amber |
+| **Note** | Blue |
+| **Source code** | Cyan |
+| **Title** | Green, larger and bold |
+| **Message / Byline / Footnote** | Pink / Lavender / Purple |
+
+Toolbar buttons:
+
+- **Pause auto-scroll** / **Resume auto-scroll** — toggle whether new lines auto-scroll you to the bottom.
+- **Copy** — copies the visible log text to the clipboard (no type prefixes — just the SAS content).
+- **Download** — saves the log as `<JobName>-<8charId>.log`.
+- **Refresh now** — force-fetch the latest log content.
+
+#### Listing
+
+The Compute listing output (procedure output and the like). Same controls as the Log tab. The listing has its own type hierarchy: **title** lines render largest, **highlighted** lines (column headers, summary rows) at a medium size, normal lines at the base size. **Download** saves as `<JobName>-<8charId>.lst`.
+
+#### Code
+
+The full SAS source from the job definition, syntax-highlighted via Prism with a line-number gutter on the left.
+
+- **Copy code** — copies the source to the clipboard.
+- **Download** — saves as `<JobName>.sas`.
+
+The line numbers are display-only — both Copy and Download produce the clean, runnable source.
+
+#### Parameters
+
+A table of every parameter declared on the job definition, paired with the value actually submitted at runtime:
+
+| Column | Description |
+|--------|-------------|
+| **Name** | Parameter name, with the label as a sub-line if it differs |
+| **Type** | Parameter type (`character`, `numeric`, etc.) |
+| **Required** | Yes / No |
+| **Default** | Default value from the job definition |
+| **Argument** | The value passed in when the job was submitted, with an **overridden** badge if it differs from the default, or **extra** if it was supplied but never declared on the definition |
+
+---
+
+## 16. Keyboard and Interaction Tips
 
 - **Shift+Click** on batch result checkboxes to select a range of rows.
 - **Escape** closes the code viewer modal in the View Flows page.

@@ -78,6 +78,10 @@ const addErrorInterceptor = (client: AxiosInstance): void => {
       if (error.response?.status === 401) {
         return Promise.reject(new Error('Authentication required. Please log in.'));
       }
+      if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) {
+        const status = error.response.status;
+        return Promise.reject(new Error(`SAS Viya service is temporarily unavailable (HTTP ${status}). Please retry in a moment.`));
+      }
       if (error.response?.data) {
         const apiError = error.response.data;
         const errorMessage = apiError.message ||

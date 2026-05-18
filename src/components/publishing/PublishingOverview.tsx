@@ -20,7 +20,7 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
   onNavigateToFlow,
 }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
-  const { destinations, dedupedItems, stats, loading, error, refresh } =
+  const { destinations, dedupedItems, stats, destinationCounts, loading, error, refresh } =
     usePublishingOverview({ enabled: isAuthenticated });
 
   if (!isAuthenticated && !authLoading) {
@@ -81,7 +81,7 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
         <>
           <section className="publishing__section" aria-label="Publishing destinations">
             <h2 className="publishing__section-title">Destinations</h2>
-            <DestinationsPanel destinations={destinations} />
+            <DestinationsPanel destinations={destinations} counts={destinationCounts} />
           </section>
 
           <section className="publishing__section" aria-label="Published models and decisions">

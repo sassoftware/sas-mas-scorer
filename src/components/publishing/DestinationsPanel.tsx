@@ -9,12 +9,17 @@ import {
   formatDestinationTypeLabel,
   getDestinationDetailFields,
 } from '../../utils/publishHelpers';
+import { DestinationCounts } from '../../hooks/usePublishingOverview';
 
 interface DestinationsPanelProps {
   destinations: PublishDestination[];
+  counts?: Record<string, DestinationCounts>;
 }
 
-export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinations }) => {
+const pluralize = (n: number, singular: string, plural: string): string =>
+  `${n} ${n === 1 ? singular : plural}`;
+
+export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinations, counts }) => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
@@ -42,6 +47,7 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinatio
         const isOpen = expanded.has(d.id);
         const details = getDestinationDetailFields(d);
         const hasDetails = details.length > 0;
+        const countsForDest = counts?.[d.name] ?? { models: 0, decisions: 0 };
 
         return (
           <Card key={d.id} className="publishing__destination-card">
@@ -52,6 +58,21 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinatio
                   <Badge variant="info" size="small">
                     {formatDestinationTypeLabel(d.destinationType)}
                   </Badge>
+                  {countsForDest.models > 0 && (
+                    <Badge variant="info" size="small">
+                      {pluralize(countsForDest.models, 'model', 'models')}
+                    </Badge>
+                  )}
+                  {countsForDest.decisions > 0 && (
+                    <Badge variant="success" size="small">
+                      {pluralize(countsForDest.decisions, 'decision', 'decisions')}
+                    </Badge>
+                  )}
+                  {countsForDest.models === 0 && countsForDest.decisions === 0 && (
+                    <Badge variant="default" size="small">
+                      0
+                    </Badge>
+                  )}
                 </div>
                 {d.description && (
                   <p className="publishing__destination-desc">{d.description}</p>

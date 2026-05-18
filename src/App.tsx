@@ -14,6 +14,7 @@ import { UIBuilder } from './components/uiBuilder/UIBuilder';
 import { UIRunner } from './components/uiRunner/UIRunner';
 import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
 import { PublishingOverview } from './components/publishing';
+import { JobMonitoringPage, JobDetailPage } from './components/jobMonitoring';
 import FlowListPage from './components/flows/FlowListPage';
 import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
@@ -72,6 +73,7 @@ function App() {
     const uiAppEditMatch = hash.match(/^\/ui-apps\/([^/]+)\/edit$/);
     const uiAppNewMatch = hash.match(/^\/ui-apps\/new\/([^/]+)$/);
     const flowDetailMatch = hash.match(/^\/flows\/([^/]+)$/);
+    const jobDetailMatch = hash.match(/^\/jobs\/([^/]+)$/);
     return {
       moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
       stepId: stepMatch ? decodeURIComponent(stepMatch[1]) : null,
@@ -82,12 +84,14 @@ function App() {
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
       isFlowsListView: hash === '/flows' || hash === '/flows/',
       isPublishingView: hash === '/publishing' || hash === '/publishing/',
+      isJobMonitoringView: hash === '/jobs' || hash === '/jobs/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
+      jobDetailId: jobDetailMatch ? decodeURIComponent(jobDetailMatch[1]) : null,
       isStandalone: searchParams.get('standalone') === 'true',
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, flowDetailId, isStandalone } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, flowDetailId, jobDetailId, isStandalone } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -160,7 +164,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !flowDetailId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !flowDetailId && !jobDetailId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -195,6 +199,8 @@ function App() {
 
   // Determine active view from current route
   const getActiveView = (): ViewType => {
+    if (jobDetailId) return 'job-detail';
+    if (isJobMonitoringView) return 'job-monitoring';
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
     if (isCoverageView) return 'coverage';
@@ -231,8 +237,20 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/publishing');
+    } else if (view === 'job-monitoring') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/jobs');
     }
   }, [resetModules, navigate]);
+
+  const handleOpenJob = useCallback((id: string) => {
+    navigate(`/jobs/${encodeURIComponent(id)}`);
+  }, [navigate]);
+
+  const handleBackToJobMonitoring = useCallback(() => {
+    navigate('/jobs');
+  }, [navigate]);
 
   const handleSelectModule = useCallback((module: Module) => {
     setSelectedModule(module);
@@ -348,6 +366,14 @@ function App() {
     // Coverage Analysis View
     if (activeView === 'coverage') {
       return <CoverageAnalysis />;
+    }
+
+    // Job Monitoring views
+    if (activeView === 'job-monitoring') {
+      return <JobMonitoringPage onOpenJob={handleOpenJob} />;
+    }
+    if (activeView === 'job-detail' && jobDetailId) {
+      return <JobDetailPage jobId={jobDetailId} onBack={handleBackToJobMonitoring} />;
     }
 
     // Publishing Overview View

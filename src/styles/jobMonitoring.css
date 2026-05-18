@@ -1,0 +1,698 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* Job Monitoring overview page */
+.job-monitoring {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.job-monitoring__login-prompt {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8);
+}
+
+.job-monitoring__scanning {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-blue-light);
+  color: var(--sas-blue-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  align-self: flex-start;
+}
+
+.job-monitoring__scanning-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: job-monitoring-spin 0.9s linear infinite;
+}
+
+@keyframes job-monitoring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.job-monitoring__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--sas-error-light);
+  border: 1px solid var(--sas-error);
+  border-radius: var(--radius-md);
+  color: var(--sas-error-dark);
+}
+
+/* Stats */
+.job-monitoring__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.job-monitoring__stat-card {
+  padding: var(--space-5);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+  border-left: 4px solid var(--sas-gray-400);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.job-monitoring__stat-card--total      { border-left-color: var(--sas-blue-primary); }
+.job-monitoring__stat-card--running    { border-left-color: var(--sas-info); }
+.job-monitoring__stat-card--completed  { border-left-color: var(--sas-success); }
+.job-monitoring__stat-card--failed     { border-left-color: var(--sas-error); }
+.job-monitoring__stat-card--runtime    { border-left-color: var(--sas-blue-primary); }
+
+.job-monitoring__stat-value {
+  font-size: 2.25rem;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--sas-gray-900);
+}
+
+.job-monitoring__stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.job-monitoring__stat-sub {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+}
+
+/* Sections */
+.job-monitoring__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.job-monitoring__section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.job-monitoring__section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--sas-gray-900);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.job-monitoring__section-meta {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+/* Running jobs */
+.job-monitoring__running-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--space-3);
+}
+
+.job-monitoring__running-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+  border-left: 4px solid var(--sas-info);
+}
+
+.job-monitoring__running-card--pending {
+  border-left-color: var(--sas-gray-400);
+}
+
+.job-monitoring__running-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.job-monitoring__running-name {
+  font-weight: 600;
+  color: var(--sas-gray-900);
+  word-break: break-word;
+}
+
+.job-monitoring__running-desc {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.job-monitoring__running-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-600);
+}
+
+.job-monitoring__running-meta strong {
+  color: var(--sas-gray-800);
+  font-weight: 500;
+}
+
+.job-monitoring__running-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job-monitoring__empty {
+  color: var(--sas-gray-600);
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+  background-color: var(--sas-white);
+  border: 1px dashed var(--sas-gray-300);
+  border-radius: var(--radius-md);
+}
+
+/* Completed jobs table toolbar */
+.job-monitoring__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+}
+
+.job-monitoring__search {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+  min-width: 220px;
+}
+
+.job-monitoring__search-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-base);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  background-color: var(--sas-white);
+}
+
+.job-monitoring__search-input:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 3px var(--sas-blue-light);
+}
+
+.job-monitoring__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.job-monitoring__chip {
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.job-monitoring__chip:hover {
+  background-color: var(--sas-gray-100);
+}
+
+.job-monitoring__chip--active {
+  background-color: var(--sas-blue-primary);
+  border-color: var(--sas-blue-primary);
+  color: var(--sas-white);
+}
+
+.job-monitoring__chip--active:hover {
+  background-color: var(--sas-blue-primary);
+}
+
+.job-monitoring__toolbar-spacer { flex: 1; }
+
+.job-monitoring__toolbar-count {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  white-space: nowrap;
+}
+
+/* Table cells */
+.job-monitoring__cell-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.job-monitoring__cell-name-main {
+  font-weight: 600;
+  color: var(--sas-gray-900);
+  word-break: break-word;
+}
+
+.job-monitoring__cell-name-sub {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+}
+
+/* When the row is interactive, underline the job name on row hover so the
+ * "click me" affordance is obvious without needing a tooltip. */
+.sas-table__row:hover .job-monitoring__cell-name--link .job-monitoring__cell-name-main {
+  color: var(--sas-blue-primary);
+  text-decoration: underline;
+}
+
+/* Right-edge chevron that fades in on row hover. The static dimmed state
+ * still hints that the row is interactive even before hover. */
+.job-monitoring__row-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sas-gray-400);
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.sas-table__row:hover .job-monitoring__row-chevron {
+  color: var(--sas-blue-primary);
+  transform: translateX(2px);
+}
+
+.job-monitoring__toolbar-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.job-monitoring__cell-mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+/* Pagination */
+.job-monitoring__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--sas-gray-200);
+  flex-wrap: wrap;
+}
+
+.job-monitoring__pagination-info {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.job-monitoring__pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.job-monitoring__pagination-page {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  padding: 0 var(--space-2);
+}
+
+/* Confirm dialog (used for Cancel Job / Delete Job) */
+.confirm-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.confirm-dialog__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--sas-gray-900);
+}
+
+.confirm-dialog__message {
+  color: var(--sas-gray-700);
+  line-height: 1.5;
+  font-size: var(--font-size-base);
+}
+
+.confirm-dialog__message strong {
+  color: var(--sas-gray-900);
+}
+
+.confirm-dialog__error {
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-error-light);
+  border: 1px solid var(--sas-error);
+  border-radius: var(--radius-md);
+  color: var(--sas-error-dark);
+  font-size: var(--font-size-sm);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Pulse animation for running state */
+@keyframes job-monitoring-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.job-monitoring__pulse {
+  animation: job-monitoring-pulse 1.4s ease-in-out infinite;
+}
+
+/* ---------- Job Detail Page ---------- */
+.job-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.job-detail__back {
+  background: none;
+  border: none;
+  color: var(--sas-blue-primary);
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+}
+
+.job-detail__back:hover { text-decoration: underline; }
+
+.job-detail__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.job-detail__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.job-detail__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--sas-gray-900);
+  margin: 0;
+}
+
+.job-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.job-detail__meta strong {
+  color: var(--sas-gray-800);
+  font-weight: 500;
+}
+
+.job-detail__description {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.job-detail__tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.job-detail__tab {
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  margin-bottom: -1px;
+}
+
+.job-detail__tab:hover { color: var(--sas-gray-900); }
+
+.job-detail__tab--active {
+  color: var(--sas-blue-primary);
+  border-bottom-color: var(--sas-blue-primary);
+}
+
+.job-detail__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 200px;
+}
+
+/* Log viewer */
+.job-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.job-log__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-gray-100);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.job-log__toolbar-info {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.job-log__toolbar-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.job-log__lines {
+  font-family: var(--font-family-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  background-color: #1e1e1e;
+  color: #e6e6e6;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  height: 60vh;
+  overflow: auto;
+  white-space: pre;
+}
+
+.job-log__empty {
+  color: var(--sas-gray-400);
+  padding: var(--space-4);
+  text-align: center;
+  font-family: var(--font-family-mono);
+}
+
+.job-log__line {
+  display: block;
+  white-space: pre;
+  padding: 0 var(--space-2);
+  border-left: 3px solid transparent;
+}
+
+/* Each line type gets a distinct text colour, a coloured left border, and
+ * a faint background tint so the type is obvious at a glance — even when
+ * the line content itself begins with "NOTE:", "ERROR:" etc. (which is part
+ * of the SAS log payload, not anything we render). The type field is never
+ * printed verbatim. */
+.job-log__line--normal {
+  color: #e6e6e6;
+}
+
+.job-log__line--error {
+  color: #fca5a5;
+  background-color: rgba(239, 68, 68, 0.14);
+  border-left-color: #ef4444;
+  font-weight: 500;
+}
+
+.job-log__line--fatal {
+  color: #fecaca;
+  background-color: rgba(239, 68, 68, 0.22);
+  border-left-color: #dc2626;
+  font-weight: 700;
+}
+
+.job-log__line--warning {
+  color: #fcd34d;
+  background-color: rgba(245, 158, 11, 0.12);
+  border-left-color: #f59e0b;
+}
+
+.job-log__line--note {
+  color: #93c5fd;
+  background-color: rgba(59, 130, 246, 0.08);
+  border-left-color: #3b82f6;
+}
+
+.job-log__line--source {
+  color: #9cdcfe;
+  background-color: rgba(125, 211, 252, 0.05);
+  border-left-color: #38bdf8;
+}
+
+.job-log__line--message {
+  color: #f0abfc;
+}
+
+.job-log__line--byline {
+  color: #c4b5fd;
+}
+
+.job-log__line--footnote {
+  color: #a78bfa;
+  font-style: italic;
+}
+
+/* Title and highlighted form a size hierarchy. In the listing tab, title is
+ * the page header and highlighted is mid-emphasis (column headers, summary
+ * rows). In the log, title gets the same treatment so SAS page banners
+ * stand out. */
+.job-log__line--title {
+  color: #a3e635;
+  background-color: rgba(163, 230, 53, 0.10);
+  border-left-color: #84cc16;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.job-log__line--highlighted {
+  color: #fde68a;
+  background-color: rgba(253, 224, 71, 0.08);
+  border-left-color: #facc15;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* Code panel */
+.job-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.job-code__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-gray-100);
+  border-radius: var(--radius-md);
+}
+
+.job-code__pre {
+  margin: 0;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/* Parameters panel */
+.job-params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.job-params__note {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.job-params__value-default {
+  color: var(--sas-gray-500);
+  font-style: italic;
+}
+
+.job-params__value-override {
+  color: var(--sas-gray-900);
+  font-weight: 500;
+}
+
+.job-params__override-tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  background-color: var(--sas-blue-light);
+  color: var(--sas-blue-primary);
+  border-radius: 999px;
+}
