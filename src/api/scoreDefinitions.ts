@@ -24,7 +24,7 @@ export interface ScoreDefinitionPayload {
   };
   objectDescriptor: {
     name: string;
-    type: 'decision';
+    type: string; // 'decision' | 'codeFile' | ...
     uri: string;
   };
   mappings: ScoreDefinitionMapping[];
@@ -48,7 +48,7 @@ export interface TestScoreDefinitionPayload {
   };
   objectDescriptor: {
     name: string;
-    type: 'decision';
+    type: string; // 'decision' | 'codeFile' | ...
     uri: string;
   };
   mappings: ScoreDefinitionMapping[];

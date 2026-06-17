@@ -63,12 +63,15 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   // Parse current sort state
   const currentSort = parseSortBy(sortBy);
 
-  // Reset local search state when sortBy is cleared (indicating a reset)
+  // Reset local search state when sortBy is cleared (indicating a reset).
+  // Intentionally keyed on sortBy only — adding searchTerm would re-run this on
+  // every keystroke and wipe the user's in-progress search.
   useEffect(() => {
     if (!sortBy && searchTerm) {
       setSearchTerm('');
       setDebouncedSearch('');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy]);
 
   // Debounce search input

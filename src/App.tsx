@@ -15,13 +15,15 @@ import { UIRunner } from './components/uiRunner/UIRunner';
 import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
 import { PublishingOverview } from './components/publishing';
 import { JobMonitoringPage, JobDetailPage } from './components/jobMonitoring';
+import { SchemaBuilder } from './components/schemaBuilder/SchemaBuilder';
 import FlowListPage from './components/flows/FlowListPage';
 import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
-import { getUIDefinition, listUIDefinitions } from './storage/uiStorage';
+import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
+import { decodeUIDefinition } from './utils/shareLink';
 import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import './styles/index.css';
@@ -85,13 +87,17 @@ function App() {
       isFlowsListView: hash === '/flows' || hash === '/flows/',
       isPublishingView: hash === '/publishing' || hash === '/publishing/',
       isJobMonitoringView: hash === '/jobs' || hash === '/jobs/',
+      isSchemaBuilderView: hash === '/schema-builder' || hash === '/schema-builder/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
       jobDetailId: jobDetailMatch ? decodeURIComponent(jobDetailMatch[1]) : null,
       isStandalone: searchParams.get('standalone') === 'true',
+      // Self-contained share token: the full UI definition encoded into the URL
+      // so a shared link works without the definition existing in localStorage.
+      uiAppDef: searchParams.get('def'),
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, flowDetailId, jobDetailId, isStandalone } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, flowDetailId, jobDetailId, isStandalone, uiAppDef } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -164,15 +170,22 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !flowDetailId && !jobDetailId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !flowDetailId && !jobDetailId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleId, isAuthenticated]);
 
-  // Load UI definition from URL when needed
+  // Load UI definition from URL when needed.
+  // A `def` token in the URL carries the full definition, so it takes priority
+  // over localStorage — this is what makes shared links work for any recipient.
   useEffect(() => {
+    if (uiAppDef) {
+      setActiveUIDefinition(decodeUIDefinition(uiAppDef));
+      setUILoading(false);
+      return;
+    }
     const targetId = uiAppId || uiAppEditId;
     if (targetId) {
       setUILoading(true);
@@ -183,7 +196,7 @@ function App() {
     } else {
       setActiveUIDefinition(null);
     }
-  }, [uiAppId, uiAppEditId]);
+  }, [uiAppId, uiAppEditId, uiAppDef]);
 
   // Set selected step from URL when steps are loaded
   useEffect(() => {
@@ -201,6 +214,7 @@ function App() {
   const getActiveView = (): ViewType => {
     if (jobDetailId) return 'job-detail';
     if (isJobMonitoringView) return 'job-monitoring';
+    if (isSchemaBuilderView) return 'schema-builder';
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
     if (isCoverageView) return 'coverage';
@@ -241,6 +255,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/jobs');
+    } else if (view === 'schema-builder') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/schema-builder');
     }
   }, [resetModules, navigate]);
 
@@ -334,6 +352,14 @@ function App() {
     navigate(`/ui-apps/${encodeURIComponent(id)}`);
   }, [navigate, loadRecentUIApps]);
 
+  // Save a shared (URL-embedded) UI App into the local library so the recipient
+  // can keep and edit it. importUIDefinition assigns a fresh id and timestamps.
+  const handleSaveSharedUIApp = useCallback(async (def: UIDefinition) => {
+    const saved = await importUIDefinition(JSON.stringify(def));
+    loadRecentUIApps();
+    navigate(`/ui-apps/${encodeURIComponent(saved.id)}`);
+  }, [navigate, loadRecentUIApps]);
+
   const handleCreateNewUIApp = useCallback(() => {
     // Navigate to modules list so user can pick a module
     // For now, go to modules list with a note
@@ -366,6 +392,11 @@ function App() {
     // Coverage Analysis View
     if (activeView === 'coverage') {
       return <CoverageAnalysis />;
+    }
+
+    // Schema → Code View
+    if (activeView === 'schema-builder') {
+      return <SchemaBuilder onBack={handleBackToModules} />;
     }
 
     // Job Monitoring views
@@ -418,6 +449,8 @@ function App() {
           onBack={handleBackToUIApps}
           onEdit={() => handleEditUIApp(activeUIDefinition.id)}
           standalone={isStandalone}
+          shareToken={uiAppDef ?? undefined}
+          onSaveCopy={uiAppDef ? () => handleSaveSharedUIApp(activeUIDefinition) : undefined}
         />
       );
     }

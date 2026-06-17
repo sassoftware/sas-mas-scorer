@@ -3,12 +3,20 @@
 
 import { sasViyaClient } from './client';
 
+export interface CodeFileSignatureTermDataGridExtension {
+  name: string;
+  dataType: string; // string | decimal | integer | date | datetime
+  length?: number;  // valid for string columns
+}
+
 export interface CodeFileSignatureTerm {
   name: string;
-  dataType: string;
-  direction: string;
-  length?: number;
+  dataType: string;   // string | decimal | integer | dataGrid | date | datetime | unknown
+  direction: string;  // input | inOut | output
+  length?: number;    // valid for string data type
   description?: string;
+  dataGridExtension?: CodeFileSignatureTermDataGridExtension[];
+  generateDataGridColumns?: boolean;
 }
 
 export interface CodeFileDetail {

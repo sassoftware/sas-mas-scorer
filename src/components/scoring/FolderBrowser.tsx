@@ -13,14 +13,27 @@ interface FolderBrowserProps {
   selectedFolderId: string | null;
   onSelect: (folderId: string, folderName: string) => void;
   initialFolderId?: string | null;
+  /**
+   * When set, folder members whose `uri` starts with this prefix
+   * (e.g. "/decisions/codeFiles/") are also shown as selectable rows.
+   */
+  pickFileUriPrefix?: string;
+  /** Currently selected file id (matched against the id parsed from the uri). */
+  selectedFileId?: string | null;
+  /** Called when a file member is selected. */
+  onSelectFile?: (fileId: string, fileName: string) => void;
 }
 
 export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   selectedFolderId,
   onSelect,
   initialFolderId,
+  pickFileUriPrefix,
+  selectedFileId,
+  onSelectFile,
 }) => {
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
+  const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +65,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
       }
 
       setFolders(items);
+      setFiles([]);
       setBreadcrumbs([]);
       setPagination({ start: 0, limit: 50, count: items.length });
     } catch (err: unknown) {
@@ -76,6 +90,16 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
         });
 
       setFolders(folderItems);
+
+      if (pickFileUriPrefix) {
+        const fileItems = response.items
+          .filter(m => m.uri.startsWith(pickFileUriPrefix))
+          .map(m => ({ id: m.uri.replace(pickFileUriPrefix, ''), name: m.name }));
+        setFiles(fileItems);
+      } else {
+        setFiles([]);
+      }
+
       setBreadcrumbs(newBreadcrumbs);
       setPagination({ start: response.start, limit: response.limit, count: response.count });
     } catch (err: unknown) {
@@ -84,7 +108,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pickFileUriPrefix]);
 
   // Navigate into a folder
   const handleOpenFolder = useCallback((folderId: string, folderName: string) => {
@@ -176,34 +200,63 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
           <div className="folder-browser__loading">Loading folders...</div>
         ) : error ? (
           <div className="folder-browser__error">{error}</div>
-        ) : folders.length === 0 ? (
-          <div className="folder-browser__empty">No subfolders in this location</div>
+        ) : folders.length === 0 && files.length === 0 ? (
+          <div className="folder-browser__empty">
+            {pickFileUriPrefix ? 'No subfolders or code files in this location' : 'No subfolders in this location'}
+          </div>
         ) : (
-          folders.map(f => (
-            <div
-              key={f.id}
-              className={`folder-browser__item${f.id === selectedFolderId ? ' folder-browser__item--selected' : ''}`}
-            >
-              <button
-                className="folder-browser__item-name"
-                onClick={() => handleOpenFolder(f.id, f.name)}
-                type="button"
-                title="Open folder"
+          <>
+            {folders.map(f => (
+              <div
+                key={f.id}
+                className={`folder-browser__item${f.id === selectedFolderId ? ' folder-browser__item--selected' : ''}`}
               >
-                <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-                </svg>
-                {f.name}
-              </button>
-              <button
-                className="folder-browser__select-btn"
-                onClick={() => onSelect(f.id, f.name)}
-                type="button"
+                <button
+                  className="folder-browser__item-name"
+                  onClick={() => handleOpenFolder(f.id, f.name)}
+                  type="button"
+                  title="Open folder"
+                >
+                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                  </svg>
+                  {f.name}
+                </button>
+                <button
+                  className="folder-browser__select-btn"
+                  onClick={() => onSelect(f.id, f.name)}
+                  type="button"
+                >
+                  {f.id === selectedFolderId ? 'Selected' : 'Select'}
+                </button>
+              </div>
+            ))}
+            {files.map(f => (
+              <div
+                key={`file-${f.id}`}
+                className={`folder-browser__item folder-browser__item--file${f.id === selectedFileId ? ' folder-browser__item--selected' : ''}`}
               >
-                {f.id === selectedFolderId ? 'Selected' : 'Select'}
-              </button>
-            </div>
-          ))
+                <button
+                  className="folder-browser__item-name"
+                  onClick={() => onSelectFile?.(f.id, f.name)}
+                  type="button"
+                  title="Select code file"
+                >
+                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm0 2l4 4h-4V4z" />
+                  </svg>
+                  {f.name}
+                </button>
+                <button
+                  className="folder-browser__select-btn"
+                  onClick={() => onSelectFile?.(f.id, f.name)}
+                  type="button"
+                >
+                  {f.id === selectedFileId ? 'Selected' : 'Select'}
+                </button>
+              </div>
+            ))}
+          </>
         )}
       </div>
 

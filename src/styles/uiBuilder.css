@@ -648,3 +648,37 @@
   padding: 12px 20px;
   border-top: 1px solid var(--sas-gray-200, #e0e0e0);
 }
+
+/* === Share Dialog === */
+
+.share-dialog__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-dialog__mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--sas-gray-700, #555);
+}
+
+.share-dialog__mode input {
+  margin-top: 2px;
+}
+
+.share-dialog__link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-dialog__link-row .save-scenario-dialog__input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.8rem;
+}

@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { UIField } from '../../../types/uiBuilder';
+import { DecimalInput } from '../../common/DecimalInput';
 
 interface Props {
   field: UIField;
@@ -13,17 +14,9 @@ interface Props {
 
 export const NumberWidget: React.FC<Props> = ({ field, value, onChange, disabled }) => {
   return (
-    <input
-      type="number"
-      step="any"
-      className="sas-input"
-      value={value !== null && value !== undefined ? String(value) : ''}
-      onChange={(e) => {
-        const val = e.target.value;
-        onChange(val === '' ? null : parseFloat(val));
-      }}
-      min={field.validation?.min}
-      max={field.validation?.max}
+    <DecimalInput
+      value={value}
+      onChange={(num) => onChange(num)}
       placeholder={field.placeholder}
       disabled={disabled}
     />

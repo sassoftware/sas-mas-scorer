@@ -75,21 +75,18 @@ export const validateStepInput = async (
   stepId: string,
   input: StepInput
 ): Promise<ValidationViolation | null> => {
-  try {
-    const response = await apiClient.post<ValidationViolation>(
-      `/commons/validations/modules/${moduleId}/steps/${stepId}`,
-      input,
-      {
-        headers: {
-          'Content-Type': SAS_CONTENT_TYPES.STEP_INPUT,
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    // 200 means valid, 400 means validation errors
-    throw error;
-  }
+  // 200 means valid; a 400 surfaces validation errors as a thrown error that
+  // the caller inspects.
+  const response = await apiClient.post<ValidationViolation>(
+    `/commons/validations/modules/${moduleId}/steps/${stepId}`,
+    input,
+    {
+      headers: {
+        'Content-Type': SAS_CONTENT_TYPES.STEP_INPUT,
+      },
+    }
+  );
+  return response.data;
 };
 
 // Helper function to build step input from form values

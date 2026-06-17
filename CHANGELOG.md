@@ -2,6 +2,40 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.4.0] - 2026-06-02
+
+### Added
+
+- **Schema → Code** page — a new primary navigation entry that turns a sample JSON or XML payload into a Python `execute()` function for SAS Intelligent Decisioning, then saves it to SAS Viya
+  - Paste or upload a JSON/XML sample; the parser auto-detects the format, flattens the structure, infers SAS ID data types (Character / Integer / Decimal / Boolean / Date / Datetime), and turns repeating elements into **DataGrid** columns
+  - **Variable Mapping** step shows every detected variable with its source path, generated SAS name (validated to ≤32 chars and a legal SAS identifier), inferred type (editable), an editable storage **Length** for string-like types, and a sample value; rows can be renamed, retyped, or removed before generating code
+  - **Python Output** step renders the generated `execute()` with Prism syntax highlighting and a line-number gutter, plus **Copy to clipboard** and **Download .py**
+  - **Save to SAS Viya** dialog with two modes:
+    - **Create new** — uploads the code to the Files service (`POST /files/files`), then creates the code file (`POST /decisions/codeFiles?parentFolderUri={folder}`, `type: decisionPythonFile`) referencing it via `fileUri`, with the description and the typed signature, in a folder chosen via the content browser
+    - **Update existing** — browse the content tree to pick an existing code file, then upload the new code (`POST /files/files`) and create a new **revision** (`POST /decisions/codeFiles/{id}/revisions?revisionType={minor|major}&fromRevisionUri={current revision}`) referencing the new file plus the signature. The revision is what carries new code content, since `updateCodeFile` only edits metadata; `fromRevisionUri` links the new revision to the current one for lineage
+    - On success, the dialog shows an **Open in SAS Intelligent Decisioning** deep link straight to the saved code file
+    - Optional **"Also create a test scenario"** checkbox — creates a Scenario score definition (`POST /scoreDefinitions/definitions`) targeting the new code file's revision, with the pasted example used as the static `input_string` value and a description of *"Auto-generated from the example schema"*, so there's a ready-to-run first test. Pick the CAS output server/caslib (reusing the existing CAS pickers) and the scenario folder (defaults to the code file's folder)
+    - The full variable **signature** is sent with the create/revision request — every input/output term with its SID `dataType` (`string`/`integer`/`decimal`/`date`/`datetime`; booleans map to `integer` since the generated Python emits 1/0) and the editable string lengths. DataGrid outputs are declared as `string` (Character) at the maximum length (32672), because a Python code node returns a DataGrid as a serialized JSON string rather than a native grid (see the DataGrid guidance below)
+  - **Default unset variables to missing values** — a checkbox on the **Python Output** step that initializes unset or unparsed output variables to a SAS **missing value** (Python `None`) instead of `0` / empty string. Off by default, preserving the original behavior. Variables are type-annotated in the generated code so the inferred SID signature stays correct either way
+  - **DataGrid output guidance** — a Python code node cannot output a DataGrid directly into SAS Intelligent Decisioning, so DataGrid outputs are emitted as a serialized JSON string in a max-length Character variable. The **Python Output** step now shows a per-variable note explaining this, with a copy-ready `dataGrid_create(<grid>, <string>)` statement to convert the string back into a real DataGrid downstream (via a **Rule Set** or **Variable Assignment** node), plus a warning to size the Character length so the JSON isn't truncated
+- **Self-contained UI App share links** — UI Apps can now be shared with anyone, not just on the browser where they were created. The new **Share** button in the builder toolbar opens a Share dialog that embeds the *entire* app definition into the URL (base64url-encoded in a `def` query parameter), so the recipient needs nothing in their own local storage
+  - Choose **Standalone** (form only, no app chrome) or **Within MAS Scorer** (full application chrome) for how the shared link opens — selectable in the dialog and carried by the existing `standalone=true` URL flag
+  - **Full link (this server)** — a complete URL rooted at the current deployment's origin, for sharing within the same deployment
+  - **Portable code (any target)** — just the hash suffix (`#/ui-apps/{id}?def=...&standalone=true`). Because all three delivery targets (Electron desktop, SAS Job Execution / JobDefinition, and the Webserver build) use hash-based routing, the same suffix can be pasted onto the end of *any* target's URL and resolves identically — e.g. build an app in the desktop app, then paste the code onto a Job Execution URL
+  - **Save to My UI Apps** — when an app is opened from a shared link, the runner replaces **Edit** with a save action that imports the embedded definition into the recipient's own library (with a fresh ID) so they can keep and edit it
+  - The standalone toggle in the runner now preserves the embedded `def` token, so switching in and out of standalone mode keeps a shared link self-contained
+
+### Changed
+
+- **Top header navigation** — removed the redundant **Modules** link from the top header bar; all page navigation now happens through the sidebar
+- **Header help icon** — the **?** icon in the header now opens the project **User Guide** (`USER-GUIDE.md` on GitHub) instead of the MAS REST API documentation
+- **Developer tooling** — added an ESLint configuration (`.eslintrc.cjs`, with TypeScript and React Hooks rules) so `npm run lint` runs cleanly, and fixed the issues it surfaced: unsafe `return`s inside `finally` blocks in the Job Monitoring / Job Detail hooks (rewritten as guarded state updates, so loading flags settle correctly) and a redundant `try/catch` in the steps API
+
+### Fixed
+
+- **Decimal input truncation** — decimal fields in the scoring form and the **Number** UI App widget no longer drop the decimal portion while typing. They previously re-parsed the value to a number on every keystroke and fed it back as the input text, so typing `3.0` collapsed to `3` (the `.` / `0` vanished) and a comma was rejected outright. A new shared `DecimalInput` keeps the exact text the user types (`3.`, `3.0`, `3,02`), accepts both `.` and `,` as the decimal separator, and emits the parsed number to the form
+- **UI App field help tooltips** — the **?** help icon next to a field now reliably shows the field's description on hover (and on keyboard focus). It previously relied on the browser's native `title` attribute, which was slow and often suppressed on the small icon; it now uses a styled tooltip that appears instantly, wraps long text, and is keyboard-accessible
+
 ## [2.3.0] - 2026-05-11
 
 ### Added

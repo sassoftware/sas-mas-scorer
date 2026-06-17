@@ -404,12 +404,15 @@ export const useJobMonitoring = (
       setStatsError(err instanceof Error ? err.message : 'Failed to load job stats');
       setStatsBackoff(true);
     } finally {
-      if (!mountedRef.current) return;
-      if (token === statsTokenRef.current) {
+      if (mountedRef.current && token === statsTokenRef.current) {
         if (!silent) setStatsLoading(false);
         setStatsScanning(false);
       }
     }
+    // Intentionally keyed on `enabled` only so the polling loop reuses one
+    // stable callback; persistCache only writes to module-level cache/refs, so a
+    // slightly stale closure has no observable effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
   // --- Running ---
@@ -445,8 +448,7 @@ export const useJobMonitoring = (
       setRunningError(err instanceof Error ? err.message : 'Failed to load running jobs');
       setRunningBackoff(true);
     } finally {
-      if (!mountedRef.current) return;
-      if (!silent) setRunningLoading(false);
+      if (mountedRef.current && !silent) setRunningLoading(false);
     }
   }, [enabled]);
 
@@ -477,9 +479,9 @@ export const useJobMonitoring = (
       setCompletedError(err instanceof Error ? err.message : 'Failed to load completed jobs');
       setCompletedBackoff(true);
     } finally {
-      if (!mountedRef.current) return;
-      if (tick !== completedTickRef.current) return;
-      if (!silent) setCompletedLoading(false);
+      if (mountedRef.current && tick === completedTickRef.current && !silent) {
+        setCompletedLoading(false);
+      }
     }
   }, [enabled, page, pageSize, debouncedSearch, stateFilter, sortBy]);
 

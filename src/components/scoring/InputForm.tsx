@@ -4,6 +4,7 @@
 import React from 'react';
 import { StepParameter, StepParameterType } from '../../types';
 import { TypeBadge } from '../common/Badge';
+import { DecimalInput } from '../common/DecimalInput';
 
 interface InputFormProps {
   parameters: StepParameter[];
@@ -54,16 +55,10 @@ export const InputForm: React.FC<InputFormProps> = ({
     switch (type) {
       case 'decimal':
         return (
-          <input
+          <DecimalInput
             id={inputId}
-            type="number"
-            step="any"
-            className="sas-input"
-            value={value !== null && value !== undefined ? String(value) : ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              handleChange(name, val === '' ? null : parseFloat(val));
-            }}
+            value={value}
+            onChange={(num) => handleChange(name, num)}
             disabled={disabled}
             placeholder="Enter decimal value"
           />

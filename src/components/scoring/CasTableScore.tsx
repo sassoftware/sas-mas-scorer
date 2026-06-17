@@ -303,6 +303,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       setError(e.message ?? 'Failed to fetch table rows');
       setFetchingForScore(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, columns, mapping, parameters, concurrency, onExecuteBatch, getCellValue]);
 
   const unmappedParams = parameters.filter(p => !mapping[p.name]);

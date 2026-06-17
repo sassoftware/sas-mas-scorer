@@ -21,18 +21,26 @@ interface UIRunnerProps {
   onBack: () => void;
   onEdit: () => void;
   standalone?: boolean;
+  /** Present when the app was opened from a self-contained share link. */
+  shareToken?: string;
+  /** When set (shared mode), saves the embedded app into the local library. */
+  onSaveCopy?: () => void;
 }
 
-export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, standalone = false }) => {
+export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, standalone = false, shareToken, onSaveCopy }) => {
   const navigate = useNavigate();
 
+  // Preserve the share token across the standalone toggle so a shared link
+  // stays self-contained when switching in or out of standalone mode.
+  const tokenSuffix = shareToken ? `&def=${shareToken}` : '';
+
   const handleOpenStandalone = useCallback(() => {
-    navigate(`/ui-apps/${encodeURIComponent(definition.id)}?standalone=true`);
-  }, [navigate, definition.id]);
+    navigate(`/ui-apps/${encodeURIComponent(definition.id)}?standalone=true${tokenSuffix}`);
+  }, [navigate, definition.id, tokenSuffix]);
 
   const handleExitStandalone = useCallback(() => {
-    navigate(`/ui-apps/${encodeURIComponent(definition.id)}`);
-  }, [navigate, definition.id]);
+    navigate(`/ui-apps/${encodeURIComponent(definition.id)}${shareToken ? `?def=${shareToken}` : ''}`);
+  }, [navigate, definition.id, shareToken]);
   const [inputValues, setInputValues] = useState<Record<string, unknown>>(() => {
     const defaults: Record<string, unknown> = {};
     for (const section of definition.layout.sections) {
@@ -186,7 +194,11 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
                 )}
                 <Badge variant="info">{module?.name ?? definition.moduleId}</Badge>
                 <Button variant="tertiary" onClick={handleOpenStandalone}>Standalone</Button>
-                <Button variant="secondary" onClick={onEdit}>Edit</Button>
+                {shareToken ? (
+                  onSaveCopy && <Button variant="secondary" onClick={onSaveCopy}>Save to My UI Apps</Button>
+                ) : (
+                  <Button variant="secondary" onClick={onEdit}>Edit</Button>
+                )}
                 <Button variant="tertiary" onClick={onBack}>Back</Button>
               </div>
             }

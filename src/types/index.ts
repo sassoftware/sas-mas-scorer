@@ -3,3 +3,4 @@
 
 export * from './mas';
 export * from './uiBuilder';
+export * from './schemaBuilder';

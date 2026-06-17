@@ -163,8 +163,7 @@ export const useJobDetail = (
         setJobError(err instanceof Error ? err.message : 'Failed to load job');
         return null;
       } finally {
-        if (!mountedRef.current) return null;
-        if (!silent) setJobLoading(false);
+        if (mountedRef.current && !silent) setJobLoading(false);
       }
     },
     [enabled, jobId]
@@ -235,8 +234,7 @@ export const useJobDetail = (
         if (!mountedRef.current) return;
         setErr(err instanceof Error ? err.message : `Failed to load ${kind} file`);
       } finally {
-        if (!mountedRef.current) return;
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
     },
     []

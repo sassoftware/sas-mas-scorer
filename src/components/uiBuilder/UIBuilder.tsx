@@ -11,6 +11,7 @@ import { BuilderToolbar } from './BuilderToolbar';
 import { BuilderCanvas } from './BuilderCanvas';
 import { BuilderPreview } from './BuilderPreview';
 import { ReplaceModuleDialog } from './ReplaceModuleDialog';
+import { ShareDialog } from './ShareDialog';
 import { useSteps } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { saveUIDefinition } from '../../storage/uiStorage';
@@ -43,6 +44,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isPreview, setIsPreview] = useState(false);
   const [showReplaceModule, setShowReplaceModule] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const { steps } = useSteps(effectiveModuleId);
 
@@ -139,6 +141,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         onColumnsChange={(cols) => setDef({ ...def, layout: { ...def.layout, columns: cols } })}
         onSave={handleSave}
         onPreview={() => setIsPreview(!isPreview)}
+        onShare={() => setShowShare(true)}
         onReplaceModule={initialDef ? () => setShowReplaceModule(true) : undefined}
         saving={saving}
         isPreview={isPreview}
@@ -167,6 +170,10 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
           }}
           onClose={() => setShowReplaceModule(false)}
         />
+      )}
+
+      {showShare && (
+        <ShareDialog definition={def} onClose={() => setShowShare(false)} />
       )}
     </div>
   );

@@ -21,7 +21,8 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 13. [View Flows](#13-view-flows)
 14. [Test Coverage Analysis](#14-test-coverage-analysis)
 15. [Job Monitoring](#15-job-monitoring)
-16. [Keyboard and Interaction Tips](#16-keyboard-and-interaction-tips)
+16. [Schema → Code](#16-schema--code)
+17. [Keyboard and Interaction Tips](#17-keyboard-and-interaction-tips)
 
 ---
 
@@ -93,6 +94,7 @@ The left sidebar is the primary navigation. It contains four main pages and a co
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
 | **Test Coverage** | Analyze test scenario coverage across all assets |
 | **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code |
+| **Schema → Code** | Generate a Python `execute()` function from a JSON/XML sample and save it to SAS Intelligent Decisioning |
 
 ### Current Module Section
 
@@ -443,7 +445,7 @@ The builder has three main areas:
 |--------|-------------|
 | **Back** | Return to the UI Apps list |
 | **Layout columns** (1 / 2 / 3) | Set the number of form columns |
-| **Copy Standalone Link** | Copy a URL that opens this UI without the sidebar or header (see [Standalone Mode](#standalone-mode)) |
+| **Share** | Open the Share dialog to copy a self-contained link or portable code for this UI (see [Sharing & Standalone Mode](#sharing--standalone-mode)) |
 | **Replace Module** | Swap the underlying module while preserving as much of the field configuration as possible (available when editing an existing app) |
 | **Preview / Edit** | Toggle between editing and previewing the live form |
 | **Save** | Save the current configuration |
@@ -523,17 +525,30 @@ From the **UI Apps** list, click **Run** on any app. The runner displays the for
 
 - **Standalone** — Switch to standalone mode (see below).
 - **Edit** — Open the builder to modify the app.
+- **Save to My UI Apps** — Appears instead of **Edit** when the app was opened from a shared link. Saves the embedded definition into your own library (with a new ID) so you can keep and edit it.
 - **Back** — Return to the UI Apps list.
 
-### Standalone Mode
+### Sharing & Standalone Mode
 
-Standalone mode removes the sidebar, header, and all navigation chrome, leaving only the UI App form centered on the page. This is useful for sharing a direct link with business users or embedding in other tools.
+A UI App normally lives only in the browser where it was created (it is stored in that browser's local storage). To hand an app to someone else — or to move it between the desktop, Job Execution, and Webserver versions of MAS Scorer — use **Share**, which embeds the *entire app definition* into the link. The recipient does not need anything pre-installed; the link is self-contained.
 
-- From the runner, click **Standalone** in the header.
-- From the builder, click **Copy Standalone Link** to get a shareable URL.
-- In standalone mode, an **Exit Standalone** bar appears at the top to return to the full application.
+> **Note:** The app still scores against a live module. Whatever server the link is opened against must have the same MAS module published, or the runner will report that the module could not be loaded.
 
-The standalone URL follows the pattern: `#/ui-apps/{appId}?standalone=true`
+**Standalone vs. Within MAS Scorer**
+
+The Share dialog lets you choose how the app opens:
+
+- **Standalone** — Removes the sidebar, header, and all navigation chrome, leaving only the UI App form centered on the page. Best for business users or for embedding in other tools. An **Exit Standalone** bar appears at the top to return to the full application.
+- **Within MAS Scorer** — Opens the app inside the normal application chrome.
+
+You can also switch to standalone at any time from the runner by clicking **Standalone** in the header.
+
+**Two ways to copy from the Share dialog**
+
+- **Full link (this server)** — A complete URL rooted at the server you are currently on. Use this when the recipient will open the *same* deployment.
+- **Portable code (any target)** — Just the hash portion of the URL (for example `#/ui-apps/{appId}?def=...&standalone=true`). Because all three delivery targets use the same hash-based routing, you can paste this onto the end of *any* MAS Scorer URL — the desktop app, the Job Execution HTML, or the Webserver build — and it opens the same app. This is the recommended way to move an app between targets (e.g. build it in the desktop app, then paste the code onto your Job Execution URL).
+
+The shared URL follows the pattern: `#/ui-apps/{appId}?def={encodedDefinition}&standalone=true`, where `def` carries the full, URL-encoded app definition and the optional `standalone=true` flag selects standalone vs. within-MAS-Scorer display.
 
 ### Managing UI Apps
 
@@ -806,7 +821,65 @@ A table of every parameter declared on the job definition, paired with the value
 
 ---
 
-## 16. Keyboard and Interaction Tips
+## 16. Schema → Code
+
+The **Schema → Code** page generates a Python `execute()` function for SAS Intelligent Decisioning (SID) from a sample data payload, then lets you save it to SAS Viya. It is useful when an incoming request arrives as a single JSON or XML string and you need SID code that parses it into individual, typed variables.
+
+The page is a three-step workflow shown as tabs at the top.
+
+### Step 1 — Input Schema
+
+1. Set the **Input variable name** — the name of the SID Character variable that will hold the raw string at runtime (default `input_string`).
+2. Provide a sample payload one of three ways:
+   - **Paste** JSON or XML directly into the text area.
+   - **Upload file** — choose a `.json`, `.xml`, or `.txt` file.
+   - **Load JSON sample** / **Load XML sample** — insert a built-in example to experiment with.
+3. Click **Parse & extract variables**. The format (JSON or XML) is detected automatically.
+
+### Step 2 — Variable Mapping
+
+The detected variables are listed in a table:
+
+| Column | Description |
+|--------|-------------|
+| **Source Path** | Where the value came from in the sample (dot notation for JSON, slash path for XML) |
+| **Variable Name** | The generated SID variable name — editable, validated to ≤32 characters and a legal SAS identifier |
+| **Len** | Current length of the variable name (turns red if over 32) |
+| **SAS ID Type** | Inferred data type (Character, Integer, Decimal, Boolean, Date, Datetime) — change it with the dropdown |
+| **Sample Value** | The value pulled from your sample |
+
+Repeating elements (JSON arrays / repeated XML elements) become a **DataGrid** variable, with their child fields captured as grid columns. Use the **×** button to remove any variable you do not need. When the mapping looks right, click **Generate Python code**.
+
+### Step 3 — Python Output
+
+The generated `execute()` function is shown with syntax highlighting. The function initializes all output variables, guards against empty input, parses the string, and extracts each value with type casting and error handling (returning `parse_success` and `parse_status` alongside your variables). From here you can:
+
+- **Copy to clipboard**
+- **Download .py**
+- **Save to SAS Viya** — opens the save dialog.
+
+**Default unset variables to missing values** — by default, a variable that is absent from the payload (or fails to parse) is initialized to a neutral default: `0` for numbers and an empty string for text. Tick this checkbox to initialize them to a SAS **missing value** (Python `None`) instead, so a value that wasn't supplied comes back as missing rather than zero/blank. The variable types in the saved signature are unchanged either way.
+
+**DataGrid outputs need an extra step.** A Python code node cannot output a DataGrid directly into SID — it can only return the grid as a *serialized JSON string* in a Character variable. When your mapping includes one or more DataGrids, this screen shows a note for each, with a ready-to-copy conversion statement. To turn the string back into a real DataGrid in your decision, add a **Rule Set** or **Variable Assignment** node *after* this code file and assign:
+
+```
+dataGrid_create(<grid_variable>, <character_output>)
+```
+
+where `<character_output>` is this code file's serialized string and `<grid_variable>` is a DataGrid variable in your decision. Make sure the Character variable's **length** is large enough to hold the full JSON — the generated signature uses the maximum (32672). If it is left at the default of 100, SID silently truncates the string and the conversion fails.
+
+### Saving to SAS Intelligent Decisioning
+
+The **Save to SAS Viya** dialog has two modes:
+
+- **Create new** — enter a name (≤32 chars, letters/digits/underscore) and optional description, browse to a target **folder**, and click **Create code file**. The code is uploaded to the Files service and registered as a new Python code file in SID.
+- **Update existing** — choose a **revision type** (minor or major), then browse the content tree and **select an existing code file**. Clicking **Save new revision** pushes the generated code to that code file as a new revision.
+
+> **Why a revision for updates?** A code file's content lives in an attached file, and the SID "update" operation only changes a code file's name and description — it cannot replace the code. Creating a new revision is what actually publishes the new code, while preserving the previous version's history.
+
+---
+
+## 17. Keyboard and Interaction Tips
 
 - **Shift+Click** on batch result checkboxes to select a range of rows.
 - **Escape** closes the code viewer modal in the View Flows page.

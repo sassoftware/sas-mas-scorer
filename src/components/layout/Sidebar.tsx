@@ -5,7 +5,7 @@ import React from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -110,6 +110,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <li>
               <button
                 className={`sas-sidebar__menu-item ${
+                  activeView === 'schema-builder' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('schema-builder')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+                </svg>
+                <span>Schema → Code</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`sas-sidebar__menu-item ${
                   activeView === 'job-monitoring' || activeView === 'job-detail'
                     ? 'sas-sidebar__menu-item--active'
                     : ''
@@ -203,7 +216,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v2.3.0</div>
+        <div className="sas-sidebar__version">MAS Scorer v2.4.0</div>
       </div>
     </aside>
   );

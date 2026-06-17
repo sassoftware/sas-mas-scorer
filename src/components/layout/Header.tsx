@@ -57,12 +57,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
         </div>
       </div>
 
-      <nav className="sas-header__nav">
-        <a href="#modules" className="sas-header__nav-link sas-header__nav-link--active">
-          Modules
-        </a>
-      </nav>
-
       <div className="sas-header__actions">
         {isElectron && onOpenSettings && (
           <button
@@ -77,11 +71,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
           </button>
         )}
         <a
-          href="https://developer.sas.com/rest-apis/microanalyticScore"
+          href="https://github.com/sassoftware/sas-mas-scorer/blob/main/USER-GUIDE.md"
           target="_blank"
           rel="noopener noreferrer"
           className="sas-header__help-link"
-          title="API Documentation"
+          title="User Guide"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />

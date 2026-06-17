@@ -7,3 +7,4 @@ export * from './DataTable';
 export * from './Badge';
 export * from './Alert';
 export * from './Card';
+export * from './DecimalInput';

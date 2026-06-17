@@ -98,7 +98,15 @@ export const DynamicForm: React.FC<Props> = ({ layout, inputValues, outputValues
                     <label className="ui-runner__field-label">
                       {field.label}
                       {field.description && (
-                        <span className="ui-runner__field-hint" title={field.description}>?</span>
+                        <span
+                          className="ui-runner__field-hint"
+                          data-tooltip={field.description}
+                          tabIndex={0}
+                          role="img"
+                          aria-label={field.description}
+                        >
+                          ?
+                        </span>
                       )}
                     </label>
                   )}
