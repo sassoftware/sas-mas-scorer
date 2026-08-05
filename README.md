@@ -180,7 +180,7 @@ Maintainers are accepting patches and contributions to this project.
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details about submitting contributions to this project.
 
 ## License
-This project is licensed under the [Apache 2.0 License](LICENSE).
+Except for the application icon (`/public/icon.png`), this project is licensed under the [Apache 2.0 License](https://github.com/sassoftware/sas-mas-scorer/blob/main/LICENSE). The application icon is owned by SAS and is not released under an open source license.
 
 ## Additional Resources
 

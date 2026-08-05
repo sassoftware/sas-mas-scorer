@@ -6,6 +6,8 @@ import { StepOutput, StepParameter } from '../../types';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge, StatusBadge } from '../common/Badge';
+import { DataGridModal } from './DataGridModal';
+import { isDatagrid, datagridShape } from '../../utils/datagrid';
 
 interface BatchResult {
   rowIndex: number;
@@ -61,6 +63,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
 }) => {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [gridModal, setGridModal] = useState<{ title: string; value: unknown[] } | null>(null);
   const lastClickedRef = useRef<number | null>(null);
 
   const successCount = results.filter(r => r.output && !r.error).length;
@@ -119,9 +122,27 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
     setExpandedRow(expandedRow === index ? null : index);
   };
 
-  const formatValue = (value: unknown): string => {
+  const formatValue = (value: unknown, name: string, rowNumber: number): React.ReactNode => {
     if (value === null || value === undefined) return 'null';
-    if (Array.isArray(value)) return value.join(', ');
+    if (isDatagrid(value)) {
+      // Full datagrids get messy inline — show the shape as a link into a modal viewer
+      const shape = datagridShape(value);
+      return (
+        <button
+          className="batch-results__datagrid-link"
+          onClick={() => setGridModal({ title: `${name} — row ${rowNumber}`, value })}
+          title="View DataGrid"
+        >
+          DataGrid({shape.rows} × {shape.cols})
+        </button>
+      );
+    }
+    if (Array.isArray(value)) {
+      return value
+        .map(v => (typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)))
+        .join(', ');
+    }
+    if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
 
@@ -272,7 +293,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                       const outputVar = result.output?.outputs?.find(o => o.name === name);
                       return (
                         <td key={name} className="batch-results__value">
-                          {outputVar ? formatValue(outputVar.value) : '-'}
+                          {outputVar ? formatValue(outputVar.value, name, result.rowIndex + 1) : '-'}
                         </td>
                       );
                     })}
@@ -316,6 +337,13 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
           </table>
         </div>
       </CardBody>
+      {gridModal && (
+        <DataGridModal
+          title={gridModal.title}
+          value={gridModal.value}
+          onClose={() => setGridModal(null)}
+        />
+      )}
     </Card>
   );
 };

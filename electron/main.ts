@@ -50,12 +50,20 @@ function applySslConfig(): void {
 // --- Window creation ---
 
 function createWindow(): void {
+  // Packaged builds ship the icon inside dist/ (via Vite's public dir);
+  // in dev it is read straight from the repo. On Windows/Linux this sets the
+  // window/taskbar icon — the packaged exe icon comes from electron-builder.
+  const iconPath = app.isPackaged
+    ? path.join(__dirname, '..', '..', 'dist', 'icon.png')
+    : path.join(__dirname, '..', '..', 'public', 'icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     title: 'SAS MAS Scorer',
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

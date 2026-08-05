@@ -20,7 +20,9 @@ import { SaveBatchScenariosDialog } from './SaveBatchScenariosDialog';
 import { SaveTestDialog } from './SaveTestDialog';
 import { LoadScenarioDialog } from './LoadScenarioDialog';
 import { useStepExecution } from '../../hooks';
-import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
+import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo, getDecisionSignature } from '../../api';
+import { DataGridParamInfo } from './DataGridInputModal';
+import { coerceDatagridValue } from '../../utils/datagrid';
 
 interface ScorePanelProps {
   module: Module;
@@ -84,6 +86,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   // Decision/Model metadata for CAS upload columns
   const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
   const [modelInfo, setModelInfo] = useState<PublishedModelInfo | null>(null);
+  // MAS input param name → datagrid schema info (columns/max rows) from the decision signature
+  const [datagridParams, setDatagridParams] = useState<Record<string, DataGridParamInfo>>({});
   const moduleType = useMemo(() => getModuleType(module), [module]);
 
   const sourceURI = useMemo(() => {
@@ -126,6 +130,52 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
       .then(setModelInfo)
       .catch(() => setModelInfo(null));
   }, [moduleType, module.name]);
+
+  // Resolve which MAS input params are decision datagrids, and their declared
+  // columns (dataGridExtension) and row cap (dataGridMaxRowCount) if any.
+  // MAS lowercases decision variable names and appends a trailing '_'.
+  useEffect(() => {
+    if (moduleType !== 'Decision' || !sourceURI) {
+      setDatagridParams({});
+      return;
+    }
+    let cancelled = false;
+    getDecisionSignature(sourceURI)
+      .then(signature => {
+        if (cancelled) return;
+        const gridVars = signature.filter(
+          v => v.dataType?.toLowerCase() === 'datagrid' && v.direction !== 'output'
+        );
+        if (gridVars.length === 0) {
+          setDatagridParams({});
+          return;
+        }
+        const byLower = new Map(gridVars.map(v => [v.name.toLowerCase(), v]));
+        const map: Record<string, DataGridParamInfo> = {};
+        for (const param of step.inputs ?? []) {
+          const masName = param.name.toLowerCase();
+          const match = byLower.get(masName)
+            ?? (masName.endsWith('_') ? byLower.get(masName.slice(0, -1)) : undefined);
+          if (match) {
+            map[param.name] = {
+              columns: match.dataGridExtension?.length
+                ? match.dataGridExtension.map(c => ({
+                    name: c.name,
+                    dataType: c.dataType,
+                    length: c.length,
+                  }))
+                : null,
+              maxRows: match.dataGridMaxRowCount ?? null,
+            };
+          }
+        }
+        setDatagridParams(map);
+      })
+      .catch(() => setDatagridParams({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [moduleType, sourceURI, step.inputs]);
 
   const moduleVersion = useMemo(() => {
     if (moduleType === 'Decision' && decisionInfo) {
@@ -214,12 +264,28 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     setInputValues(sampleValues);
   }, [step.inputs]);
 
+  // Batch rows carry datagrid cells as JSON strings (CSV/CAS columns are flat);
+  // MAS rejects the string form, so parse them into the native array first
+  const normalizeDatagridInputs = useCallback((
+    input: Record<string, unknown>
+  ): Record<string, unknown> => {
+    const gridParamNames = Object.keys(datagridParams);
+    if (gridParamNames.length === 0) return input;
+    const normalized = { ...input };
+    for (const name of gridParamNames) {
+      const grid = coerceDatagridValue(normalized[name]);
+      if (grid) normalized[name] = grid;
+    }
+    return normalized;
+  }, [datagridParams]);
+
   // Execute a single row and return the result
   const executeRow = useCallback(async (
     rowIndex: number,
-    input: Record<string, unknown>
+    rawInput: Record<string, unknown>
   ): Promise<BatchResult> => {
     const requestStartTime = performance.now();
+    const input = normalizeDatagridInputs(rawInput);
 
     try {
       const stepInput = buildStepInput(step, input);
@@ -242,7 +308,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
         executionTime: requestEndTime - requestStartTime,
       };
     }
-  }, [module.id, step]);
+  }, [module.id, step, normalizeDatagridInputs]);
 
   // Batch execution handler with configurable concurrency
   const handleBatchExecute = useCallback(async (rows: Record<string, unknown>[], concurrency: number) => {
@@ -896,6 +962,13 @@ title;`;
 
     const headers = ['Row', 'Status', ...inputParams.map(p => `Input_${p}`), ...outputParams.map(p => `Output_${p}`), 'Runtime_ms', 'Error', 'Source_Link', 'Version'];
 
+    // Serialize datagrids and other structured values as JSON, not "[object Object]"
+    const toCsvValue = (value: unknown): string => {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'object') return JSON.stringify(value);
+      return String(value);
+    };
+
     const csvRows = batchResults.map(result => {
       const row: string[] = [
         String(result.rowIndex + 1),
@@ -903,14 +976,12 @@ title;`;
       ];
 
       inputParams.forEach(param => {
-        const value = result.input[param];
-        row.push(value === null || value === undefined ? '' : String(value));
+        row.push(toCsvValue(result.input[param]));
       });
 
       outputParams.forEach(param => {
         const outputVar = result.output?.outputs?.find(o => o.name === param);
-        const value = outputVar?.value;
-        row.push(value === null || value === undefined ? '' : String(value));
+        row.push(toCsvValue(outputVar?.value));
       });
 
       row.push(String(result.executionTime));
@@ -1178,6 +1249,7 @@ title;`;
                   values={inputValues}
                   onChange={setInputValues}
                   disabled={executing}
+                  datagridParams={datagridParams}
                 />
               </CardBody>
               <CardFooter>

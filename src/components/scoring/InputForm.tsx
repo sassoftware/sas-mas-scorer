@@ -1,16 +1,21 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StepParameter, StepParameterType } from '../../types';
 import { TypeBadge } from '../common/Badge';
+import { Button } from '../common/Button';
 import { DecimalInput } from '../common/DecimalInput';
+import { DataGridInputModal, DataGridParamInfo } from './DataGridInputModal';
+import { coerceDatagridValue, datagridShape } from '../../utils/datagrid';
 
 interface InputFormProps {
   parameters: StepParameter[];
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
   disabled?: boolean;
+  /** MAS parameter name → datagrid schema info, for decision datagrid inputs */
+  datagridParams?: Record<string, DataGridParamInfo>;
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
@@ -18,7 +23,9 @@ export const InputForm: React.FC<InputFormProps> = ({
   values,
   onChange,
   disabled = false,
+  datagridParams,
 }) => {
+  const [editingGridParam, setEditingGridParam] = useState<string | null>(null);
   const handleChange = (name: string, value: unknown) => {
     onChange({ ...values, [name]: value });
   };
@@ -47,10 +54,58 @@ export const InputForm: React.FC<InputFormProps> = ({
     return '';
   };
 
+  // Summary line for a datagrid value ("3 rows × 2 columns"), or null when unset
+  const datagridSummary = (value: unknown): string | null => {
+    const grid = coerceDatagridValue(value);
+    if (grid) {
+      const shape = datagridShape(grid);
+      return `${shape.rows} row${shape.rows === 1 ? '' : 's'} × ${shape.cols} column${shape.cols === 1 ? '' : 's'}`;
+    }
+    if (typeof value === 'string' && value.trim()) return 'Unrecognized value';
+    return null;
+  };
+
+  const renderDatagridField = (param: StepParameter) => {
+    const value = values[param.name];
+    const summary = datagridSummary(value);
+
+    return (
+      <div className="datagrid-input-field">
+        <span className={`datagrid-input-field__summary ${summary ? '' : 'datagrid-input-field__summary--empty'}`}>
+          {summary ?? 'No grid defined'}
+        </span>
+        <div className="datagrid-input-field__buttons">
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => setEditingGridParam(param.name)}
+            disabled={disabled}
+          >
+            {summary ? 'Edit grid…' : 'Create grid…'}
+          </Button>
+          {summary && (
+            <Button
+              variant="tertiary"
+              size="small"
+              onClick={() => handleChange(param.name, null)}
+              disabled={disabled}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderInput = (param: StepParameter) => {
     const { name, type, size, dim } = param;
     const value = values[name];
     const inputId = `input-${name}`;
+
+    if (datagridParams?.[name]) {
+      return renderDatagridField(param);
+    }
 
     switch (type) {
       case 'decimal':
@@ -166,15 +221,35 @@ export const InputForm: React.FC<InputFormProps> = ({
             >
               <label htmlFor={`input-${param.name}`} className="input-form__label">
                 <span className="input-form__label-text">{param.name}</span>
-                <TypeBadge type={param.type} />
+                <TypeBadge type={datagridParams?.[param.name] ? 'dataGrid' : param.type} />
               </label>
               {renderInput(param)}
-              {param.type === 'string' && param.size && (
-                <span className="input-form__hint">Max length: {param.size}</span>
+              {datagridParams?.[param.name] ? (
+                datagridParams[param.name].maxRows !== null && (
+                  <span className="input-form__hint">
+                    Max rows: {datagridParams[param.name].maxRows}
+                  </span>
+                )
+              ) : (
+                param.type === 'string' && param.size && (
+                  <span className="input-form__hint">Max length: {param.size}</span>
+                )
               )}
             </div>
           ))}
         </div>
+      )}
+      {editingGridParam && datagridParams?.[editingGridParam] && (
+        <DataGridInputModal
+          paramName={editingGridParam}
+          schema={datagridParams[editingGridParam]}
+          value={values[editingGridParam]}
+          onApply={(gridValue) => {
+            handleChange(editingGridParam, gridValue);
+            setEditingGridParam(null);
+          }}
+          onClose={() => setEditingGridParam(null)}
+        />
       )}
     </form>
   );

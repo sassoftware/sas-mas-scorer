@@ -197,6 +197,17 @@ Two cards at the top show:
 
 The input form shows one field for each input parameter. Each field is labelled with the parameter name and displays a type badge (e.g. `decimal`, `string`, `integer`).
 
+### DataGrid Inputs (Decision Modules)
+
+If a decision input is a **datagrid** (a table-valued variable), the app detects this from the decision's signature and replaces the raw text field with a grid editor. The field shows a `dataGrid` type badge, a summary of the current grid (e.g. "2 rows × 2 columns"), and a **Create grid…** / **Edit grid…** button that opens the editor:
+
+- **Columns from the decision** — When the decision declares the datagrid's columns (a *datagrid extension*), the editor locks the column names and types to match, and each cell gets a type-appropriate input: number fields for numeric columns, date/datetime pickers, and true/false dropdowns for booleans.
+- **Row limit** — If the decision declares a maximum row count, the editor shows it as a badge and refuses to add rows beyond the limit, telling you why.
+- **Free-form grids** — When the decision does not declare columns, you define them yourself: add columns, name them, and pick each column's type (string, decimal, integer, date, datetime, boolean).
+- The editor starts with one empty row ready to fill in. **Apply grid** writes the value back to the form; **Clear** on the field removes it.
+
+The grid is sent to MAS in its native JSON structure — you never have to hand-write the `metadata`/`data` JSON yourself.
+
 **Helpful actions in the input card header:**
 
 | Button | What It Does |
@@ -259,6 +270,8 @@ After the file is parsed, a mapping interface shows each module input parameter 
 
 A badge shows how many parameters are mapped (e.g. "8/8 mapped"). All parameters must be mapped before you can run.
 
+**Datagrid inputs:** a flat file cannot nest a table inside a cell, so a column mapped to a datagrid parameter should contain the serialized datagrid JSON (e.g. `[{"metadata":[{"col":"string"}]},{"data":[["a"]]}]`) in each cell. The app parses it into the native structure MAS expects before scoring — this applies to CAS table batches as well.
+
 ### Data Preview
 
 A preview table shows the first few rows of your data so you can verify it looks correct.
@@ -290,6 +303,8 @@ After the run completes (or is stopped), the results are displayed in a detailed
 **Results table:**
 
 Each row shows the row number, status badge, output values, and runtime. Click **Show** on any row to expand it and see the full input and output JSON.
+
+If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)** link instead of the raw structure — click it to open the grid in a modal viewer with sticky headers and a **Copy JSON** button.
 
 **Actions:**
 

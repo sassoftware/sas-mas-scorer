@@ -181,11 +181,24 @@ export const getDecisionSourceInfo = async (sourceURI: string): Promise<Decision
   };
 };
 
+// Fixed column declared on a decision dataGrid variable (dataGridExtension)
+export interface DecisionDataGridColumn {
+  id?: string;
+  name: string;
+  dataType: string;
+  length?: number;
+  autoPopulate?: boolean;
+}
+
 // Decision signature variable (original variable names with correct casing)
 export interface DecisionSignatureVariable {
   name: string;
   direction: 'input' | 'output';
   dataType: string;
+  // Only meaningful when dataType is 'dataGrid'
+  dataGridExtension?: DecisionDataGridColumn[] | null;
+  dataGridMaxRowCount?: number | null;
+  generateDataGridColumns?: boolean;
 }
 
 export const getDecisionSignature = async (sourceURI: string): Promise<DecisionSignatureVariable[]> => {
@@ -205,6 +218,18 @@ export const getDecisionSignature = async (sourceURI: string): Promise<DecisionS
     name: s.name,
     direction: s.direction,
     dataType: s.dataType,
+    dataGridExtension: Array.isArray(s.dataGridExtension)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? s.dataGridExtension.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          dataType: c.dataType,
+          length: c.length,
+          autoPopulate: c.autoPopulate,
+        }))
+      : null,
+    dataGridMaxRowCount: typeof s.dataGridMaxRowCount === 'number' ? s.dataGridMaxRowCount : null,
+    generateDataGridColumns: s.generateDataGridColumns === true,
   }));
 };
 

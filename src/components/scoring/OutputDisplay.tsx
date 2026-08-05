@@ -6,6 +6,8 @@ import { StepOutput, StepParameter } from '../../types';
 import { Badge, StatusBadge, TypeBadge } from '../common/Badge';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
+import { DatagridTable } from './DatagridTable';
+import { isDatagrid } from '../../utils/datagrid';
 
 interface OutputDisplayProps {
   output: StepOutput;
@@ -30,81 +32,6 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
     return param?.type ?? 'unknown';
   };
 
-  // Check if a value is a datagrid structure
-  const isDatagrid = (value: unknown): boolean => {
-    if (!Array.isArray(value)) return false;
-    // Look for an object with 'data' property in the array
-    return value.some(
-      (item) => typeof item === 'object' && item !== null && 'data' in item
-    );
-  };
-
-  // Extract datagrid parts from the value array
-  const parseDatagrid = (value: unknown[]): { headers: string[] | null; rows: unknown[][] } => {
-    let headers: string[] | null = null;
-    let rows: unknown[][] = [];
-
-    for (const item of value) {
-      if (typeof item === 'object' && item !== null) {
-        if ('metadata' in item && Array.isArray((item as { metadata: unknown }).metadata)) {
-          // metadata is an array of objects like [{ "KEY": "string" }, { "VALUE": "int" }]
-          const metadataArray = (item as { metadata: Array<Record<string, string>> }).metadata;
-          headers = metadataArray.map((col) => Object.keys(col)[0]);
-        }
-        if ('data' in item && Array.isArray((item as { data: unknown }).data)) {
-          rows = (item as { data: unknown[][] }).data;
-        }
-      }
-    }
-
-    return { headers, rows };
-  };
-
-  // Render a datagrid as a table
-  const renderDatagrid = (value: unknown[]): React.ReactNode => {
-    const { headers, rows } = parseDatagrid(value);
-
-    return (
-      <div className="output-display__datagrid-wrapper">
-        <table className="output-display__datagrid">
-          {headers && (
-            <thead>
-              <tr>
-                {headers.map((header, idx) => (
-                  <th key={idx}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-          )}
-          <tbody>
-            {rows.map((row, rowIdx) => (
-              <tr key={rowIdx}>
-                {Array.isArray(row) ? (
-                  row.map((cell, cellIdx) => (
-                    <td key={cellIdx}>
-                      {cell === null || cell === undefined
-                        ? <span className="output-display__null">null</span>
-                        : String(cell)}
-                    </td>
-                  ))
-                ) : (
-                  <td>{String(row)}</td>
-                )}
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={headers?.length ?? 1} className="output-display__empty">
-                  No data
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
   const formatValue = (value: unknown): React.ReactNode => {
     if (value === null || value === undefined) {
       return <span className="output-display__null">null</span>;
@@ -112,7 +39,7 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
     if (Array.isArray(value)) {
       // Check if this is a datagrid structure
       if (isDatagrid(value)) {
-        return renderDatagrid(value);
+        return <DatagridTable value={value} />;
       }
       return (
         <span className="output-display__array">
