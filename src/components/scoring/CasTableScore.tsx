@@ -282,7 +282,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
       const colNames = columns.map(c => c.name);
 
-      const rows: Record<string, unknown>[] = result.rows.map(row => {
+      // The rowSets service is not guaranteed to honor the requested limit
+      const limitedRows = result.rows.slice(0, effectiveLimit);
+
+      const rows: Record<string, unknown>[] = limitedRows.map(row => {
         const rowData: Record<string, unknown> = {};
         parameters.forEach(param => {
           const colName = mapping[param.name];
@@ -303,8 +306,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       setError(e.message ?? 'Failed to fetch table rows');
       setFetchingForScore(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, columns, mapping, parameters, concurrency, onExecuteBatch, getCellValue]);
+  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, mapping, parameters, concurrency, onExecuteBatch, getCellValue]);
 
   const unmappedParams = parameters.filter(p => !mapping[p.name]);
   const allMapped = unmappedParams.length === 0;

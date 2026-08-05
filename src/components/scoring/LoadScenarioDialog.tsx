@@ -13,6 +13,7 @@ import {
 } from '../../api/scoreDefinitions';
 import { getDecisionSignature, DecisionSignatureVariable } from '../../api/modules';
 import { StepParameter } from '../../types';
+import { coerceDatagridValue } from '../../utils/datagrid';
 
 interface LoadScenarioDialogProps {
   sourceURI: string;
@@ -82,6 +83,10 @@ function unwrapMappingValue(value: unknown, paramType: string): unknown {
   if (typeof value === 'object' && value !== null && 'type' in value && 'value' in value) {
     return (value as { value: unknown }).value;
   }
+
+  // JSON-stringified datagrids → parse back to the native array MAS expects
+  const grid = coerceDatagridValue(value);
+  if (grid) return grid;
 
   // JSON-stringified objects for datagrid types → parse back
   if (typeof value === 'string' && paramType.endsWith('Array')) {
