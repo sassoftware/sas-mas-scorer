@@ -5,7 +5,7 @@ import React from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder' | 'rules-import';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -123,6 +123,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <li>
               <button
                 className={`sas-sidebar__menu-item ${
+                  activeView === 'rules-import' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('rules-import')}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 16V4" />
+                  <path d="M7 9l5-5 5 5" />
+                  <path d="M4 20h16" />
+                </svg>
+                <span>Rules Import</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`sas-sidebar__menu-item ${
                   activeView === 'job-monitoring' || activeView === 'job-detail'
                     ? 'sas-sidebar__menu-item--active'
                     : ''
@@ -216,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v2.4.0</div>
+        <div className="sas-sidebar__version">MAS Scorer v{__APP_VERSION__}</div>
       </div>
     </aside>
   );

@@ -22,7 +22,8 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 14. [Test Coverage Analysis](#14-test-coverage-analysis)
 15. [Job Monitoring](#15-job-monitoring)
 16. [Schema → Code](#16-schema--code)
-17. [Keyboard and Interaction Tips](#17-keyboard-and-interaction-tips)
+17. [Business Rules Import](#17-business-rules-import)
+18. [Keyboard and Interaction Tips](#18-keyboard-and-interaction-tips)
 
 ---
 
@@ -61,6 +62,7 @@ The desktop app supports **multiple named connections** (e.g. "Production", "Dev
    | **Client ID** | An OAuth client registered on Viya. The default `vscode` works on Viya 2022.11+ |
    | **Client Secret** | Leave empty for the default public client |
    | **Skip SSL verification** | Enable for dev/test environments with self-signed certificates |
+   | **Environment Color** | Optional — tints the application header with this connection's color so you can tell environments apart at a glance. Pick a preset (Light Blue, Midnight Blue, Pink) or any custom color; **Default** keeps the standard SAS blue |
 
 3. Click **Save**, then click **Login**. A browser window opens for the OAuth authentication flow.
 4. After successful login, the app loads your modules.
@@ -70,6 +72,7 @@ The desktop app supports **multiple named connections** (e.g. "Production", "Dev
 - Click the **gear icon** in the top-right header to open the connection settings panel.
 - From there you can add, edit, delete, or switch between connections.
 - The active connection name and a green status dot are shown in the header.
+- Editing the **Environment Color** of the active connection recolors the header immediately — handy for making sure production and test environments never look alike.
 
 ### Web Server (Browser)
 
@@ -93,6 +96,7 @@ The left sidebar is the primary navigation. It contains four main pages and a co
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
 | **Test Coverage** | Analyze test scenario coverage across all assets |
+| **Rules Import** | Validate and import SAS Intelligent Decisioning rule sets from CSV files |
 | **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code |
 | **Schema → Code** | Generate a Python `execute()` function from a JSON/XML sample and save it to SAS Intelligent Decisioning |
 
@@ -894,7 +898,59 @@ The **Save to SAS Viya** dialog has two modes:
 
 ---
 
-## 17. Keyboard and Interaction Tips
+## 17. Business Rules Import
+
+The **Rules Import** page imports SAS Intelligent Decisioning **rule sets** from CSV files — the same 15-column format used by the `%DCM_IMPORT_RULESET` macro and the rule export in SAS Intelligent Decisioning. Instead of importing blind and digging through a SAS log afterwards, you validate the file up front, fix problems directly in the grid, and see exactly what the server accepted or rejected.
+
+The page is a four-step wizard. Click any enabled step in the step bar to move back and forth.
+
+### Step 1 — Upload
+
+- Click **Choose a CSV file** or drag & drop the file onto the drop zone. Files must be UTF-8 CSV with the standard header row (`ruleset_id,ruleset_nm,folder_path,…`).
+- **Download template** in the page header produces an empty CSV with the correct header row.
+- After loading, the page shows row, rule set, and rule counts and moves on to Review & Fix automatically. Files with a missing or wrong header are rejected here with an explanation of what was expected.
+- A previously downloaded rejection file (which carries an extra reason column) can be re-uploaded as-is — the extra column is recognized and ignored.
+
+### Step 2 — Review & Fix
+
+Every row is shown in an editable grid, and every cell is re-validated as you type:
+
+- **Errors (red)** block the import — missing required values, term names longer than 32 characters or using DS2 reserved words, invalid `conditional` / `expression_type` / data type values, non-contiguous rule sequence numbers, a first rule that is not `if`, ELSE rules with conditions, unbalanced quotes or parentheses in expressions, or one term used with two different data types.
+- **Warnings (amber)** allow the import but deserve a look — lowercase `expression_type`, unquoted string action values, the same rule set name under two folders, and similar.
+- **Info (blue)** notes are advisory — for example uppercase variable names inside expressions (the documentation recommends lowercase).
+
+Tools in this step:
+
+- Hover a highlighted cell (or the status dot in the row gutter) to read its messages.
+- **Only rows with issues** filters the grid down to problem rows.
+- **Next error →** jumps to the next error cell, scrolls it into view, and places the cursor in it ready to type the fix.
+- **Auto-fix formatting** normalizes what can be fixed mechanically: lowercases conditionals, uppercases expression types and flags, canonical data type casing, stray whitespace.
+- **Download corrected CSV** saves the current state of the grid — including all your edits — as a clean CSV.
+- Large files are paginated at 200 rows per page.
+
+### Step 3 — Server Checks
+
+**Continue to server checks** runs the checks automatically (you must be logged in). For every rule set in the file the app determines:
+
+- **CREATE or UPDATE** — whether a rule set with the same name already exists in the target folder. Existing rule sets are **updated** with a new revision by the import; the current revision number is shown.
+- **Folder existence** — missing SAS Content folders are flagged as informational only; the service creates them automatically during import.
+- **ruleset_id conflicts** — files exported from *another environment* carry that environment's ids. If the target folder already contains a rule set with the same name but a different id, the service rejects the whole import. The app flags this as a blocking error and offers **Clear conflicting IDs**, which blanks the `ruleset_id` / `rule_id` columns for the affected rule sets so the import matches by name + folder and updates them cleanly.
+
+Edits that change rule set names or folder paths mark the checks as stale — rerun them before importing.
+
+### Step 4 — Import
+
+- The scope line shows what will be sent: all rule sets, or only the previously rejected ones on a retry.
+- **Import…** opens a confirmation dialog listing every rule set with a CREATE / UPDATE badge. If any rule sets will be updated, you must tick an acknowledgment checkbox first — an update replaces the rule set content with a new unlocked revision.
+- After the import, the results appear below: **imported** rule sets (green), **rejected** rule sets (red, with the server's reasons), and any global issues. Rejected rows are also tinted in the Review & Fix grid with the reasons attached to them.
+- **Import again — rejected only** re-sends just the rejected rule sets after you fix them — rule sets that already imported are never sent twice (every import creates a new revision).
+- **Download rejected rows (CSV)** and **Download server response** are available for offline analysis.
+
+> **How matching works:** the import matches rule sets by **name + folder path**. If both match, the rule set is updated; otherwise it is created. Imported rule sets arrive as unlocked revisions.
+
+---
+
+## 18. Keyboard and Interaction Tips
 
 - **Shift+Click** on batch result checkboxes to select a range of rows.
 - **Escape** closes the code viewer modal in the View Flows page.

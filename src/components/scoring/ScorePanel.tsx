@@ -6,7 +6,6 @@ import { Module, Step, ModuleSource, StepOutput, getModuleType } from '../../typ
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { TypeBadge } from '../common/Badge';
 import { Loading } from '../common/Loading';
 import { PageHeader } from '../layout/Layout';
 import { InputForm } from './InputForm';
@@ -1173,53 +1172,6 @@ title;`;
       </div>
 
       <div className="score-panel__content">
-        <div className="score-panel__grid">
-          {/* Step Info */}
-          <Card className="score-panel__info-card">
-            <CardHeader>
-              <h3>Step Information</h3>
-            </CardHeader>
-            <CardBody>
-              <div className="score-panel__step-info">
-                <div className="score-panel__step-stats">
-                  <div className="score-panel__stat">
-                    <span className="score-panel__stat-value">{step.inputs?.length ?? 0}</span>
-                    <span className="score-panel__stat-label">Inputs</span>
-                  </div>
-                  <div className="score-panel__stat">
-                    <span className="score-panel__stat-value">{step.outputs?.length ?? 0}</span>
-                    <span className="score-panel__stat-label">Outputs</span>
-                  </div>
-                </div>
-                {step.description && (
-                  <p className="score-panel__step-description">{step.description}</p>
-                )}
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Output Signature */}
-          <Card className="score-panel__signature-card">
-            <CardHeader>
-              <h3>Output Signature</h3>
-            </CardHeader>
-            <CardBody>
-              {(step.outputs?.length ?? 0) === 0 ? (
-                <p className="score-panel__no-outputs">This step produces no outputs.</p>
-              ) : (
-                <ul className="score-panel__output-list">
-                  {(step.outputs ?? []).map((param) => (
-                    <li key={param.name} className="score-panel__output-item">
-                      <span className="score-panel__output-name">{param.name}</span>
-                      <TypeBadge type={param.type} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardBody>
-          </Card>
-        </div>
-
         {/* Single Execution Mode */}
         {executionMode === 'single' && (
           <>
