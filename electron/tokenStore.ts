@@ -28,6 +28,8 @@ export interface ConnectionSettings {
 export interface SavedConnection extends ConnectionSettings {
   id: string;
   name: string;
+  /** Environment color (hex) applied to the app chrome while this connection is active */
+  color?: string;
 }
 
 interface StoreSchema {

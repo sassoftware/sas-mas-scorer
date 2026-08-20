@@ -5,6 +5,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '../common/Button';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Alert } from '../common/Alert';
+import { ENV_COLOR_PRESETS, applyEnvironmentColor } from '../../utils/envColor';
+
+const DEFAULT_HEADER_COLOR = '#0766D1'; // --sas-blue-brand, shown on the "Default" swatch
+
+const swatchStyle = (value: string, selected: boolean): React.CSSProperties => ({
+  width: '28px',
+  height: '28px',
+  borderRadius: '50%',
+  background: value,
+  border: '1px solid var(--sas-gray-300, #ccc)',
+  boxShadow: selected ? '0 0 0 2px var(--sas-white, #fff), 0 0 0 4px var(--sas-blue-primary, #0066B2)' : 'none',
+  cursor: 'pointer',
+  padding: 0,
+  flexShrink: 0,
+});
 
 interface ConnectionSettingsProps {
   onSave: () => void;
@@ -32,6 +47,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
   const [clientId, setClientId] = useState('vscode');
   const [clientSecret, setClientSecret] = useState('');
   const [insecureSsl, setInsecureSsl] = useState(false);
+  const [color, setColor] = useState(''); // '' = default SAS branding
   const [error, setError] = useState<string | null>(null);
 
   const loadConnections = useCallback(async () => {
@@ -65,6 +81,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
     setClientId('vscode');
     setClientSecret('');
     setInsecureSsl(false);
+    setColor('');
     setError(null);
     setEditingConnection(null);
   };
@@ -81,6 +98,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
     setClientId(conn.clientId);
     setClientSecret(conn.clientSecret);
     setInsecureSsl(conn.insecureSsl);
+    setColor(conn.color ?? '');
     setError(null);
     setView('edit');
   };
@@ -123,10 +141,15 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
       clientId: clientId.trim() || 'vscode',
       clientSecret,
       insecureSsl,
+      color: color || undefined,
     };
 
     if (view === 'edit' && editingConnection) {
       await window.electronAPI.updateConnection({ ...connData, id: editingConnection.id });
+      // Editing the active connection: recolor the chrome immediately
+      if (editingConnection.id === activeId) {
+        applyEnvironmentColor(connData.color ?? null);
+      }
     } else {
       const saved = await window.electronAPI.addConnection(connData);
       // Auto-activate first connection
@@ -239,6 +262,43 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                 />
               </div>
               <div className="input-form__group input-form__group--full">
+                <label className="input-form__label">
+                  <span className="input-form__label-text">Environment Color</span>
+                  <span className="input-form__hint">
+                    Colors the app header while this connection is active, so you can tell environments apart at a glance
+                  </span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    title="Default (SAS blue)"
+                    onClick={() => setColor('')}
+                    style={swatchStyle(DEFAULT_HEADER_COLOR, color === '')}
+                  />
+                  {ENV_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      title={preset.name}
+                      onClick={() => setColor(preset.value)}
+                      style={swatchStyle(preset.value, color === preset.value)}
+                    />
+                  ))}
+                  <label
+                    title="Custom color"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginLeft: '4px' }}
+                  >
+                    <input
+                      type="color"
+                      value={color || DEFAULT_HEADER_COLOR}
+                      onChange={(e) => setColor(e.target.value)}
+                      style={{ width: '36px', height: '28px', padding: 0, border: '1px solid var(--sas-gray-300, #ccc)', borderRadius: '6px', cursor: 'pointer', background: 'none' }}
+                    />
+                    <span className="input-form__hint">Custom</span>
+                  </label>
+                </div>
+              </div>
+              <div className="input-form__group input-form__group--full">
                 <label className="input-form__label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
@@ -272,13 +332,14 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
   return (
     <div className="connection-settings">
       <Card padding="none">
-        <CardHeader>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <h3>Connections</h3>
+        <CardHeader
+          actions={
             <Button variant="primary" size="small" onClick={openAddForm}>
               Add Connection
             </Button>
-          </div>
+          }
+        >
+          <h3>Connections</h3>
         </CardHeader>
         <CardBody>
           {connections.length === 0 ? (
@@ -312,6 +373,19 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                           flexShrink: 0,
                         }}
                       />
+                      {conn.color && (
+                        <span
+                          title="Environment color"
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '4px',
+                            background: conn.color,
+                            border: '1px solid var(--sas-gray-300, #ccc)',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {conn.name}

@@ -9,6 +9,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { clearCsrfToken } from '../api/client';
+import { AuthErrorModal, OPEN_SETTINGS_EVENT } from '../components/common/AuthErrorModal';
 
 interface SasAuthContextType {
   isAuthenticated: boolean;
@@ -29,6 +30,8 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Failure surfaced to the user via modal (covers every login() call site)
+  const [authFailure, setAuthFailure] = useState<{ operation: 'login' | 'logout'; message: string } | null>(null);
 
   const checkAuth = useCallback(async (): Promise<boolean> => {
     if (!window.electronAPI) return false;
@@ -65,9 +68,12 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
       setIsAuthenticated(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
+      console.error('Login failed:', err);
       setError(message);
       setIsAuthenticated(false);
-      throw err;
+      // Handled here via the modal — deliberately not rethrown, so plain
+      // onClick={login} call sites don't produce unhandled rejections
+      setAuthFailure({ operation: 'login', message });
     } finally {
       setIsLoading(false);
     }
@@ -84,8 +90,9 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
       clearCsrfToken();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Logout failed';
+      console.error('Logout failed:', err);
       setError(message);
-      throw err;
+      setAuthFailure({ operation: 'logout', message });
     } finally {
       setIsLoading(false);
     }
@@ -113,6 +120,17 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
   return (
     <SasAuthContext.Provider value={value}>
       {children}
+      {authFailure && (
+        <AuthErrorModal
+          error={authFailure.message}
+          operation={authFailure.operation}
+          onClose={() => setAuthFailure(null)}
+          onOpenSettings={() => {
+            setAuthFailure(null);
+            window.dispatchEvent(new CustomEvent(OPEN_SETTINGS_EVENT));
+          }}
+        />
+      )}
     </SasAuthContext.Provider>
   );
 };

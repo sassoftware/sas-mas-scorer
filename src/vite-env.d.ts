@@ -14,6 +14,9 @@ interface ImportMeta {
 // Build mode constant injected by Vite
 declare const __BUILD_MODE__: 'standard' | 'jobdef' | 'electron';
 
+// App version from package.json, injected by Vite
+declare const __APP_VERSION__: string;
+
 // Electron IPC bridge (exposed via preload script)
 interface ConnectionSettings {
   viyaUrl: string;
@@ -25,6 +28,8 @@ interface ConnectionSettings {
 interface SavedConnection extends ConnectionSettings {
   id: string;
   name: string;
+  /** Environment color (hex) applied to the app chrome while this connection is active */
+  color?: string;
 }
 
 interface ElectronAPI {

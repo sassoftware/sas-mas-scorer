@@ -52,6 +52,21 @@ export const getFolder = async (folderId: string): Promise<SasFolder> => {
   return response.data;
 };
 
+/**
+ * Resolve a SAS Content folder by its path (e.g. "/Public/Rules").
+ * Returns null when the folder does not exist. validateStatus lets the 404
+ * resolve here — the shared error interceptor would otherwise rewrap it into
+ * a generic Error indistinguishable from a real failure.
+ */
+export const getFolderByPath = async (path: string): Promise<SasFolder | null> => {
+  const response = await sasViyaClient.get('/folders/folders/@item', {
+    params: { path },
+    headers: { Accept: 'application/json' },
+    validateStatus: (status) => status === 200 || status === 404,
+  });
+  return response.status === 404 ? null : response.data;
+};
+
 export const getFolderMembers = async (
   folderId: string,
   start = 0,

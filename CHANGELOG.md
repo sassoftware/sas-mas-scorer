@@ -2,6 +2,30 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.6.0] - 2026-08-20
+
+### Added
+
+- **Business Rules Import** — new primary navigation page that imports SAS Intelligent Decisioning rule sets from CSV files (the `%DCM_IMPORT_RULESET` / rule-export format) through the businessRules REST API, as a four-step wizard (Upload → Review & Fix → Server Checks → Import), available in all three build targets
+  - Client-side pre-flight validation with per-cell highlighting: required values and length limits, term naming (≤32 characters, legal SAS name, no DS2 reserved words), value domains (conditional, rule-fired flag, data types, expression types), rule structure (contiguous rule/expression numbering, first rule must be IF, ELSE rules cannot have conditions), expression sanity (balanced quotes/parentheses, string-literal quoting), and cross-file consistency (one data type per term)
+  - Editable grid with error/warning/info tooltips, an issues-only filter, **Next error** navigation that scrolls to and focuses the offending cell, **Auto-fix formatting** for normalizable issues, pagination for large files, and **Download corrected CSV**
+  - Server checks classify each rule set as **CREATE** or **UPDATE** (existing revision shown), flag missing SAS Content folders (created automatically by the service), and detect **ruleset_id conflicts** in files exported from another environment — with a one-click **Clear conflicting IDs** fix so the import updates the existing rule set by name + folder instead of being rejected
+  - Import confirmation dialog with per-rule-set CREATE/UPDATE badges and an explicit acknowledgment when existing rule sets will be updated
+  - Full multipart response handling: accepted and rejected rule sets with the server's reasons mapped back onto the grid rows (including the HTTP 400 rejection response), **rejected-only retry** that never re-sends accepted rule sets, and downloads of the rejected rows and the raw server response
+- **Environment colors for connections** (desktop app) — each saved connection can be given a color (presets or a custom picker) that tints the application header, so users can tell at a glance which environment they are connected to; editing the active connection recolors the app immediately. The default remains the SAS brand blue
+- **Self-signed certificate guidance** — a failed login now opens an explanatory dialog instead of failing silently; certificate errors get step-by-step instructions (enable **Skip SSL certificate verification** on the connection profile) and a shortcut into Connection Settings. Covers every Login entry point in the app
+
+### Fixed
+
+- **Mojibake in the Job Execution build** — non-ASCII characters in the single-file build (e.g. the arrow in "Schema → Code") rendered as garbled text ("Schema â Code") because the base64-decoded script bytes were not interpreted as UTF-8; the loader now decodes them with `TextDecoder`
+
+### Changed
+
+- New default header color **#0766D1** (SAS brand blue) with an updated logo mark; header buttons keep readable contrast on any environment color
+- The version number in the sidebar is injected from `package.json` at build time instead of being hardcoded
+- Score page decluttered — the **Step Information** and **Output Signature** cards were removed (the same information is on the module details page and in the scoring results)
+- Connections dialog polish: spacing for the **Add Connection** button, and **Escape** closes the dialog
+
 ## [2.5.0] - 2026-08-05
 
 ### Added

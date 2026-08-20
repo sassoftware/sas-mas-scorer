@@ -5,6 +5,7 @@
 :root {
   /* Primary Brand Colors */
   --sas-blue-primary: #0066B2;
+  --sas-blue-brand: #0766D1; /* SAS brand blue — default app header color */
   --sas-blue-dark: #003D6B;
   --sas-blue-darker: #00294A;
   --sas-blue-light: #E6F2F9;

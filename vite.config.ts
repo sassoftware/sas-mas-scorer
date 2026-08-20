@@ -5,9 +5,13 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Single source of truth for the app version shown in the UI
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')) as { version: string };
 
 const isJobDefBuild = process.env.BUILD_MODE === 'jobdef';
 const isElectronBuild = process.env.BUILD_MODE === 'electron';
@@ -43,7 +47,10 @@ function goTemplateSafeScripts(): Plugin {
               // value is unused in singlefile mode (no real preload happens).
               const safeCode = code.replace(/\bimport\.meta\.url\b/g, 'document.baseURI');
               const encoded = Buffer.from(safeCode, 'utf-8').toString('base64');
-              return `<script>document.addEventListener("DOMContentLoaded",function(){new Function(atob("${encoded}"))()});</script>`;
+              // atob() alone yields one char per BYTE, so multi-byte UTF-8
+              // characters in the bundle (e.g. the "→" in "Schema → Code")
+              // would become mojibake — decode the bytes as UTF-8 explicitly.
+              return `<script>document.addEventListener("DOMContentLoaded",function(){var b=atob("${encoded}"),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);new Function(new TextDecoder("utf-8").decode(a))()});</script>`;
             }
           );
           file.source = html;
@@ -101,6 +108,8 @@ export default defineConfig(async () => {
     define: {
       // Expose build mode to application code
       __BUILD_MODE__: JSON.stringify(buildMode),
+      // Version from package.json, rendered in the sidebar
+      __APP_VERSION__: JSON.stringify(pkg.version),
     },
     build: {
       // Output to different directories based on build mode

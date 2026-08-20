@@ -16,6 +16,7 @@ import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
 import { PublishingOverview } from './components/publishing';
 import { JobMonitoringPage, JobDetailPage } from './components/jobMonitoring';
 import { SchemaBuilder } from './components/schemaBuilder/SchemaBuilder';
+import { RulesImportPage } from './components/rulesImport/RulesImportPage';
 import FlowListPage from './components/flows/FlowListPage';
 import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
@@ -26,6 +27,8 @@ import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storag
 import { decodeUIDefinition } from './utils/shareLink';
 import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
+import { applyEnvironmentColor } from './utils/envColor';
+import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
 import './styles/index.css';
 
 const isElectron = !!window.electronAPI;
@@ -44,11 +47,33 @@ function App() {
     const conn = await window.electronAPI.getActiveConnection();
     setHasActiveConnection(conn !== null && conn.viyaUrl !== '');
     setActiveConnectionName(conn?.name ?? null);
+    applyEnvironmentColor(conn?.color ?? null);
   }, []);
 
   useEffect(() => {
     loadActiveConnection();
   }, [loadActiveConnection]);
+
+  // The auth-error modal's "Open Connection Settings" button (Electron)
+  useEffect(() => {
+    if (!isElectron) return;
+    const openSettings = () => setShowSettings(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, openSettings);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings);
+  }, []);
+
+  // Escape dismisses the settings modal (matching the other modals)
+  useEffect(() => {
+    if (!showSettings) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSettings(false);
+        loadActiveConnection();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showSettings, loadActiveConnection]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -88,6 +113,7 @@ function App() {
       isPublishingView: hash === '/publishing' || hash === '/publishing/',
       isJobMonitoringView: hash === '/jobs' || hash === '/jobs/',
       isSchemaBuilderView: hash === '/schema-builder' || hash === '/schema-builder/',
+      isRulesImportView: hash === '/rules-import' || hash === '/rules-import/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
       jobDetailId: jobDetailMatch ? decodeURIComponent(jobDetailMatch[1]) : null,
       isStandalone: searchParams.get('standalone') === 'true',
@@ -97,7 +123,7 @@ function App() {
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, flowDetailId, jobDetailId, isStandalone, uiAppDef } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, flowDetailId, jobDetailId, isStandalone, uiAppDef } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -170,7 +196,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !flowDetailId && !jobDetailId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !isRulesImportView && !flowDetailId && !jobDetailId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -215,6 +241,7 @@ function App() {
     if (jobDetailId) return 'job-detail';
     if (isJobMonitoringView) return 'job-monitoring';
     if (isSchemaBuilderView) return 'schema-builder';
+    if (isRulesImportView) return 'rules-import';
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
     if (isCoverageView) return 'coverage';
@@ -259,6 +286,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/schema-builder');
+    } else if (view === 'rules-import') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/rules-import');
     }
   }, [resetModules, navigate]);
 
@@ -397,6 +428,11 @@ function App() {
     // Schema → Code View
     if (activeView === 'schema-builder') {
       return <SchemaBuilder onBack={handleBackToModules} />;
+    }
+
+    // Business Rules Import View
+    if (activeView === 'rules-import') {
+      return <RulesImportPage />;
     }
 
     // Job Monitoring views
@@ -605,12 +641,12 @@ function App() {
         </Layout>
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowSettings(false); loadActiveConnection(); } }}
         >
           <div style={{ maxWidth: '600px', width: '100%', margin: '24px' }}>
             <ConnectionSettings
               onSave={() => { setShowSettings(false); loadActiveConnection(); }}
-              onCancel={() => setShowSettings(false)}
+              onCancel={() => { setShowSettings(false); loadActiveConnection(); }}
               onConnectionSwitch={handleConnectionSwitch}
             />
           </div>

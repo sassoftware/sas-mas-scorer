@@ -1,0 +1,532 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* Business Rules Import page — step-wizard flow like the Schema → Code page */
+
+.rules-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* --- Step navigation --- */
+
+.rules-import__steps {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.rules-import__step {
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-600);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.rules-import__step:hover:not(:disabled) {
+  color: var(--sas-blue-primary);
+}
+
+.rules-import__step--active {
+  color: var(--sas-blue-primary);
+  border-bottom-color: var(--sas-blue-primary);
+}
+
+.rules-import__step:disabled {
+  color: var(--sas-gray-400);
+  cursor: not-allowed;
+}
+
+/* --- Panels --- */
+
+.rules-import__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.rules-import__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.rules-import__panel-header-left,
+.rules-import__panel-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rules-import__panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.rules-import__count {
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+  max-width: 480px;
+}
+
+/* --- Upload / drop zone --- */
+
+.rules-import__dropzone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 2px dashed var(--sas-gray-300);
+  border-radius: var(--radius-lg);
+  background: var(--sas-gray-50);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.rules-import__dropzone--active {
+  border-color: var(--sas-blue-brand);
+  background: var(--sas-blue-lighter);
+}
+
+.rules-import__file-input {
+  display: none;
+}
+
+.rules-import__file-label {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  background: var(--sas-blue-brand);
+  color: var(--sas-white);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.rules-import__file-label:hover {
+  background: var(--sas-blue-primary);
+}
+
+.rules-import__dropzone-hint {
+  color: var(--sas-gray-500);
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__file-summary {
+  margin-top: var(--space-3);
+  font-size: var(--font-size-base);
+  color: var(--sas-gray-800);
+}
+
+.rules-import__file-note {
+  color: var(--sas-gray-500);
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__file-issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* --- Summary strip / toolbar --- */
+
+.rules-import__filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rules-import__notice {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  font-style: italic;
+}
+
+/* --- Grid --- */
+
+.rules-import__grid-wrapper {
+  overflow: auto;
+  max-height: 62vh;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.rules-import__grid {
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  width: max-content;
+  min-width: 100%;
+}
+
+.rules-import__grid thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.rules-import__grid th {
+  background: var(--sas-gray-100);
+  color: var(--sas-gray-700);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 2px solid var(--sas-gray-300);
+  white-space: nowrap;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+.rules-import__grid td {
+  padding: 2px var(--space-1);
+  border-bottom: 1px solid var(--sas-gray-100);
+  vertical-align: middle;
+}
+
+.rules-import__col-line {
+  text-align: right;
+  color: var(--sas-gray-400);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  padding-right: var(--space-2) !important;
+  white-space: nowrap;
+}
+
+.rules-import__col-status {
+  width: 18px;
+  text-align: center;
+}
+
+.rules-import__col-wide .rules-import__cell-input,
+td.rules-import__col-wide .rules-import__cell-input {
+  min-width: 220px;
+}
+
+.rules-import__status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  cursor: help;
+}
+
+.rules-import__status-dot--error {
+  background: var(--sas-error);
+}
+
+.rules-import__status-dot--warning {
+  background: var(--sas-warning);
+}
+
+.rules-import__status-dot--info {
+  background: var(--sas-info);
+}
+
+.rules-import__row--rejected td {
+  background: var(--sas-error-light);
+}
+
+/* Row targeted by "Next error" — declared after the other row rules so the
+   focus tint wins, with a flash to draw the eye even without scrolling */
+.rules-import__row--focus td {
+  background: var(--sas-blue-light);
+  animation: rules-import-focus-flash 1.2s ease;
+}
+
+.rules-import__row--focus .rules-import__col-line {
+  color: var(--sas-blue-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+@keyframes rules-import-focus-flash {
+  0% {
+    background: var(--sas-info-light);
+  }
+  50% {
+    background: #bcd9f7;
+  }
+  100% {
+    background: var(--sas-blue-light);
+  }
+}
+
+.rules-import__cell-input {
+  width: 100%;
+  min-width: 90px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-mono);
+  background: var(--sas-white);
+  color: var(--sas-gray-900);
+  box-sizing: border-box;
+}
+
+.rules-import__cell-input:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: 0 0 0 2px var(--sas-blue-light);
+}
+
+.rules-import__cell-input--error {
+  border-color: var(--sas-error);
+  background: var(--sas-error-light);
+}
+
+.rules-import__cell-input--warning {
+  border-color: var(--sas-warning);
+  background: var(--sas-warning-light);
+}
+
+.rules-import__cell-input--info {
+  border-color: var(--sas-info);
+}
+
+.rules-import__grid-empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--sas-gray-500);
+}
+
+.rules-import__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+/* --- Server checks --- */
+
+.rules-import__preflight-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__preflight-table th {
+  text-align: left;
+  padding: var(--space-2);
+  border-bottom: 2px solid var(--sas-gray-200);
+  color: var(--sas-gray-600);
+  font-weight: var(--font-weight-semibold);
+}
+
+.rules-import__preflight-table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--sas-gray-100);
+}
+
+.rules-import__preflight-folder {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  word-break: break-all;
+}
+
+.rules-import__preflight-details {
+  color: var(--sas-gray-600);
+}
+
+.rules-import__hint {
+  margin: 0;
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__conflict-text {
+  margin: 0 0 var(--space-2);
+}
+
+/* --- Import card / results --- */
+
+.rules-import__scope-line {
+  font-size: var(--font-size-base);
+  color: var(--sas-gray-800);
+}
+
+.rules-import__blocked-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-warning-dark);
+}
+
+.rules-import__link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--sas-blue-primary);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.rules-import__result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rules-import__result-list {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rules-import__result-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rules-import__result-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__result-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* --- Confirm dialog --- */
+
+.rules-import__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal-backdrop);
+}
+
+.rules-import__dialog {
+  background: var(--sas-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 640px;
+  max-width: calc(100vw - 48px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-modal);
+}
+
+.rules-import__dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.rules-import__dialog-header h3 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.rules-import__dialog-close {
+  background: none;
+  border: none;
+  font-size: var(--font-size-xl);
+  color: var(--sas-gray-500);
+  cursor: pointer;
+  line-height: 1;
+  padding: var(--space-1);
+}
+
+.rules-import__dialog-close:hover {
+  color: var(--sas-gray-800);
+}
+
+.rules-import__dialog-body {
+  padding: var(--space-4) var(--space-5);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rules-import__dialog-intro {
+  margin: 0;
+}
+
+.rules-import__confirm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rules-import__confirm-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rules-import__confirm-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.rules-import__confirm-folder {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+  word-break: break-all;
+}
+
+.rules-import__confirm-rev {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-500);
+}
+
+.rules-import__confirm-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rules-import__confirm-ack input {
+  margin-top: 3px;
+}
+
+.rules-import__dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--sas-gray-200);
+}

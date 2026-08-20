@@ -38,8 +38,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-4);
-  background-color: var(--sas-blue-dark);
-  color: var(--sas-white);
+  /* --env-header-* properties are set per connection in the Electron app */
+  background-color: var(--env-header-bg, var(--sas-blue-brand));
+  color: var(--env-header-fg, var(--sas-white));
   z-index: var(--z-sticky);
   box-shadow: var(--shadow-md);
 }
@@ -68,13 +69,13 @@
 .sas-header__title {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
-  color: var(--sas-white);
+  color: var(--env-header-fg, var(--sas-white));
   line-height: 1.2;
 }
 
 .sas-header__subtitle {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-300);
+  color: var(--env-header-fg-muted, var(--sas-gray-300));
   opacity: 0.8;
 }
 
@@ -85,21 +86,21 @@
 
 .sas-header__nav-link {
   padding: var(--space-2) var(--space-4);
-  color: var(--sas-gray-300);
+  color: var(--env-header-fg-muted, var(--sas-gray-300));
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
 
 .sas-header__nav-link:hover {
-  color: var(--sas-white);
-  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--env-header-fg, var(--sas-white));
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.1));
   text-decoration: none;
 }
 
 .sas-header__nav-link--active {
-  color: var(--sas-white);
-  background-color: rgba(255, 255, 255, 0.15);
+  color: var(--env-header-fg, var(--sas-white));
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.15));
 }
 
 .sas-header__actions {
@@ -114,14 +115,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--sas-gray-300);
+  color: var(--env-header-fg-muted, var(--sas-gray-300));
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
 
 .sas-header__action-btn:hover {
-  color: var(--sas-white);
-  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--env-header-fg, var(--sas-white));
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.1));
 }
 
 .sas-header__action-btn svg {
@@ -135,14 +136,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--sas-gray-300);
+  color: var(--env-header-fg-muted, var(--sas-gray-300));
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
 
 .sas-header__help-link:hover {
-  color: var(--sas-white);
-  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--env-header-fg, var(--sas-white));
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.1));
 }
 
 .sas-header__help-link svg {
@@ -196,6 +197,26 @@
 .sas-header__auth-indicator--connected {
   background-color: var(--sas-success);
   box-shadow: 0 0 6px var(--sas-success);
+}
+
+/* Buttons in the header sit on the (possibly custom) environment color —
+   restyle them from the env-aware foreground so they stay visible. */
+.sas-header .sas-button--tertiary {
+  color: var(--env-header-fg, var(--sas-white));
+}
+
+.sas-header .sas-button--tertiary:hover:not(:disabled) {
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.sas-header .sas-button--primary {
+  background-color: var(--env-header-fg, var(--sas-white));
+  color: var(--env-header-bg, var(--sas-blue-brand));
+}
+
+.sas-header .sas-button--primary:hover:not(:disabled) {
+  background-color: var(--env-header-fg, var(--sas-white));
+  opacity: 0.85;
 }
 
 .sas-header__auth-indicator--disconnected {
