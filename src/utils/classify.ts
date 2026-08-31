@@ -73,6 +73,32 @@ export function classifyStep(step: Step): { nodeType: SidNodeType; label: string
   return { nodeType: 'unknown', label: 'Unknown Step' };
 }
 
+/**
+ * Recursively collect the customObject URIs of one type across a step tree
+ * (branches, multi-way cases, A/B cases and nested step lists included).
+ */
+export function collectCustomObjectUris(steps: Step[], type: string): string[] {
+  const uris: string[] = [];
+  for (const step of steps) {
+    if (step.customObject?.type === type) uris.push(step.customObject.uri);
+    if (step.onTrue) uris.push(...collectCustomObjectUris(extractSteps(step.onTrue), type));
+    if (step.onFalse) uris.push(...collectCustomObjectUris(extractSteps(step.onFalse), type));
+    if (step.steps) uris.push(...collectCustomObjectUris(step.steps, type));
+    if (step.branchCases) {
+      for (const bc of step.branchCases) {
+        if (bc.onTrue) uris.push(...collectCustomObjectUris(extractSteps(bc.onTrue), type));
+      }
+    }
+    if (step.defaultCase) uris.push(...collectCustomObjectUris(extractSteps(step.defaultCase), type));
+    if (step.abTestCases) {
+      for (const tc of step.abTestCases) {
+        if (tc.onTrue) uris.push(...collectCustomObjectUris(extractSteps(tc.onTrue), type));
+      }
+    }
+  }
+  return uris;
+}
+
 export function extractSteps(branchData: unknown): Step[] {
   if (!branchData) return [];
   if (typeof branchData === 'object' && branchData !== null) {

@@ -14,6 +14,10 @@ import { getCodeFileDetail, type CodeFileDetail } from '../../api/codeFiles';
 import { getTreatmentDefinitionByRevision, getTreatmentGroupByUri, type TreatmentDefinitionDetail, type TreatmentGroupDetail } from '../../api/treatments';
 import { getDecisionNodeType, type DecisionNodeTypeDetail } from '../../api/nodeTypes';
 import { getSegmentationTree, type SegmentationTreeDetail, type SegTreeNode } from '../../api/segmentationTrees';
+import {
+  authTypeLabel, boundDecisionVariable, getRestApiDefinitionByUri,
+  REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail, type RestApiParam,
+} from '../../api/restApiDefinitions';
 import FlowDeepLink from './FlowDeepLink';
 
 /* ------------------------------------------------------------------ */
@@ -114,6 +118,49 @@ function VariableTable({ variables }: { variables: { name: string; direction?: s
   );
 }
 
+/** Renders a template string with its {placeholders} highlighted. */
+function TemplateText({ text }: { text: string }) {
+  if (!text) return <>&mdash;</>;
+  const parts = text.split(/(\{[^{}\s]+\})/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^\{[^{}\s]+\}$/.test(part)
+          ? <span key={i} className="flow-sp-ph">{part}</span>
+          : <span key={i}>{part}</span>,
+      )}
+    </>
+  );
+}
+
+/** Query parameters / headers, with the decision variable each placeholder binds to. */
+function ParamTable({ params, mappings }: { params: RestApiParam[]; mappings?: StepMapping[] }) {
+  if (!params.length) return null;
+  return (
+    <table className="flow-sp-var-table">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Value</th>
+          <th>Decision variable</th>
+        </tr>
+      </thead>
+      <tbody>
+        {params.map((p, i) => {
+          const bound = boundDecisionVariable(p.value, mappings);
+          return (
+            <tr key={i} title={p.description || undefined}>
+              <td>{p.key}</td>
+              <td><TemplateText text={p.value ?? ''} /></td>
+              <td>{bound ?? '\u2014'}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 function SegTreeNodeView({ node, depth = 0 }: { node: SegTreeNode; depth?: number }) {
   return (
     <div className="flow-sp-card" style={{ marginLeft: depth * 16 }}>
@@ -153,11 +200,13 @@ function SegTreeNodeView({ node, depth = 0 }: { node: SegTreeNode; depth?: numbe
 
 interface FlowSidePanelProps {
   nodeData: SidNodeData;
+  /** Definitions already fetched by the page, keyed by step revision URI. */
+  restApiCache?: Map<string, RestApiDefinitionDetail>;
   onClose: () => void;
   onViewCode?: (href: string, language: string) => void;
 }
 
-export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSidePanelProps) {
+export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewCode }: FlowSidePanelProps) {
   const [ruleSetDetail, setRuleSetDetail] = useState<RuleSetDetail | null>(null);
   const [ruleSetRules, setRuleSetRules] = useState<BusinessRule[]>([]);
   const [modelDetail, setModelDetail] = useState<SidModelDetail | null>(null);
@@ -168,6 +217,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
   const [treatmentGroup, setTreatmentGroup] = useState<TreatmentGroupDetail | null>(null);
   const [nodeTypeDetail, setNodeTypeDetail] = useState<DecisionNodeTypeDetail | null>(null);
   const [segTreeDetail, setSegTreeDetail] = useState<SegmentationTreeDetail | null>(null);
+  const [restApiDetail, setRestApiDetail] = useState<RestApiDefinitionDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -203,6 +253,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
       setTreatmentGroup(null);
       setNodeTypeDetail(null);
       setSegTreeDetail(null);
+      setRestApiDetail(null);
 
       try {
         // Rule Set
@@ -304,6 +355,22 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
           }
         }
 
+        // REST API definition (customObject.uri is the revision URI)
+        if (currentStep.customObject?.type === REST_API_DEFINITION_TYPE) {
+          const uri = currentStep.customObject.uri;
+          const cached = restApiCache?.get(uri);
+          if (cached) {
+            if (!cancelled) setRestApiDetail(cached);
+          } else {
+            try {
+              const detail = await getRestApiDefinitionByUri(uri);
+              if (!cancelled) setRestApiDetail(detail);
+            } catch (e) {
+              errs.push(`REST API definition: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+        }
+
         // Segmentation tree
         if (currentStep.customObject?.type === 'segmentationTree') {
           try {
@@ -323,7 +390,7 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [step]);
+  }, [step, restApiCache]);
 
   /* ---- useEffect 2: Check for decisionNodeType after codeFileDetail loads ---- */
   useEffect(() => {
@@ -585,6 +652,93 @@ export default function FlowSidePanel({ nodeData, onClose, onViewCode }: FlowSid
               <>
                 <h5 className="flow-side-panel__section-title">Signature</h5>
                 <VariableTable variables={codeFileDetail.signature} />
+              </>
+            )}
+          </Section>
+        )}
+
+        {/* REST API definition */}
+        {restApiDetail && (
+          <Section title="REST API">
+            {(() => {
+              // Deep-link from the step URI: its first UUID is the definition id.
+              // restApiDetail.id is the revision id when fetched by revision URI.
+              const uri = step?.customObject?.uri;
+              const link = uri ? buildDeepLink('restApiDefinition', uri) : null;
+              return link ? <FlowDeepLink url={link.url} label={link.label} /> : null;
+            })()}
+            <div className="flow-sp-rest-call">
+              <span className={`flow-sp-method flow-sp-method--${(restApiDetail.method ?? '').toLowerCase()}`}>
+                {restApiDetail.method ?? '\u2014'}
+              </span>
+              <code className="flow-sp-rest-uri">
+                <TemplateText text={restApiDetail.uriTemplate ?? ''} />
+              </code>
+            </div>
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Name:</span>
+              <span className="flow-sp-detail__value">{restApiDetail.name}</span>
+            </div>
+            {restApiDetail.description && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Description:</span>
+                <span className="flow-sp-detail__value">{restApiDetail.description}</span>
+              </div>
+            )}
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Authorization:</span>
+              <span className="flow-sp-detail__value">
+                {authTypeLabel(restApiDetail.authorization?.authorizationType)}
+              </span>
+            </div>
+            {restApiDetail.majorRevision !== undefined && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Version:</span>
+                <span className="flow-sp-detail__value">
+                  {restApiDetail.majorRevision}.{restApiDetail.minorRevision ?? 0}
+                  {restApiDetail.locked ? ' (locked)' : ''}
+                </span>
+              </div>
+            )}
+            {restApiDetail.folderType === 'trashFolder' && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Status:</span>
+                <span className="flow-sp-detail__value flow-sp-detail__value--invalid">
+                  Definition is in the trash
+                </span>
+              </div>
+            )}
+
+            {restApiDetail.queryParams && restApiDetail.queryParams.length > 0 && (
+              <>
+                <h5 className="flow-side-panel__section-title">Query Parameters</h5>
+                <ParamTable params={restApiDetail.queryParams} mappings={step?.mappings} />
+              </>
+            )}
+            {restApiDetail.requestHeaders && restApiDetail.requestHeaders.length > 0 && (
+              <>
+                <h5 className="flow-side-panel__section-title">Request Headers</h5>
+                <ParamTable params={restApiDetail.requestHeaders} mappings={step?.mappings} />
+              </>
+            )}
+            {restApiDetail.responseHeaders && restApiDetail.responseHeaders.length > 0 && (
+              <>
+                <h5 className="flow-side-panel__section-title">Response Headers</h5>
+                <ParamTable params={restApiDetail.responseHeaders} mappings={step?.mappings} />
+              </>
+            )}
+            {restApiDetail.requestBody && restApiDetail.requestBody.trim() !== '' && (
+              <>
+                <h5 className="flow-side-panel__section-title">
+                  Request Body{restApiDetail.requestBodyFormat ? ` (${restApiDetail.requestBodyFormat})` : ''}
+                </h5>
+                <div className="flow-sp-code">{restApiDetail.requestBody}</div>
+              </>
+            )}
+            {restApiDetail.signature && restApiDetail.signature.length > 0 && (
+              <>
+                <h5 className="flow-side-panel__section-title">Signature</h5>
+                <VariableTable variables={restApiDetail.signature} />
               </>
             )}
           </Section>

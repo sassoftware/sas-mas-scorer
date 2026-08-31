@@ -312,6 +312,38 @@ export const RulesImportPage: React.FC = () => {
     }
   };
 
+  /** Rows still carrying a ruleset_id or rule_id from the environment they were exported from. */
+  const rowsWithIds = rows.reduce(
+    (n, row) => (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '' ? n + 1 : n),
+    0
+  );
+
+  /**
+   * Blank both id columns across the file. A CSV exported from one environment carries
+   * that environment's ids; elsewhere they match nothing, so the service tries to CREATE
+   * a rule set whose name + folder already exists and rejects the import with a 400.
+   * Without ids the import matches by name + folder and updates in place.
+   */
+  const handleClearAllIds = () => {
+    const affected = new Set<number>();
+    rows.forEach((row, i) => {
+      if (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '') affected.add(i);
+    });
+    if (affected.size === 0) {
+      setNotice('No ids to clear.');
+      return;
+    }
+    setRows((prev) =>
+      prev.map((row, i) =>
+        affected.has(i)
+          ? row.map((cell, c) => (c === COL.RULESET_ID || c === COL.RULE_ID ? '' : cell))
+          : row
+      )
+    );
+    setEditedRows((prev) => new Set([...prev, ...affected]));
+    setNotice(`Cleared ids on ${affected.size} row${affected.size === 1 ? '' : 's'}.`);
+  };
+
   /**
    * Clear ruleset_id/rule_id on all rows of conflicted rule sets so the
    * import matches the existing rule set by name + folder and updates it.
@@ -590,6 +622,19 @@ export const RulesImportPage: React.FC = () => {
               {notice && <span className="rules-import__notice">{notice}</span>}
             </div>
             <div className="rules-import__panel-header-right">
+              <Button
+                variant="tertiary"
+                size="small"
+                onClick={handleClearAllIds}
+                disabled={rowsWithIds === 0}
+                title={
+                  rowsWithIds === 0
+                    ? 'The ruleset_id and rule_id columns are already empty.'
+                    : 'Blank ruleset_id and rule_id so the import matches rule sets by name and folder. Required when the CSV was exported from another environment.'
+                }
+              >
+                Clear ID columns{rowsWithIds > 0 ? ` (${rowsWithIds})` : ''}
+              </Button>
               <Button variant="tertiary" size="small" onClick={handleAutoFix}>
                 Auto-fix formatting
               </Button>

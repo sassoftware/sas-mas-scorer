@@ -13,6 +13,9 @@ const ENUM_OPTIONS: Partial<Record<number, readonly string[]>> = {
   [COL.EXPRESSION_TYPE]: EXPRESSION_TYPES,
 };
 
+/** Columns whose values routinely span several lines (14% of rows in a real export). */
+const MULTILINE_COLS = new Set<number>([COL.EXPRESSION]);
+
 /** Wide free-text columns get a wider input. */
 const WIDE_COLS = new Set<number>([COL.FOLDER_PATH, COL.EXPRESSION, COL.RULESET_DESC, COL.RULE_DESC]);
 
@@ -113,6 +116,22 @@ export const RulesGrid: React.FC<RulesGridProps> = ({
                             <option key={o} value={o}>{o}</option>
                           ))}
                         </select>
+                      </td>
+                    );
+                  }
+                  if (MULTILINE_COLS.has(c) || cell.includes('\n')) {
+                    const lineCount = cell.split('\n').length;
+                    return (
+                      <td key={c} className="rules-import__col-wide">
+                        <textarea
+                          id={cellId}
+                          className={`${inputClass} rules-import__cell-textarea`}
+                          value={cell}
+                          rows={Math.min(lineCount, 6)}
+                          onChange={(e) => onCellChange(r, c, e.target.value)}
+                          title={tooltip}
+                          spellCheck={false}
+                        />
                       </td>
                     );
                   }

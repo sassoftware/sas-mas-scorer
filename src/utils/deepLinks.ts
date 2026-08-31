@@ -19,6 +19,8 @@ const LINK_MAP: Record<string, { path: string; app: string }> = {
   treatmentGroup:        { path: 'SASDecisionManager/treatmentGroups',   app: 'SAS Intelligent Decisioning' },
   treatment:             { path: 'SASDecisionManager/treatments',        app: 'SAS Intelligent Decisioning' },
   segmentationTree:      { path: 'SASDecisionManager/segmentationTrees', app: 'SAS Intelligent Decisioning' },
+  decisionRESTAPIDefinition: { path: 'SASDecisionManager/restApiDefinitions', app: 'SAS Intelligent Decisioning' },
+  restApiDefinition:     { path: 'SASDecisionManager/restApiDefinitions', app: 'SAS Intelligent Decisioning' },
   reference:             { path: 'SASDecisionManager/references',        app: 'SAS Intelligent Decisioning' },
   globalVariable:        { path: 'SASDecisionManager/globalVariables',   app: 'SAS Intelligent Decisioning' },
   valueList:             { path: 'SASDecisionManager/valueLists',        app: 'SAS Intelligent Decisioning' },

@@ -4,6 +4,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { Step, DecisionFlow, SidNodeData, SidNodeType } from '../types/sid';
 import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression } from '../utils/classify';
+import { uriTemplateHost, type RestApiDefinitionDetail } from '../api/restApiDefinitions';
 
 interface Pending {
   nodeId: string;
@@ -24,9 +25,22 @@ interface ConversionState {
   linkTargets: Map<string, string>;
   linkLabels: Map<string, string>;
   subDecisionCache: Map<string, DecisionFlow>;
+  restApiCache: Map<string, RestApiDefinitionDetail>;
   depth: number;
   groups: NodeGroup[];
   activeGroupStack: NodeGroup[];
+}
+
+/** Method and host badges for a REST API node, once its definition is cached. */
+function restApiNodeData(
+  state: ConversionState,
+  step: Step,
+  nodeType: SidNodeType,
+): Partial<SidNodeData> | undefined {
+  if (nodeType !== 'rest_api' || !step.customObject?.uri) return undefined;
+  const def = state.restApiCache.get(step.customObject.uri);
+  if (!def) return undefined;
+  return { restMethod: def.method, restHost: uriTemplateHost(def.uriTemplate) };
 }
 
 function nextId(state: ConversionState): string {
@@ -323,7 +337,7 @@ function processSteps(
 
     // Regular node
     const nid = nextId(state);
-    addNode(state, nid, nodeType, label, step);
+    addNode(state, nid, nodeType, label, step, restApiNodeData(state, step, nodeType));
     if (step.linkLabel) state.linkLabels.set(step.linkLabel, nid);
     connectPending(state, pending, nid);
     if (!firstId) firstId = nid;
@@ -336,6 +350,7 @@ function processSteps(
 export function convertFlowToGraph(
   flow: DecisionFlow,
   subDecisionCache: Map<string, DecisionFlow> = new Map(),
+  restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
 ): { nodes: Node<SidNodeData>[]; edges: Edge[]; groups: NodeGroup[] } {
   const steps = flow.flow?.steps ?? [];
 
@@ -346,6 +361,7 @@ export function convertFlowToGraph(
     linkTargets: new Map(),
     linkLabels: new Map(),
     subDecisionCache,
+    restApiCache,
     depth: 0,
     groups: [],
     activeGroupStack: [],

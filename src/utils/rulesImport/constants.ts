@@ -41,7 +41,8 @@ export const MAX_LEN: Record<RuleCsvColumn, number> = {
   expression_order: 32,
 };
 
-export const CONDITIONALS = ['if', 'elseif', 'else'] as const;
+/** 'or' chains an additional condition onto the preceding rule (seen in real exports). */
+export const CONDITIONALS = ['if', 'elseif', 'else', 'or'] as const;
 
 /** Valid signature-term data types (businessRules OpenAPI signatureTerm enum, minus service-only 'any'). */
 export const DATATYPES = ['string', 'decimal', 'integer', 'date', 'datetime', 'datagrid', 'boolean'] as const;
@@ -49,7 +50,10 @@ export const DATATYPES = ['string', 'decimal', 'integer', 'date', 'datetime', 'd
 /** Display casing for the datatype select. */
 export const DATATYPE_DISPLAY = ['string', 'decimal', 'integer', 'date', 'datetime', 'dataGrid', 'boolean'] as const;
 
-export const EXPRESSION_TYPES = ['CONDITION', 'ACTION'] as const;
+export const EXPRESSION_TYPES = ['CONDITION', 'ACTION', 'ACTIONADVANCEDLIST'] as const;
+
+/** Expression types that carry an action rather than a condition. */
+export const ACTION_TYPES: ReadonlySet<string> = new Set(['ACTION', 'ACTIONADVANCEDLIST']);
 
 export const FLAG_VALUES = ['Y', 'N'] as const;
 
