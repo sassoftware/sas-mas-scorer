@@ -530,3 +530,12 @@ td.rules-import__col-wide .rules-import__cell-input {
   padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--sas-gray-200);
 }
+
+/* Expression cells: 14% of real exports carry multi-line expressions */
+.rules-import__cell-textarea {
+  min-width: 260px;
+  resize: vertical;
+  line-height: 1.35;
+  white-space: pre;
+  overflow-x: auto;
+}

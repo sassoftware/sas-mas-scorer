@@ -9,6 +9,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import type { DecisionFlow, SidNodeData } from '../../types/sid';
 import { convertFlowToGraph } from '../../flow/sidToReactFlow';
+import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
 import { layoutGraph } from '../../flow/layoutGraph';
 import { NODE_COLORS } from '../../flow/constants';
 import StartEndNode from './nodes/StartEndNode';
@@ -16,6 +17,7 @@ import DecisionNode from './nodes/DecisionNode';
 import RuleSetNode from './nodes/RuleSetNode';
 import ModelNode from './nodes/ModelNode';
 import CodeFileNode from './nodes/CodeFileNode';
+import RestApiNode from './nodes/RestApiNode';
 import ConditionNode from './nodes/ConditionNode';
 import GroupBoxes from './GroupBoxes';
 
@@ -28,22 +30,24 @@ const nodeTypes = {
   assignment: DecisionNode, abtest: ConditionNode,
   parallel: DecisionNode, record_contact: DecisionNode,
   treatment_group: DecisionNode, segmentation_tree: DecisionNode,
+  rest_api: RestApiNode,
   unknown: DecisionNode,
 };
 
 interface FlowDiagramProps {
   flow: DecisionFlow;
   subDecisionCache?: Map<string, DecisionFlow>;
+  restApiCache?: Map<string, RestApiDefinitionDetail>;
   onNodeClick?: (nodeData: SidNodeData) => void;
 }
 
-export default function FlowDiagram({ flow, subDecisionCache, onNodeClick }: FlowDiagramProps) {
+export default function FlowDiagram({ flow, subDecisionCache, restApiCache, onNodeClick }: FlowDiagramProps) {
   const [legendOpen, setLegendOpen] = useState(true);
   const { initialNodes, initialEdges, groupBoxes } = useMemo(() => {
-    const { nodes: rawNodes, edges: rawEdges, groups } = convertFlowToGraph(flow, subDecisionCache ?? new Map());
+    const { nodes: rawNodes, edges: rawEdges, groups } = convertFlowToGraph(flow, subDecisionCache ?? new Map(), restApiCache ?? new Map());
     const { nodes: layoutedNodes, edges: layoutedEdges, groupBoxes: boxes } = layoutGraph(rawNodes, rawEdges, groups);
     return { initialNodes: layoutedNodes, initialEdges: layoutedEdges, groupBoxes: boxes };
-  }, [flow, subDecisionCache]);
+  }, [flow, subDecisionCache, restApiCache]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -94,6 +98,7 @@ export default function FlowDiagram({ flow, subDecisionCache, onNodeClick }: Flo
                   ['assignment', 'Assignment'], ['abtest', 'A/B Test'],
                   ['parallel', 'Parallel Process'], ['record_contact', 'Record Contact'],
                   ['treatment_group', 'Treatment Group'], ['segmentation_tree', 'Segmentation Tree'],
+                  ['rest_api', 'REST API'],
                 ] as const).map(([type, label]) => (
                   <div key={type} className="flow-diagram__legend-item">
                     <div className="flow-diagram__legend-swatch"

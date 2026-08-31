@@ -4,6 +4,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDecision, getDecisionRevision } from '../../api/decisions';
+import { getRestApiDefinitionByUri, REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail } from '../../api/restApiDefinitions';
+import { collectCustomObjectUris } from '../../utils/classify';
 import type { DecisionFlow, SidNodeData, Step } from '../../types/sid';
 import FlowHeader from './FlowHeader';
 import FlowDiagram from './FlowDiagram';
@@ -26,6 +28,9 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   const [subDecisionCache] = useState<Map<string, DecisionFlow>>(new Map());
   const [subDecisionsLoading, setSubDecisionsLoading] = useState(false);
 
+  // REST API definition cache (keyed by the step's revision URI)
+  const [restApiCache] = useState<Map<string, RestApiDefinitionDetail>>(new Map());
+
   // Side panel
   const [selectedNode, setSelectedNode] = useState<SidNodeData | null>(null);
 
@@ -45,7 +50,7 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     getDecision(id)
       .then((data) => {
         setFlow(data);
-        fetchSubDecisions(data, subDecisionCache, 0);
+        fetchSubDecisions(data, subDecisionCache, 0).then(() => fetchRestApiDefinitions(data));
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -80,6 +85,29 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     } finally {
       setSubDecisionsLoading(false);
     }
+  }
+
+  /** Fetch the REST API definitions used by the decision and its sub-decisions. */
+  async function fetchRestApiDefinitions(decision: DecisionFlow) {
+    const uris = new Set(collectCustomObjectUris(decision.flow?.steps ?? [], REST_API_DEFINITION_TYPE));
+    for (const sub of subDecisionCache.values()) {
+      for (const uri of collectCustomObjectUris(sub.flow?.steps ?? [], REST_API_DEFINITION_TYPE)) {
+        uris.add(uri);
+      }
+    }
+    const newUris = [...uris].filter((uri) => !restApiCache.has(uri));
+    if (newUris.length === 0) return;
+
+    const results = await Promise.allSettled(newUris.map((uri) => getRestApiDefinitionByUri(uri)));
+    let added = false;
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        restApiCache.set(newUris[i], result.value);
+        added = true;
+      }
+    });
+    // Force a re-render so the nodes pick up the method/host badges
+    if (added) setFlow((prev) => (prev ? { ...prev } : prev));
   }
 
   const handleNodeClick = useCallback((nodeData: SidNodeData) => {
@@ -135,12 +163,14 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
       <FlowDiagram
         flow={flow}
         subDecisionCache={subDecisionCache}
+        restApiCache={restApiCache}
         onNodeClick={handleNodeClick}
       />
 
       {selectedNode && (
         <FlowSidePanel
           nodeData={selectedNode}
+          restApiCache={restApiCache}
           onClose={() => setSelectedNode(null)}
           onViewCode={handleViewCode}
         />

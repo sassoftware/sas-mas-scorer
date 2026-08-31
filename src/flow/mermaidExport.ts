@@ -8,7 +8,7 @@
  * and in the markdown (with incremented heading levels).
  */
 import type { DecisionFlow, Step, SidNodeType, StepMapping } from '../types/sid';
-import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression } from '../utils/classify';
+import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression, collectCustomObjectUris } from '../utils/classify';
 import { NODE_TYPE_LABELS, CODE_TYPE_LABELS } from './constants';
 import { buildDeepLink, buildDecisionDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../utils/deepLinks';
 import { getRuleSet, getRuleSetRules, type RuleSetDetail, type BusinessRule } from '../api/rulesets';
@@ -18,6 +18,10 @@ import { getTreatmentGroupByUri, getTreatmentDefinitionByRevision, type Treatmen
 import { getDecisionNodeType, type DecisionNodeTypeDetail } from '../api/nodeTypes';
 import { getSegmentationTree, type SegmentationTreeDetail } from '../api/segmentationTrees';
 import { getDecisionRevision, getWorkflowHistory } from '../api/decisions';
+import {
+  authTypeLabel, boundDecisionVariable, getRestApiDefinitionByUri,
+  REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail, type RestApiParam,
+} from '../api/restApiDefinitions';
 
 /* ================================================================== */
 /*  Mermaid diagram generation (with subgraph support)                 */
@@ -48,6 +52,7 @@ const MERMAID_SHAPES: Record<SidNodeType, string> = {
   record_contact: '[("{label}")]',
   treatment_group: '[/"{label}"\\]',
   segmentation_tree: '[("{label}")]',
+  rest_api: '[/"{label}"/]',
   unknown: '["{label}"]',
 };
 
@@ -67,6 +72,7 @@ const MERMAID_CLASSES: Record<SidNodeType, string> = {
   record_contact: 'recordContactNode',
   treatment_group: 'treatmentGroupNode',
   segmentation_tree: 'segTreeNode',
+  rest_api: 'restApiNode',
   unknown: 'unknownNode',
 };
 
@@ -334,6 +340,7 @@ export function generateMermaid(
   state.lines.push('    classDef recordContactNode fill:#FCE4EC,stroke:#EC407A,color:#333,stroke-width:2px');
   state.lines.push('    classDef treatmentGroupNode fill:#F3E5F5,stroke:#AB47BC,color:#333,stroke-width:2px');
   state.lines.push('    classDef segTreeNode fill:#E0F2F1,stroke:#009688,color:#333,stroke-width:2px');
+  state.lines.push('    classDef restApiNode fill:#E8EAF6,stroke:#3F51B5,color:#333,stroke-width:2px');
   state.lines.push('    classDef unknownNode fill:#F0F0F0,stroke:#999,color:#333');
 
   return state.lines.join('\n');
@@ -493,9 +500,14 @@ interface FetchedNodeDetails {
   treatmentEligibilityRuleSets?: Map<string, RuleSetDetail>;
   segmentationTree?: SegmentationTreeDetail;
   subDecisionFlow?: DecisionFlow;
+  restApi?: RestApiDefinitionDetail;
 }
 
-async function fetchNodeDetails(step: Step, subDecisionCache: Map<string, DecisionFlow>): Promise<FetchedNodeDetails> {
+async function fetchNodeDetails(
+  step: Step,
+  subDecisionCache: Map<string, DecisionFlow>,
+  restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
+): Promise<FetchedNodeDetails> {
   const details: FetchedNodeDetails = {};
 
   if (step.ruleset?.id) {
@@ -581,12 +593,39 @@ async function fetchNodeDetails(step: Step, subDecisionCache: Map<string, Decisi
     details.subDecisionFlow = subDecisionCache.get(step.customObject.uri);
   }
 
+  if (step.customObject?.type === REST_API_DEFINITION_TYPE && step.customObject?.uri) {
+    const uri = step.customObject.uri;
+    const cached = restApiCache.get(uri);
+    if (cached) {
+      details.restApi = cached;
+    } else {
+      try { details.restApi = await getRestApiDefinitionByUri(uri); } catch { /* skip */ }
+    }
+  }
+
   return details;
 }
 
 /* ================================================================== */
 /*  Markdown formatting helpers                                        */
 /* ================================================================== */
+
+/** Escape a value for a Markdown table cell (pipes and newlines break the row). */
+function mdCell(text: string | undefined): string {
+  if (!text) return '';
+  return text.replace(/\s*\r?\n\s*/g, ' ').replace(/\|/g, '\\|');
+}
+
+/** Query parameters / headers as a Markdown table, resolving placeholder bindings. */
+function formatRestParams(params: RestApiParam[], mappings?: StepMapping[]): string {
+  let md = '| Key | Value | Decision Variable | Description |\n';
+  md += '|-----|-------|-------------------|-------------|\n';
+  for (const p of params) {
+    const bound = boundDecisionVariable(p.value, mappings);
+    md += `| \`${mdCell(p.key)}\` | \`${mdCell(p.value)}\` | ${bound ? `\`${bound}\`` : '\u2014'} | ${mdCell(p.description)} |\n`;
+  }
+  return md;
+}
 
 function formatMappings(mappings: StepMapping[]): string {
   let md = '| Step Term | Direction | Decision Variable |\n';
@@ -919,9 +958,55 @@ function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDe
     }
   }
 
+  if (step.customObject?.type === REST_API_DEFINITION_TYPE) {
+    const def = details.restApi;
+    md += deepLinkMd(buildDeepLink('restApiDefinition', step.customObject.uri));
+    if (def) {
+      md += `- **Method**: \`${def.method ?? '\u2014'}\`\n`;
+      md += `- **Endpoint**: \`${def.uriTemplate ?? '\u2014'}\`\n`;
+      md += `- **Authorization**: ${authTypeLabel(def.authorization?.authorizationType)}\n`;
+      if (def.description) md += `- **Definition Description**: ${def.description}\n`;
+      if (def.majorRevision !== undefined) {
+        md += `- **Definition Version**: ${def.majorRevision}.${def.minorRevision ?? 0}${def.locked ? ' (locked)' : ''}\n`;
+      }
+      if (def.folderType === 'trashFolder') md += `- **Warning**: the definition is in the trash\n`;
+
+      if (def.queryParams && def.queryParams.length > 0) {
+        md += '\n**Query Parameters**:\n\n';
+        md += formatRestParams(def.queryParams, step.mappings);
+      }
+      if (def.requestHeaders && def.requestHeaders.length > 0) {
+        md += '\n**Request Headers**:\n\n';
+        md += formatRestParams(def.requestHeaders, step.mappings);
+      }
+      if (def.responseHeaders && def.responseHeaders.length > 0) {
+        md += '\n**Response Headers**:\n\n';
+        md += formatRestParams(def.responseHeaders, step.mappings);
+      }
+      if (def.requestBody && def.requestBody.trim() !== '') {
+        const lang = (def.requestBodyFormat ?? '').toLowerCase() === 'json' ? 'json' : '';
+        md += `\n**Request Body**${def.requestBodyFormat ? ` (${def.requestBodyFormat})` : ''}:\n\n`;
+        md += `\`\`\`${lang}\n${def.requestBody}\n\`\`\`\n`;
+      }
+      if (def.signature && def.signature.length > 0) {
+        md += `\n**Signature** (${def.signature.length}):\n\n`;
+        md += '| Name | Type | Direction | Description |\n|------|------|-----------|-------------|\n';
+        for (const t of def.signature) {
+          md += `| \`${t.name}\` | ${t.dataType} | ${t.direction} | ${mdCell(t.description)} |\n`;
+        }
+      }
+      md += '\n';
+    } else {
+      md += `- **REST API Definition**: ${step.customObject.name}\n`;
+      md += `- **URI**: \`${step.customObject.uri}\`\n`;
+      md += '\n*The definition could not be retrieved.*\n\n';
+    }
+  }
+
   if (step.customObject
     && step.customObject.type !== 'decision'
     && step.customObject.type !== 'treatmentGroup'
+    && step.customObject.type !== REST_API_DEFINITION_TYPE
     && !CODE_TYPE_LABELS[step.customObject.type]) {
     const dl = buildCustomObjectDeepLink(step.customObject.type, step.customObject.uri);
     md += deepLinkMd(dl);
@@ -986,6 +1071,26 @@ async function fetchAllSubDecisions(
   }
 }
 
+/** Fetch every REST API definition referenced by the decision and its sub-decisions. */
+async function fetchAllRestApiDefinitions(
+  flow: DecisionFlow,
+  subDecisionCache: Map<string, DecisionFlow>,
+): Promise<Map<string, RestApiDefinitionDetail>> {
+  const cache = new Map<string, RestApiDefinitionDetail>();
+  const uris = new Set(collectCustomObjectUris(flow.flow?.steps ?? [], REST_API_DEFINITION_TYPE));
+  for (const sub of subDecisionCache.values()) {
+    for (const uri of collectCustomObjectUris(sub.flow?.steps ?? [], REST_API_DEFINITION_TYPE)) {
+      uris.add(uri);
+    }
+  }
+  const list = [...uris];
+  const results = await Promise.allSettled(list.map((uri) => getRestApiDefinitionByUri(uri)));
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') cache.set(list[i], result.value);
+  });
+  return cache;
+}
+
 /* ================================================================== */
 /*  Main export function (async — fetches all details)                 */
 /* ================================================================== */
@@ -1005,6 +1110,8 @@ export async function generateMarkdownExport(
   const subDecisionCache = new Map<string, DecisionFlow>(existingSubDecisionCache ?? []);
   onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching sub-decisions...' });
   await fetchAllSubDecisions(flow, subDecisionCache);
+  onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching REST API definitions...' });
+  const restApiCache = await fetchAllRestApiDefinitions(flow, subDecisionCache);
 
   const mermaid = generateMermaid(flow, subDecisionCache);
   const sig = flow.signature ?? [];
@@ -1020,6 +1127,7 @@ export async function generateMarkdownExport(
   toc += '- [Overview](#overview)\n';
   toc += '  - [Workflow](#workflow)\n';
   if (inputs.length > 0 || outputs.length > 0) toc += '- [Variables](#variables)\n';
+  if (nodes.some((n) => n.type === 'rest_api')) toc += '- [External Endpoints](#external-endpoints)\n';
   toc += '- [Flow Diagram](#flow-diagram)\n';
   if (nodes.length > 0) {
     toc += '- [Node Details](#node-details)\n';
@@ -1089,6 +1197,21 @@ export async function generateMarkdownExport(
     }
   }
 
+  // External endpoints — every outbound REST call the decision makes
+  const restNodes = nodes.filter((n) => n.type === 'rest_api');
+  if (restNodes.length > 0) {
+    md += '\n## External Endpoints\n\n';
+    md += `This decision calls **${restNodes.length}** external endpoint${restNodes.length > 1 ? 's' : ''}.\n\n`;
+    md += '| Node | Method | Endpoint | Authorization | Definition |\n';
+    md += '|------|--------|----------|---------------|------------|\n';
+    for (const n of restNodes) {
+      const def = n.step.customObject ? restApiCache.get(n.step.customObject.uri) : undefined;
+      const version = def?.majorRevision !== undefined ? `v${def.majorRevision}.${def.minorRevision ?? 0}` : '\u2014';
+      md += `| [${mdCell(n.name)}](#${n.anchor}) | ${def?.method ?? '\u2014'} | \`${mdCell(def?.uriTemplate) || '\u2014'}\` |`;
+      md += ` ${authTypeLabel(def?.authorization?.authorizationType)} | ${version} |\n`;
+    }
+  }
+
   // Diagram
   md += '\n## Flow Diagram\n\n';
   md += '```mermaid\n' + mermaid + '\n```\n';
@@ -1129,7 +1252,7 @@ export async function generateMarkdownExport(
             nodeName: node.name,
             phase: 'Fetching node details',
           });
-          return fetchNodeDetails(node.step, subDecisionCache);
+          return fetchNodeDetails(node.step, subDecisionCache, restApiCache);
         }),
       );
       batchResults.forEach((result, bi) => {

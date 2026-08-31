@@ -118,25 +118,30 @@ export const runPreflight = async (groups: RuleSetGroup[], signature: string): P
   });
 
   const results = await runPool(groups, 4, async (group): Promise<PreflightRuleSetResult> => {
+    // SAS exports may omit the folder path; then there is no folder to resolve.
+    const blankFolder = group.folderPath === '';
     const folderResult = folderResults.get(group.folderPath);
     const base: PreflightRuleSetResult = {
       key: group.key,
       name: group.name,
       folderPath: group.folderPath,
       action: 'unknown',
-      folderExists: folderResult?.error ? null : (folderResult?.folder ? true : false),
+      folderExists: blankFolder || folderResult?.error ? null : (folderResult?.folder ? true : false),
       folderId: folderResult?.folder?.id,
     };
 
-    if (folderResult?.error) {
-      return { ...base, checkError: folderResult.error };
-    }
-    // Folder missing → the rule set cannot exist there yet
-    if (!folderResult?.folder) {
-      return { ...base, action: 'create' };
+    if (!blankFolder) {
+      if (folderResult?.error) {
+        return { ...base, checkError: folderResult.error };
+      }
+      // Folder missing → the rule set cannot exist there yet
+      if (!folderResult?.folder) {
+        return { ...base, action: 'create' };
+      }
     }
     try {
-      const matches = await findRuleSets(group.name, `/folders/folders/${folderResult.folder.id}`);
+      const parentUri = blankFolder ? undefined : `/folders/folders/${folderResult!.folder!.id}`;
+      const matches = await findRuleSets(group.name, parentUri);
       if (matches.length === 0) return { ...base, action: 'create' };
       const first = matches[0];
       return {
@@ -145,7 +150,9 @@ export const runPreflight = async (groups: RuleSetGroup[], signature: string): P
         existingRuleSetId: first.id,
         existingRevision:
           first.majorRevision !== undefined ? `${first.majorRevision}.${first.minorRevision ?? 0}` : undefined,
-        checkError: matches.length > 1 ? `${matches.length} rule sets with this name exist in the folder` : undefined,
+        checkError: matches.length > 1
+          ? `${matches.length} rule sets with this name exist${blankFolder ? '' : ' in the folder'}`
+          : undefined,
       };
     } catch (err) {
       return { ...base, checkError: err instanceof Error ? err.message : 'Rule set check failed' };

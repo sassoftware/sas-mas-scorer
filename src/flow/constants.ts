@@ -20,6 +20,7 @@ export const NODE_COLORS: Record<SidNodeType, { bg: string; border: string; text
   record_contact:     { bg: '#FCE4EC', border: '#EC407A', text: '#333333' },
   treatment_group:    { bg: '#F3E5F5', border: '#AB47BC', text: '#333333' },
   segmentation_tree:  { bg: '#E0F2F1', border: '#009688', text: '#333333' },
+  rest_api:           { bg: '#E8EAF6', border: '#3F51B5', text: '#333333' },
   unknown:            { bg: '#F0F0F0', border: '#999999', text: '#333333' },
 };
 
@@ -32,6 +33,7 @@ export const CUSTOM_TYPE_MAP: Record<string, SidNodeType> = {
   decisionQueryFile: 'code_file',
   treatmentGroup: 'treatment_group',
   segmentationTree: 'segmentation_tree',
+  decisionRESTAPIDefinition: 'rest_api',
   dntStatic: 'custom',
 };
 
@@ -52,6 +54,7 @@ export const NODE_DIMENSIONS: Record<SidNodeType, { width: number; height: numbe
   record_contact:     { width: 220, height: 60 },
   treatment_group:    { width: 220, height: 60 },
   segmentation_tree:  { width: 220, height: 60 },
+  rest_api:           { width: 240, height: 70 },
   unknown:            { width: 180, height: 60 },
 };
 
@@ -72,6 +75,7 @@ export const NODE_TYPE_LABELS: Record<SidNodeType, string> = {
   record_contact: 'Record Contact',
   treatment_group: 'Treatment Group',
   segmentation_tree: 'Segmentation Tree',
+  rest_api: 'REST API',
   unknown: 'Unknown',
 };
 

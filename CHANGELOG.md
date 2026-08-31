@@ -2,6 +2,29 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.7.0] - 2026-08-31
+
+### Added
+
+- **REST API definitions in View Flows** — decision steps that call a REST API definition used to render as anonymous custom nodes, hiding the most interesting thing about them. They are now a node type of their own:
+  - The diagram shows a **REST API** node with the HTTP method and the endpoint host
+  - The node details panel shows the endpoint with its `{placeholders}` highlighted and mapped to the decision variables that feed them, the authorization type, query parameters, request and response headers, the request body, the definition signature, revision and lock state, and a deep link into SAS Intelligent Decisioning
+  - The Markdown export gains a section per REST API node plus an **External Endpoints** table listing every outbound call the decision makes — node, method, endpoint, authorization type and definition version
+- **Clear ID columns** in Rules Import — one click blanks `ruleset_id` and `rule_id` across the file, which is what a CSV exported from another environment needs before it will import. The button shows how many rows still carry an id and is disabled once both columns are empty
+
+### Fixed
+
+- **Rules Import rejected valid exports** — the validation was checked against a 299-rule-set export taken from a live environment, and raised roughly 1,000 blocking errors on rows the service itself had produced:
+  - Rows whose expression stands on its own — free-form conditions (`sum(a,b) > 5000`), advanced actions (`DATAGRID_TOPN(...)`) and `ACTIONADVANCEDLIST` — no longer require a data type or term. 39% of the rows in that export have this shape
+  - `or` is accepted as a `conditional`, and `ACTIONADVANCEDLIST` as an `expression_type`
+  - A blank `folder_path` is a warning instead of an error, and the server checks match such rule sets by name instead of reporting a missing folder
+  - Expressions longer than 4,000 characters warn instead of erroring — that limit comes from the `%DCM_IMPORT_RULESET` informat, not from the import service, which accepts far longer values
+  - The one-data-type-per-term rule is scoped to a rule set rather than the whole file, since each rule set has its own signature
+
+### Changed
+
+- Rules Import expression cells use a resizable multi-line editor — 14% of the rows in a real export contain expressions that span several lines
+
 ## [2.6.0] - 2026-08-20
 
 ### Added

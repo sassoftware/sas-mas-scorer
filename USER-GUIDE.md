@@ -622,6 +622,7 @@ The diagram renders the full decision flow with all node types:
 | **Record Contact** | Contact history recording |
 | **Treatment Group** | Treatment assignment |
 | **Segmentation Tree** | Decision tree segmentation |
+| **REST API** | A call to an external service, defined as a REST API definition (the node shows the HTTP method and endpoint host) |
 
 **Diagram controls:**
 
@@ -640,6 +641,7 @@ Click any node in the diagram to open a side panel with detailed information:
 - **Code Files** — Shows a preview of the code with a button to open a full syntax-highlighted viewer.
 - **Treatment Groups** — Shows member definitions, attributes, and eligibility criteria.
 - **Segmentation Trees** — Shows split conditions and outcomes.
+- **REST API definitions** — Shows the HTTP method and the endpoint with its `{placeholders}` highlighted, the authorization type, query parameters, request and response headers, the request body and the definition's signature. Each parameter and header row also names the decision variable its placeholder is bound to, so you can see what actually gets sent.
 
 Where applicable, the side panel includes deep links to open the asset directly in SAS Intelligent Decisioning or SAS Model Manager.
 
@@ -653,7 +655,7 @@ If the decision has an associated workflow, the flow header shows the current wo
 
 ### Export
 
-Click **Export** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details.
+Click **Export** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details. If the decision calls any REST API definitions, the document also contains an **External Endpoints** table listing every outbound call — the node, HTTP method, endpoint, authorization type and definition version — which is useful for review and governance.
 
 ---
 
@@ -915,15 +917,18 @@ The page is a four-step wizard. Click any enabled step in the step bar to move b
 
 Every row is shown in an editable grid, and every cell is re-validated as you type:
 
-- **Errors (red)** block the import — missing required values, term names longer than 32 characters or using DS2 reserved words, invalid `conditional` / `expression_type` / data type values, non-contiguous rule sequence numbers, a first rule that is not `if`, ELSE rules with conditions, unbalanced quotes or parentheses in expressions, or one term used with two different data types.
-- **Warnings (amber)** allow the import but deserve a look — lowercase `expression_type`, unquoted string action values, the same rule set name under two folders, and similar.
+- **Errors (red)** block the import — missing required values, term names longer than 32 characters or using DS2 reserved words, invalid `conditional` / `expression_type` / data type values, non-contiguous rule sequence numbers, a first rule that is not `if`, ELSE rules with conditions, unbalanced quotes or parentheses in expressions, or one term used with two different data types within the same rule set.
+- **Warnings (amber)** allow the import but deserve a look — a blank folder path, an expression longer than 4,000 characters, lowercase `expression_type`, unquoted string action values, the same rule set name under two folders, and similar.
 - **Info (blue)** notes are advisory — for example uppercase variable names inside expressions (the documentation recommends lowercase).
+
+Two shapes that look wrong but are perfectly valid are accepted as they are: rows whose **expression stands on its own**, with no data type or term — a free-form condition such as `sum(amount_a, amount_b) > 5000`, or an advanced action such as `DATAGRID_TOPN(...)` — and expressions that **span several lines**, which get a resizable multi-line cell editor.
 
 Tools in this step:
 
 - Hover a highlighted cell (or the status dot in the row gutter) to read its messages.
 - **Only rows with issues** filters the grid down to problem rows.
 - **Next error →** jumps to the next error cell, scrolls it into view, and places the cursor in it ready to type the fix.
+- **Clear ID columns** blanks `ruleset_id` and `rule_id` on every row. A CSV exported from another environment carries that environment's ids; in the target they match nothing, so the service tries to *create* a rule set whose name and folder already exist and rejects the import. Without ids the import matches by name + folder and updates in place. The button shows how many rows still carry an id, and is disabled once both columns are empty.
 - **Auto-fix formatting** normalizes what can be fixed mechanically: lowercases conditionals, uppercases expression types and flags, canonical data type casing, stray whitespace.
 - **Download corrected CSV** saves the current state of the grid — including all your edits — as a clean CSV.
 - Large files are paginated at 200 rows per page.
@@ -934,7 +939,7 @@ Tools in this step:
 
 - **CREATE or UPDATE** — whether a rule set with the same name already exists in the target folder. Existing rule sets are **updated** with a new revision by the import; the current revision number is shown.
 - **Folder existence** — missing SAS Content folders are flagged as informational only; the service creates them automatically during import.
-- **ruleset_id conflicts** — files exported from *another environment* carry that environment's ids. If the target folder already contains a rule set with the same name but a different id, the service rejects the whole import. The app flags this as a blocking error and offers **Clear conflicting IDs**, which blanks the `ruleset_id` / `rule_id` columns for the affected rule sets so the import matches by name + folder and updates them cleanly.
+- **ruleset_id conflicts** — files exported from *another environment* carry that environment's ids. If the target folder already contains a rule set with the same name but a different id, the service rejects the whole import. The app flags this as a blocking error and offers **Clear conflicting IDs**, which blanks the `ruleset_id` / `rule_id` columns for the affected rule sets so the import matches by name + folder and updates them cleanly. If you already know the file came from elsewhere, **Clear ID columns** in Review & Fix does the same for the whole file before you get here.
 
 Edits that change rule set names or folder paths mark the checks as stale — rerun them before importing.
 

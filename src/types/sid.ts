@@ -218,6 +218,7 @@ export type SidNodeType =
   | 'record_contact'
   | 'treatment_group'
   | 'segmentation_tree'
+  | 'rest_api'
   | 'unknown';
 
 export interface SidNodeData {
@@ -229,5 +230,8 @@ export interface SidNodeData {
   isGroup?: boolean;
   groupLabel?: string;
   groupType?: 'sub-decision' | 'parallel';
+  /** REST API steps: filled in once the definition has been fetched. */
+  restMethod?: string;
+  restHost?: string;
   [key: string]: unknown;
 }

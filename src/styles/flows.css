@@ -1110,3 +1110,60 @@
   font-size: var(--font-size-sm);
   color: var(--sas-gray-600);
 }
+
+/* ------------------------------------------------------------------ */
+/*  REST API step details                                              */
+/* ------------------------------------------------------------------ */
+
+.flow-sp-rest-call {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--sas-gray-50);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.flow-sp-method {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  background: #3f51b5;
+}
+
+.flow-sp-method--post {
+  background: #2e7d32;
+}
+
+.flow-sp-method--put,
+.flow-sp-method--patch {
+  background: #ef6c00;
+}
+
+.flow-sp-method--delete {
+  background: #c62828;
+}
+
+.flow-sp-rest-uri {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-800);
+  word-break: break-all;
+}
+
+/* {placeholder} that binds a signature term into the request */
+.flow-sp-ph {
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  background: #e8eaf6;
+  color: #3f51b5;
+  font-weight: var(--font-weight-semibold);
+}
