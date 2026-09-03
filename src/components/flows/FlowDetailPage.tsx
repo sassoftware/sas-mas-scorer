@@ -5,7 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDecision, getDecisionRevision } from '../../api/decisions';
 import { getRestApiDefinitionByUri, REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail } from '../../api/restApiDefinitions';
-import { collectCustomObjectUris } from '../../utils/classify';
+import { getRuleSetBundle, type RuleSetBundle } from '../../api/rulesets';
+import { collectCustomObjectUris, collectRuleSetIds } from '../../utils/classify';
 import type { DecisionFlow, SidNodeData, Step } from '../../types/sid';
 import FlowHeader from './FlowHeader';
 import FlowDiagram from './FlowDiagram';
@@ -31,6 +32,9 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   // REST API definition cache (keyed by the step's revision URI)
   const [restApiCache] = useState<Map<string, RestApiDefinitionDetail>>(new Map());
 
+  // Rule set cache (keyed by rule set id)
+  const [ruleSetCache] = useState<Map<string, RuleSetBundle>>(new Map());
+
   // Side panel
   const [selectedNode, setSelectedNode] = useState<SidNodeData | null>(null);
 
@@ -50,7 +54,9 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     getDecision(id)
       .then((data) => {
         setFlow(data);
-        fetchSubDecisions(data, subDecisionCache, 0).then(() => fetchRestApiDefinitions(data));
+        fetchSubDecisions(data, subDecisionCache, 0)
+          .then(() => fetchRestApiDefinitions(data))
+          .then(() => fetchRuleSets(data));
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
@@ -110,6 +116,27 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     if (added) setFlow((prev) => (prev ? { ...prev } : prev));
   }
 
+  /** Fetch the rule sets used by the decision and its sub-decisions. */
+  async function fetchRuleSets(decision: DecisionFlow) {
+    const ids = new Set(collectRuleSetIds(decision.flow?.steps ?? []));
+    for (const sub of subDecisionCache.values()) {
+      for (const id of collectRuleSetIds(sub.flow?.steps ?? [])) ids.add(id);
+    }
+    const newIds = [...ids].filter((rsId) => !ruleSetCache.has(rsId));
+    if (newIds.length === 0) return;
+
+    const results = await Promise.allSettled(newIds.map((rsId) => getRuleSetBundle(rsId)));
+    let added = false;
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        ruleSetCache.set(newIds[i], result.value);
+        added = true;
+      }
+    });
+    // Force a re-render so the nodes pick up the rule count and validation badges
+    if (added) setFlow((prev) => (prev ? { ...prev } : prev));
+  }
+
   const handleNodeClick = useCallback((nodeData: SidNodeData) => {
     setSelectedNode(nodeData);
   }, []);
@@ -164,6 +191,7 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
         flow={flow}
         subDecisionCache={subDecisionCache}
         restApiCache={restApiCache}
+        ruleSetCache={ruleSetCache}
         onNodeClick={handleNodeClick}
       />
 
@@ -171,6 +199,7 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
         <FlowSidePanel
           nodeData={selectedNode}
           restApiCache={restApiCache}
+          ruleSetCache={ruleSetCache}
           onClose={() => setSelectedNode(null)}
           onViewCode={handleViewCode}
         />

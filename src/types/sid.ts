@@ -233,5 +233,9 @@ export interface SidNodeData {
   /** REST API steps: filled in once the definition has been fetched. */
   restMethod?: string;
   restHost?: string;
+  /** Rule set steps: filled in once the rule set and its rules have been fetched. */
+  ruleCount?: number;
+  ruleSetType?: string;
+  ruleIssueCount?: number;
   [key: string]: unknown;
 }

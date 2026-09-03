@@ -8,7 +8,8 @@ import { buildConditionExpression } from '../../utils/classify';
 import { directionLabel } from '../../utils/direction';
 import { buildDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../../utils/deepLinks';
 import { getSasViyaUrl } from '../../config';
-import { getRuleSet, getRuleSetRules, type RuleSetDetail, type BusinessRule } from '../../api/rulesets';
+import { getRuleSetBundle, getRuleSet, type RuleSetDetail, type BusinessRule, type RuleSetBundle } from '../../api/rulesets';
+import { buildRuleSetView, type RuleElementView } from '../../utils/ruleSetView';
 import { getSidModel, type SidModelDetail } from '../../api/sidModels';
 import { getCodeFileDetail, type CodeFileDetail } from '../../api/codeFiles';
 import { getTreatmentDefinitionByRevision, getTreatmentGroupByUri, type TreatmentDefinitionDetail, type TreatmentGroupDetail } from '../../api/treatments';
@@ -161,6 +162,119 @@ function ParamTable({ params, mappings }: { params: RestApiParam[]; mappings?: S
   );
 }
 
+/** One condition or action, with its kind and any lookup table or list it reads. */
+function RuleElement({ element, lead }: { element: RuleElementView; lead: string }) {
+  return (
+    <div className={`flow-sp-rule__line${element.invalid ? ' flow-sp-rule__line--invalid' : ''}`}>
+      <span className="flow-sp-rule__lead">{lead}</span>
+      <span className="flow-sp-rule__expr">{element.text || '—'}</span>
+      <span className="flow-sp-rule__kind">{element.kind}</span>
+      {element.reference && (
+        <span className="flow-sp-rule__ref" title={element.reference.id}>
+          {element.reference.kind === 'list' ? 'list' : 'lookup'} {element.reference.name}
+        </span>
+      )}
+      {element.invalid && element.message && (
+        <span className="flow-sp-rule__msg">{element.message}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A rule set is an ordered if / else if / else chain. Rules arrive in execution
+ * order and conditions within a rule are ANDed.
+ */
+function RuleChain({ rules }: { rules: BusinessRule[] }) {
+  const view = buildRuleSetView(rules);
+
+  return (
+    <>
+      {view.invalidCount > 0 && (
+        <div className="flow-sp-rule-alert">
+          <div className="flow-sp-rule-alert__title">
+            &#9888; {view.invalidCount} element{view.invalidCount === 1 ? '' : 's'} reported invalid
+          </div>
+          {view.issues.map((issue, i) => (
+            <div key={i} className="flow-sp-rule-alert__item">
+              {issue.message}
+              <span className="flow-sp-rule-alert__rules">
+                {issue.rules.join(', ')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(view.reads.length > 0 || view.writes.length > 0) && (
+        <>
+          <h5 className="flow-side-panel__section-title">Term usage</h5>
+          {view.reads.length > 0 && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Reads:</span>
+              <span className="flow-sp-detail__value">{view.reads.join(', ')}</span>
+            </div>
+          )}
+          {view.writes.length > 0 && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Writes:</span>
+              <span className="flow-sp-detail__value">{view.writes.join(', ')}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {view.references.length > 0 && (
+        <>
+          <h5 className="flow-side-panel__section-title">Lookup tables &amp; lists</h5>
+          {view.references.map((ref, i) => (
+            <div key={i} className="flow-sp-detail">
+              <span className="flow-sp-detail__label">
+                {ref.kind === 'list' ? 'List:' : 'Lookup:'}
+              </span>
+              <span className="flow-sp-detail__value">
+                {ref.name}
+                <span className="flow-sp-rule-alert__rules">{ref.usedBy.join(', ')}</span>
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+
+      <h5 className="flow-side-panel__section-title">Rules ({view.rules.length})</h5>
+      {view.rules.map((rule) => (
+        <div
+          key={rule.id ?? rule.sequence}
+          className={`flow-sp-card flow-sp-rule${rule.invalidCount > 0 ? ' flow-sp-rule--invalid' : ''}`}
+        >
+          <div className="flow-sp-card__title">
+            <span className="flow-sp-rule__seq">{rule.sequence}</span>
+            {rule.name}
+            {rule.tracked && <span className="flow-sp-rule__tracked">tracked</span>}
+          </div>
+          {rule.description && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Description:</span>
+              <span className="flow-sp-detail__value">{rule.description}</span>
+            </div>
+          )}
+          {rule.conditions.map((condition, i) => (
+            <RuleElement key={`c${i}`} element={condition} lead={i === 0 ? rule.keyword : 'AND'} />
+          ))}
+          {rule.conditions.length === 0 && rule.keyword === 'ELSE' && (
+            <div className="flow-sp-rule__line">
+              <span className="flow-sp-rule__lead">ELSE</span>
+            </div>
+          )}
+          {rule.actions.map((action, i) => (
+            <RuleElement key={`a${i}`} element={action} lead={i === 0 ? 'THEN' : 'AND'} />
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function SegTreeNodeView({ node, depth = 0 }: { node: SegTreeNode; depth?: number }) {
   return (
     <div className="flow-sp-card" style={{ marginLeft: depth * 16 }}>
@@ -202,11 +316,13 @@ interface FlowSidePanelProps {
   nodeData: SidNodeData;
   /** Definitions already fetched by the page, keyed by step revision URI. */
   restApiCache?: Map<string, RestApiDefinitionDetail>;
+  /** Rule sets already fetched by the page, keyed by rule set id. */
+  ruleSetCache?: Map<string, RuleSetBundle>;
   onClose: () => void;
   onViewCode?: (href: string, language: string) => void;
 }
 
-export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewCode }: FlowSidePanelProps) {
+export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, onClose, onViewCode }: FlowSidePanelProps) {
   const [ruleSetDetail, setRuleSetDetail] = useState<RuleSetDetail | null>(null);
   const [ruleSetRules, setRuleSetRules] = useState<BusinessRule[]>([]);
   const [modelDetail, setModelDetail] = useState<SidModelDetail | null>(null);
@@ -259,13 +375,11 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
         // Rule Set
         if (currentStep.ruleset?.id) {
           try {
-            const [detail, rules] = await Promise.all([
-              getRuleSet(currentStep.ruleset.id),
-              getRuleSetRules(currentStep.ruleset.id),
-            ]);
+            const bundle = ruleSetCache?.get(currentStep.ruleset.id)
+              ?? await getRuleSetBundle(currentStep.ruleset.id);
             if (!cancelled) {
-              setRuleSetDetail(detail);
-              setRuleSetRules(rules);
+              setRuleSetDetail(bundle.detail);
+              setRuleSetRules(bundle.rules);
             }
           } catch (e) {
             errs.push(`Rule set: ${e instanceof Error ? e.message : String(e)}`);
@@ -390,7 +504,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [step, restApiCache]);
+  }, [step, restApiCache, ruleSetCache]);
 
   /* ---- useEffect 2: Check for decisionNodeType after codeFileDetail loads ---- */
   useEffect(() => {
@@ -775,6 +889,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <span className="flow-sp-detail__value">{ruleSetDetail.description}</span>
               </div>
             )}
+            {ruleSetDetail.ruleSetType && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Type:</span>
+                <span className="flow-sp-detail__value">{ruleSetDetail.ruleSetType}</span>
+              </div>
+            )}
             {ruleSetDetail.majorRevision !== undefined && (
               <div className="flow-sp-detail">
                 <span className="flow-sp-detail__label">Version:</span>
@@ -793,44 +913,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <VariableTable variables={ruleSetDetail.signature} />
               </>
             )}
-            {ruleSetRules.length > 0 && (
-              <>
-                <h5 className="flow-side-panel__section-title">Rules ({ruleSetRules.length})</h5>
-                {ruleSetRules.map((rule: BusinessRule) => (
-                  <div key={rule.id} className="flow-sp-card">
-                    <div className="flow-sp-card__title">{rule.name}</div>
-                    {rule.description && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Description:</span>
-                        <span className="flow-sp-detail__value">{rule.description}</span>
-                      </div>
-                    )}
-                    {rule.conditional && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Conditional:</span>
-                        <span className="flow-sp-detail__value">{rule.conditional}</span>
-                      </div>
-                    )}
-                    {rule.conditions && rule.conditions.length > 0 && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Conditions:</span>
-                        <span className="flow-sp-detail__value">
-                          {rule.conditions.map((c) => c.expression ?? `${c.term?.name ?? '?'}`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                    {rule.actions && rule.actions.length > 0 && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Actions:</span>
-                        <span className="flow-sp-detail__value">
-                          {rule.actions.map((a) => a.expression ?? `${a.term?.name ?? '?'}`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
+            {ruleSetRules.length > 0 && <RuleChain rules={ruleSetRules} />}
           </Section>
         )}
 

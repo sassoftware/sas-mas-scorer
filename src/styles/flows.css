@@ -1167,3 +1167,118 @@
   color: #3f51b5;
   font-weight: var(--font-weight-semibold);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Rule set chain                                                     */
+/* ------------------------------------------------------------------ */
+
+.flow-sp-rule--invalid {
+  border-color: #f0b4b4;
+  background: #fdf4f4;
+}
+
+.flow-sp-rule__seq {
+  display: inline-block;
+  min-width: 18px;
+  margin-right: var(--space-2);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--sas-gray-200);
+  color: var(--sas-gray-700);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.flow-sp-rule__tracked {
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: 9999px;
+  background: var(--sas-gray-200);
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+.flow-sp-rule__line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.flow-sp-rule__line--invalid {
+  color: #b42318;
+}
+
+.flow-sp-rule__lead {
+  flex-shrink: 0;
+  min-width: 52px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-500);
+  text-transform: uppercase;
+}
+
+.flow-sp-rule__expr {
+  flex: 1 1 180px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-800);
+  word-break: break-word;
+}
+
+.flow-sp-rule__line--invalid .flow-sp-rule__expr {
+  color: #b42318;
+}
+
+.flow-sp-rule__kind,
+.flow-sp-rule__ref {
+  flex-shrink: 0;
+  padding: 0 var(--space-2);
+  border-radius: 9999px;
+  font-size: var(--font-size-xs);
+  background: var(--sas-gray-200);
+  color: var(--sas-gray-600);
+}
+
+.flow-sp-rule__ref {
+  font-family: var(--font-family-mono);
+  background: #e8eaf6;
+  color: #3f51b5;
+}
+
+.flow-sp-rule__msg {
+  flex-basis: 100%;
+  font-size: var(--font-size-xs);
+  color: #b42318;
+}
+
+.flow-sp-rule-alert {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid #f0b4b4;
+  border-radius: var(--radius-md);
+  background: #fdf4f4;
+}
+
+.flow-sp-rule-alert__title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #b42318;
+  margin-bottom: var(--space-2);
+}
+
+.flow-sp-rule-alert__item {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-800);
+  margin-bottom: var(--space-1);
+}
+
+.flow-sp-rule-alert__rules {
+  display: block;
+  color: var(--sas-gray-500);
+  font-size: var(--font-size-xs);
+}

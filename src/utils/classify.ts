@@ -99,6 +99,32 @@ export function collectCustomObjectUris(steps: Step[], type: string): string[] {
   return uris;
 }
 
+/**
+ * Every rule set id the steps reference, recursing the same way
+ * collectCustomObjectUris does.
+ */
+export function collectRuleSetIds(steps: Step[]): string[] {
+  const ids: string[] = [];
+  for (const step of steps) {
+    if (step.ruleset?.id) ids.push(step.ruleset.id);
+    if (step.onTrue) ids.push(...collectRuleSetIds(extractSteps(step.onTrue)));
+    if (step.onFalse) ids.push(...collectRuleSetIds(extractSteps(step.onFalse)));
+    if (step.steps) ids.push(...collectRuleSetIds(step.steps));
+    if (step.branchCases) {
+      for (const bc of step.branchCases) {
+        if (bc.onTrue) ids.push(...collectRuleSetIds(extractSteps(bc.onTrue)));
+      }
+    }
+    if (step.defaultCase) ids.push(...collectRuleSetIds(extractSteps(step.defaultCase)));
+    if (step.abTestCases) {
+      for (const tc of step.abTestCases) {
+        if (tc.onTrue) ids.push(...collectRuleSetIds(extractSteps(tc.onTrue)));
+      }
+    }
+  }
+  return ids;
+}
+
 export function extractSteps(branchData: unknown): Step[] {
   if (!branchData) return [];
   if (typeof branchData === 'object' && branchData !== null) {

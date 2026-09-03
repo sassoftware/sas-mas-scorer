@@ -7,8 +7,27 @@ import { NODE_COLORS } from '../../../flow/constants';
 
 type RuleSetNodeType = Node<SidNodeData, 'ruleset'>;
 
+const pill = {
+  display: 'inline-block',
+  padding: '2px 8px',
+  borderRadius: '9999px',
+  lineHeight: 1.4,
+} as const;
+
+/** Rule count, kind and invalid-element count arrive once the rules are fetched. */
 export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
   const colors = NODE_COLORS.ruleset;
+  const ruleCount = typeof data.ruleCount === 'number' ? data.ruleCount : null;
+  const ruleSetType = typeof data.ruleSetType === 'string' ? data.ruleSetType : '';
+  const issues = typeof data.ruleIssueCount === 'number' ? data.ruleIssueCount : 0;
+
+  const subtitle = [
+    ruleCount === null ? '' : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}`,
+    ruleSetType,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <>
       <Handle type="target" position={Position.Top} />
@@ -25,22 +44,36 @@ export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
             clipPath: 'polygon(8% 0%, 92% 0%, 100% 100%, 0% 100%)',
           }}
         >
-          <div style={{ fontSize: '10px', fontWeight: 600, marginBottom: '4px' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '2px 8px',
-                borderRadius: '9999px',
-                color: '#ffffff',
-                backgroundColor: colors.border,
-              }}
-            >
+          <div
+            style={{
+              fontSize: '10px',
+              fontWeight: 600,
+              marginBottom: '4px',
+              display: 'flex',
+              gap: '4px',
+              justifyContent: 'center',
+            }}
+          >
+            <span style={{ ...pill, color: '#ffffff', backgroundColor: colors.border }}>
               Rule Set
             </span>
+            {issues > 0 && (
+              <span
+                style={{ ...pill, color: '#ffffff', backgroundColor: '#dc2626' }}
+                title={`${issues} element${issues === 1 ? '' : 's'} reported invalid by SAS Intelligent Decisioning`}
+              >
+                &#9888; {issues}
+              </span>
+            )}
           </div>
           <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
             {data.label}
           </div>
+          {subtitle && (
+            <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>
+              {subtitle}
+            </div>
+          )}
         </div>
       </div>
       <Handle type="source" position={Position.Bottom} />

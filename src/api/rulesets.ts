@@ -3,31 +3,62 @@
 
 import { sasViyaClient } from './client';
 
-export interface RuleCondition {
+/** A decision variable a rule condition or action reads or assigns. */
+export interface RuleTermRef {
   id?: string;
-  type?: string;
+  name: string;
+  dataType?: string;
+  /** input | output | inOut | none */
+  direction?: string;
+  description?: string;
+}
+
+/** A lookup table or advanced list a rule element depends on. */
+export interface RuleObjectRef {
+  id?: string;
+  name?: string;
+  version?: number;
+}
+
+interface RuleElementBase {
+  id?: string;
   expression?: string;
-  term?: { name: string; dataType?: string };
+  term?: RuleTermRef;
+  /**
+   * Present but empty on elements that read no lookup table, so callers must
+   * check for a name rather than for the object itself.
+   */
+  lookup?: RuleObjectRef;
+  /** The terms the expression reads. */
+  expressionUnits?: Array<{ term?: RuleTermRef }>;
   status?: string;
   statusMessage?: string;
 }
 
-export interface RuleAction {
-  id?: string;
+/** Condition types seen in the wild: complex, decisionTable, lookup. */
+export interface RuleCondition extends RuleElementBase {
   type?: string;
-  expression?: string;
-  term?: { name: string; dataType?: string };
-  status?: string;
-  statusMessage?: string;
+}
+
+/** Action types seen in the wild: assignment, complex, lookupValue, listQuery. */
+export interface RuleAction extends RuleElementBase {
+  type?: string;
+  /** The advanced list a listQuery action reads from. */
+  advancedList?: RuleObjectRef;
+  /** The terms a listQuery action assigns. */
+  terms?: RuleTermRef[];
 }
 
 export interface BusinessRule {
   id: string;
   name: string;
   description?: string;
+  /** if | elseif | else | or — chains this rule to the one before it. */
   conditional?: string;
   ruleFiredTrackingEnabled?: boolean;
   status?: string;
+  statusMessage?: string;
+  version?: number;
   conditions?: RuleCondition[];
   actions?: RuleAction[];
 }
@@ -46,6 +77,7 @@ export interface RuleSetDetail {
   id: string;
   name: string;
   description?: string;
+  /** assignment | filtering */
   ruleSetType?: string;
   createdBy?: string;
   modifiedBy?: string;
@@ -67,10 +99,54 @@ export async function getRuleSet(id: string): Promise<RuleSetDetail> {
   return response.data;
 }
 
+/**
+ * The rules collection defaults to 10 items, so it must be paged explicitly —
+ * without this a 46-rule rule set silently reports itself as having 10.
+ * The service sorts by ruleExecutionSeqNo, so the result is in execution order.
+ */
+const RULES_PAGE_SIZE = 100;
+
 export async function getRuleSetRules(id: string): Promise<BusinessRule[]> {
-  const response = await sasViyaClient.get<{ items?: BusinessRule[] }>(
-    `/businessRules/ruleSets/${id}/rules`,
-    { headers: { Accept: 'application/vnd.sas.collection+json' } },
-  );
-  return response.data.items ?? [];
+  const all: BusinessRule[] = [];
+  let start = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const params = new URLSearchParams({
+      start: String(start),
+      limit: String(RULES_PAGE_SIZE),
+    });
+    const response = await sasViyaClient.get<{ items?: BusinessRule[]; count?: number }>(
+      `/businessRules/ruleSets/${id}/rules?${params.toString()}`,
+      { headers: { Accept: 'application/vnd.sas.collection+json' } },
+    );
+    const items = response.data.items ?? [];
+    all.push(...items);
+    start += items.length;
+
+    const total = response.data.count;
+    if (items.length < RULES_PAGE_SIZE) break;
+    if (total !== undefined && all.length >= total) break;
+  }
+
+  return all;
+}
+
+/** A rule set together with its complete rule list. */
+export interface RuleSetBundle {
+  detail: RuleSetDetail;
+  rules: BusinessRule[];
+}
+
+/**
+ * Fetches the unit the flow diagram, the side panel and the Markdown export all
+ * need. A failure to read the rules is tolerated — the rule set itself is not.
+ */
+export async function getRuleSetBundle(id: string): Promise<RuleSetBundle> {
+  const [detail, rules] = await Promise.allSettled([getRuleSet(id), getRuleSetRules(id)]);
+  if (detail.status === 'rejected') throw detail.reason;
+  return {
+    detail: detail.value,
+    rules: rules.status === 'fulfilled' ? rules.value : [],
+  };
 }

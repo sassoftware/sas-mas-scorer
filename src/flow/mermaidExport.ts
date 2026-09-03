@@ -8,10 +8,11 @@
  * and in the markdown (with incremented heading levels).
  */
 import type { DecisionFlow, Step, SidNodeType, StepMapping } from '../types/sid';
-import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression, collectCustomObjectUris } from '../utils/classify';
+import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression, collectCustomObjectUris, collectRuleSetIds } from '../utils/classify';
 import { NODE_TYPE_LABELS, CODE_TYPE_LABELS } from './constants';
 import { buildDeepLink, buildDecisionDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../utils/deepLinks';
-import { getRuleSet, getRuleSetRules, type RuleSetDetail, type BusinessRule } from '../api/rulesets';
+import { getRuleSet, getRuleSetBundle, type RuleSetDetail, type BusinessRule, type RuleSetBundle } from '../api/rulesets';
+import { buildRuleSetView, type RuleElementView, type RuleSetView } from '../utils/ruleSetView';
 import { getSidModel, type SidModelDetail } from '../api/sidModels';
 import { getCodeFileDetail, getFileContent, stripLeadingJsonComment, type CodeFileDetail } from '../api/codeFiles';
 import { getTreatmentGroupByUri, getTreatmentDefinitionByRevision, type TreatmentGroupDetail, type TreatmentDefinitionDetail } from '../api/treatments';
@@ -507,16 +508,22 @@ async function fetchNodeDetails(
   step: Step,
   subDecisionCache: Map<string, DecisionFlow>,
   restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
+  ruleSetCache: Map<string, RuleSetBundle> = new Map(),
 ): Promise<FetchedNodeDetails> {
   const details: FetchedNodeDetails = {};
 
   if (step.ruleset?.id) {
-    const [rs, rules] = await Promise.allSettled([
-      getRuleSet(step.ruleset.id),
-      getRuleSetRules(step.ruleset.id),
-    ]);
-    if (rs.status === 'fulfilled') details.ruleSet = rs.value;
-    if (rules.status === 'fulfilled') details.rules = rules.value;
+    const cached = ruleSetCache.get(step.ruleset.id);
+    if (cached) {
+      details.ruleSet = cached.detail;
+      details.rules = cached.rules;
+    } else {
+      try {
+        const bundle = await getRuleSetBundle(step.ruleset.id);
+        details.ruleSet = bundle.detail;
+        details.rules = bundle.rules;
+      } catch { /* skip */ }
+    }
   }
 
   if (step.model?.id) {
@@ -624,6 +631,73 @@ function formatRestParams(params: RestApiParam[], mappings?: StepMapping[]): str
     const bound = boundDecisionVariable(p.value, mappings);
     md += `| \`${mdCell(p.key)}\` | \`${mdCell(p.value)}\` | ${bound ? `\`${bound}\`` : '\u2014'} | ${mdCell(p.description)} |\n`;
   }
+  return md;
+}
+
+/** Escape backticks so an expression cannot break out of its code span. */
+function mdInline(text: string): string {
+  return text.replace(/\r?\n/g, ' ').replace(/`/g, "'");
+}
+
+/** One condition or action as a Markdown line, with its kind and any reference. */
+function formatRuleElement(element: RuleElementView, lead: string): string {
+  let md = `- \`${lead.padEnd(7)}\` ${element.text ? `\`${mdInline(element.text)}\`` : '—'}`;
+  md += ` *(${element.kind})*`;
+  if (element.reference) {
+    md += ` → ${element.reference.kind === 'list' ? 'list' : 'lookup'} **${mdCell(element.reference.name)}**`;
+  }
+  if (element.invalid) md += ` ⚠ ${mdCell(element.message) || 'not valid'}`;
+  return md + '\n';
+}
+
+/**
+ * A rule set as the ordered if / else if / else chain it actually is, with the
+ * terms it reads and writes and anything the service flags as invalid.
+ */
+function formatRuleChain(rules: BusinessRule[]): string {
+  const view = buildRuleSetView(rules);
+  let md = '';
+
+  if (view.invalidCount > 0) {
+    md += `\n> ⚠ **${view.invalidCount} element${view.invalidCount === 1 ? '' : 's'}`;
+    md += ' reported invalid by SAS Intelligent Decisioning**\n>\n';
+    for (const issue of view.issues) {
+      md += `> - ${mdCell(issue.message)} — *${issue.rules.join(', ')}*\n`;
+    }
+    md += '\n';
+  }
+
+  if (view.reads.length > 0) md += `- **Reads**: ${view.reads.map((t) => `\`${t}\``).join(', ')}\n`;
+  if (view.writes.length > 0) md += `- **Writes**: ${view.writes.map((t) => `\`${t}\``).join(', ')}\n`;
+
+  if (view.references.length > 0) {
+    md += '\n**Lookup Tables & Lists**:\n\n';
+    for (const ref of view.references) {
+      md += `- **${mdCell(ref.name)}** (${ref.kind === 'list' ? 'advanced list' : 'lookup table'})`;
+      md += ` — used by ${ref.usedBy.join(', ')}\n`;
+    }
+  }
+
+  md += `\n**Rules** (${view.rules.length}), in execution order:\n`;
+  for (const rule of view.rules) {
+    md += `\n**${rule.sequence}. ${mdCell(rule.name)}**`;
+    if (rule.tracked) md += ' *(rule fired tracking)*';
+    if (rule.invalidCount > 0) md += ' ⚠';
+    md += '\n';
+    if (rule.description) md += `\n*${mdCell(rule.description)}*\n`;
+    md += '\n';
+    rule.conditions.forEach((condition, i) => {
+      md += formatRuleElement(condition, i === 0 ? rule.keyword : 'AND');
+    });
+    if (rule.conditions.length === 0 && rule.keyword === 'ELSE') {
+      md += '- `ELSE   `\n';
+    }
+    rule.actions.forEach((action, i) => {
+      md += formatRuleElement(action, i === 0 ? 'THEN' : 'AND');
+    });
+  }
+  md += '\n';
+
   return md;
 }
 
@@ -829,29 +903,7 @@ function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDe
       }
     }
     const rules = details.rules ?? details.ruleSet?.rules;
-    if (rules && rules.length > 0) {
-      md += `\n**Rules** (${rules.length}):\n\n`;
-      for (const rule of rules) {
-        md += `- **${rule.name}**`;
-        if (rule.conditional) md += ` *(${rule.conditional.toUpperCase()})*`;
-        md += '\n';
-        if (rule.conditions && rule.conditions.length > 0) {
-          for (const c of rule.conditions) {
-            const expr = c.type === 'complex' && c.expression
-              ? c.expression
-              : c.term ? `${c.term.name} ${c.expression ?? ''}` : c.expression ?? '';
-            if (expr) md += `  - Condition: \`${expr}\`\n`;
-          }
-        }
-        if (rule.actions && rule.actions.length > 0) {
-          for (const a of rule.actions) {
-            const expr = a.term ? `${a.term.name} = ${a.expression}` : a.expression ?? '';
-            if (expr) md += `  - Action: \`${expr}\`\n`;
-          }
-        }
-      }
-      md += '\n';
-    }
+    if (rules && rules.length > 0) md += formatRuleChain(rules);
   }
 
   if (step.model) {
@@ -1091,6 +1143,23 @@ async function fetchAllRestApiDefinitions(
   return cache;
 }
 
+async function fetchAllRuleSets(
+  flow: DecisionFlow,
+  subDecisionCache: Map<string, DecisionFlow>,
+): Promise<Map<string, RuleSetBundle>> {
+  const cache = new Map<string, RuleSetBundle>();
+  const ids = new Set(collectRuleSetIds(flow.flow?.steps ?? []));
+  for (const sub of subDecisionCache.values()) {
+    for (const id of collectRuleSetIds(sub.flow?.steps ?? [])) ids.add(id);
+  }
+  const list = [...ids];
+  const results = await Promise.allSettled(list.map((id) => getRuleSetBundle(id)));
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') cache.set(list[i], result.value);
+  });
+  return cache;
+}
+
 /* ================================================================== */
 /*  Main export function (async — fetches all details)                 */
 /* ================================================================== */
@@ -1112,6 +1181,8 @@ export async function generateMarkdownExport(
   await fetchAllSubDecisions(flow, subDecisionCache);
   onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching REST API definitions...' });
   const restApiCache = await fetchAllRestApiDefinitions(flow, subDecisionCache);
+  onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching rule sets...' });
+  const ruleSetCache = await fetchAllRuleSets(flow, subDecisionCache);
 
   const mermaid = generateMermaid(flow, subDecisionCache);
   const sig = flow.signature ?? [];
@@ -1122,12 +1193,33 @@ export async function generateMarkdownExport(
 
   const decisionDL = buildDecisionDeepLink(flow.id);
 
+  // Rule sets, resolved once — the summary tables and the TOC both need them
+  const ruleSetNodes = nodes.filter((n) => n.type === 'ruleset' && n.step.ruleset?.id);
+  const ruleSetViews = new Map<string, RuleSetView>();
+  const referenceRows: Array<{ name: string; kind: string; usedBy: string; ruleSet: string }> = [];
+  for (const n of ruleSetNodes) {
+    const bundle = ruleSetCache.get(n.step.ruleset!.id);
+    if (!bundle) continue;
+    const view = buildRuleSetView(bundle.rules);
+    ruleSetViews.set(n.step.ruleset!.id, view);
+    for (const ref of view.references) {
+      referenceRows.push({
+        name: ref.name,
+        kind: ref.kind === 'list' ? 'Advanced list' : 'Lookup table',
+        usedBy: ref.usedBy.join(', '),
+        ruleSet: n.step.ruleset!.name,
+      });
+    }
+  }
+
   // Table of Contents
   let toc = '## Table of Contents\n\n';
   toc += '- [Overview](#overview)\n';
   toc += '  - [Workflow](#workflow)\n';
   if (inputs.length > 0 || outputs.length > 0) toc += '- [Variables](#variables)\n';
   if (nodes.some((n) => n.type === 'rest_api')) toc += '- [External Endpoints](#external-endpoints)\n';
+  if (ruleSetNodes.length > 0) toc += '- [Rule Sets](#rule-sets)\n';
+  if (referenceRows.length > 0) toc += '- [Lookup Tables & Lists](#lookup-tables--lists)\n';
   toc += '- [Flow Diagram](#flow-diagram)\n';
   if (nodes.length > 0) {
     toc += '- [Node Details](#node-details)\n';
@@ -1212,6 +1304,42 @@ export async function generateMarkdownExport(
     }
   }
 
+  // Rule sets — every rule set the decision executes, and what it depends on
+  if (ruleSetNodes.length > 0) {
+    md += '\n## Rule Sets\n\n';
+    md += `This decision executes **${ruleSetNodes.length}** rule set`;
+    md += `${ruleSetNodes.length > 1 ? 's' : ''}.\n\n`;
+    md += '| Node | Rule Set | Rules | Type | Version | Status |\n';
+    md += '|------|----------|-------|------|---------|--------|\n';
+
+    for (const n of ruleSetNodes) {
+      const bundle = ruleSetCache.get(n.step.ruleset!.id);
+      const detail = bundle?.detail;
+      const view = ruleSetViews.get(n.step.ruleset!.id);
+      const version = detail?.majorRevision !== undefined
+        ? `${detail.majorRevision}.${detail.minorRevision ?? 0}`
+        : '—';
+      const status = view && view.invalidCount > 0
+        ? `⚠ ${view.invalidCount} invalid`
+        : detail
+          ? 'Valid'
+          : '—';
+      md += `| [${mdCell(n.name)}](#${n.anchor}) | ${mdCell(n.step.ruleset!.name)} |`;
+      md += ` ${bundle ? bundle.rules.length : '—'} | ${detail?.ruleSetType ?? '—'} | ${version} | ${status} |\n`;
+    }
+  }
+
+  // Lookup tables and advanced lists — the data this decision reads outside its own variables
+  if (referenceRows.length > 0) {
+    md += '\n## Lookup Tables & Lists\n\n';
+    md += 'Data these rule sets read beyond the decision variables.\n\n';
+    md += '| Name | Kind | Rule Set | Used By |\n';
+    md += '|------|------|----------|--------|\n';
+    for (const row of referenceRows) {
+      md += `| ${mdCell(row.name)} | ${row.kind} | ${mdCell(row.ruleSet)} | ${mdCell(row.usedBy)} |\n`;
+    }
+  }
+
   // Diagram
   md += '\n## Flow Diagram\n\n';
   md += '```mermaid\n' + mermaid + '\n```\n';
@@ -1252,7 +1380,7 @@ export async function generateMarkdownExport(
             nodeName: node.name,
             phase: 'Fetching node details',
           });
-          return fetchNodeDetails(node.step, subDecisionCache, restApiCache);
+          return fetchNodeDetails(node.step, subDecisionCache, restApiCache, ruleSetCache);
         }),
       );
       batchResults.forEach((result, bi) => {

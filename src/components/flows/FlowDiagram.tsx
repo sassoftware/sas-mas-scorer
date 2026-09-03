@@ -10,6 +10,7 @@ import '@xyflow/react/dist/style.css';
 import type { DecisionFlow, SidNodeData } from '../../types/sid';
 import { convertFlowToGraph } from '../../flow/sidToReactFlow';
 import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
+import type { RuleSetBundle } from '../../api/rulesets';
 import { layoutGraph } from '../../flow/layoutGraph';
 import { NODE_COLORS } from '../../flow/constants';
 import StartEndNode from './nodes/StartEndNode';
@@ -38,16 +39,17 @@ interface FlowDiagramProps {
   flow: DecisionFlow;
   subDecisionCache?: Map<string, DecisionFlow>;
   restApiCache?: Map<string, RestApiDefinitionDetail>;
+  ruleSetCache?: Map<string, RuleSetBundle>;
   onNodeClick?: (nodeData: SidNodeData) => void;
 }
 
-export default function FlowDiagram({ flow, subDecisionCache, restApiCache, onNodeClick }: FlowDiagramProps) {
+export default function FlowDiagram({ flow, subDecisionCache, restApiCache, ruleSetCache, onNodeClick }: FlowDiagramProps) {
   const [legendOpen, setLegendOpen] = useState(true);
   const { initialNodes, initialEdges, groupBoxes } = useMemo(() => {
-    const { nodes: rawNodes, edges: rawEdges, groups } = convertFlowToGraph(flow, subDecisionCache ?? new Map(), restApiCache ?? new Map());
+    const { nodes: rawNodes, edges: rawEdges, groups } = convertFlowToGraph(flow, subDecisionCache ?? new Map(), restApiCache ?? new Map(), ruleSetCache ?? new Map());
     const { nodes: layoutedNodes, edges: layoutedEdges, groupBoxes: boxes } = layoutGraph(rawNodes, rawEdges, groups);
     return { initialNodes: layoutedNodes, initialEdges: layoutedEdges, groupBoxes: boxes };
-  }, [flow, subDecisionCache, restApiCache]);
+  }, [flow, subDecisionCache, restApiCache, ruleSetCache]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
