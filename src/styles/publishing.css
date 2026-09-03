@@ -348,3 +348,83 @@
   cursor: pointer;
   font: inherit;
 }
+
+/* ─── Loading progress ─── */
+
+.publishing__progress {
+  padding: var(--space-4);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.publishing__progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.publishing__progress-phase {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+  color: var(--sas-gray-800);
+}
+
+.publishing__progress-count {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  font-variant-numeric: tabular-nums;
+}
+
+.publishing__progress-track {
+  position: relative;
+  height: 8px;
+  background: var(--sas-gray-200);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+}
+
+/* The service reports no total, so the bar sweeps rather than fills. */
+.publishing__progress-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: var(--radius-full);
+  background: var(--sas-blue-primary);
+  animation: publishing-progress-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes publishing-progress-sweep {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publishing__progress-fill {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
+.publishing__progress-message {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  margin-bottom: var(--space-2);
+}
+
+.publishing__progress-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-500);
+}
+
+.publishing__progress-step--done {
+  color: var(--sas-success-dark);
+}
