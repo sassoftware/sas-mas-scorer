@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { sasViyaClient } from './client';
+import { fetchAllPaginated } from './paginate';
 
 /** A decision variable a rule condition or action reads or assigns. */
 export interface RuleTermRef {
@@ -101,35 +102,17 @@ export async function getRuleSet(id: string): Promise<RuleSetDetail> {
 
 /**
  * The rules collection defaults to 10 items, so it must be paged explicitly —
- * without this a 46-rule rule set silently reports itself as having 10.
+ * without this a 46-rule rule set silently reports itself as having 10. The
+ * shared walker also honours the limit the service echoes back, so a capped
+ * page continues rather than ending the walk.
  * The service sorts by ruleExecutionSeqNo, so the result is in execution order.
  */
 const RULES_PAGE_SIZE = 100;
 
 export async function getRuleSetRules(id: string): Promise<BusinessRule[]> {
-  const all: BusinessRule[] = [];
-  let start = 0;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const params = new URLSearchParams({
-      start: String(start),
-      limit: String(RULES_PAGE_SIZE),
-    });
-    const response = await sasViyaClient.get<{ items?: BusinessRule[]; count?: number }>(
-      `/businessRules/ruleSets/${id}/rules?${params.toString()}`,
-      { headers: { Accept: 'application/vnd.sas.collection+json' } },
-    );
-    const items = response.data.items ?? [];
-    all.push(...items);
-    start += items.length;
-
-    const total = response.data.count;
-    if (items.length < RULES_PAGE_SIZE) break;
-    if (total !== undefined && all.length >= total) break;
-  }
-
-  return all;
+  return fetchAllPaginated<BusinessRule>(`/businessRules/ruleSets/${id}/rules`, {
+    pageSize: RULES_PAGE_SIZE,
+  });
 }
 
 /** A rule set together with its complete rule list. */

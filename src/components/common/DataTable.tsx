@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
+import { Loading } from './Loading';
+import { EmptyState } from './EmptyState';
 
 export interface Column<T> {
   key: string;
@@ -15,6 +17,12 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   keyField: keyof T;
+  /**
+   * Makes rows navigable. The whole row reacts to the mouse, and the first
+   * column's content is wrapped in a real <button> so keyboard users can
+   * reach the same action — so the first column must not render its own
+   * interactive elements (links, buttons) when this is set.
+   */
   onRowClick?: (item: T) => void;
   selectedKey?: string | number;
   loading?: boolean;
@@ -44,29 +52,11 @@ export function DataTable<T>({
     .join(' ');
 
   if (loading) {
-    return (
-      <div className="sas-table__loading">
-        <div className="sas-table__loading-spinner" />
-        <span>Loading data...</span>
-      </div>
-    );
+    return <Loading size="small" message="Loading data..." />;
   }
 
   if (data.length === 0) {
-    return (
-      <div className="sas-table__empty">
-        <svg
-          className="sas-table__empty-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        <p>{emptyMessage}</p>
-      </div>
-    );
+    return <EmptyState title={emptyMessage} />;
   }
 
   return (
@@ -93,23 +83,48 @@ export function DataTable<T>({
             const key = String(item[keyField]);
             const isSelected = selectedKey !== undefined && selectedKey === key;
 
+            const rowClasses = [
+              'sas-table__row',
+              onRowClick ? 'sas-table__row--clickable' : '',
+              isSelected ? 'sas-table__row--selected' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+
             return (
               <tr
                 key={key}
-                className={`sas-table__row ${isSelected ? 'sas-table__row--selected' : ''}`}
+                className={rowClasses}
                 onClick={() => onRowClick?.(item)}
               >
-                {columns.map((column) => (
-                  <td
-                    key={`${key}-${column.key}`}
-                    className="sas-table__td"
-                    style={{ textAlign: column.align ?? 'left' }}
-                  >
-                    {column.render
-                      ? column.render(item, rowIndex)
-                      : String((item as Record<string, unknown>)[column.key] ?? '')}
-                  </td>
-                ))}
+                {columns.map((column, columnIndex) => {
+                  const content = column.render
+                    ? column.render(item, rowIndex)
+                    : String((item as Record<string, unknown>)[column.key] ?? '');
+
+                  return (
+                    <td
+                      key={`${key}-${column.key}`}
+                      className="sas-table__td"
+                      style={{ textAlign: column.align ?? 'left' }}
+                    >
+                      {onRowClick && columnIndex === 0 ? (
+                        <button
+                          type="button"
+                          className="sas-table__row-button"
+                          onClick={(e) => {
+                            e.stopPropagation(); // the <tr> handler would fire a second time
+                            onRowClick(item);
+                          }}
+                        >
+                          {content}
+                        </button>
+                      ) : (
+                        content
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}

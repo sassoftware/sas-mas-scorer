@@ -17,6 +17,7 @@
 // publishes new code content.
 
 import { sasViyaClient } from './client';
+import { fetchAllPaginated } from './paginate';
 
 const CODE_FILE_MEDIA_TYPE = 'application/vnd.sas.decision.code.file+json';
 const FILE_MEDIA_TYPE = 'application/vnd.sas.file+json';
@@ -154,16 +155,19 @@ export async function createCodeFile(
 /**
  * Resolve the URI of a code file's current (latest) revision, used as
  * `fromRevisionUri` when creating the next revision so lineage is preserved.
- * Best-effort: returns undefined if it can't be determined.
+ * Best-effort: returns undefined if it can't be determined. The revisions
+ * collection is walked completely (its default page is 10), so the "latest"
+ * is the highest revision in the file's whole history, not in the first page.
  */
 export async function getLatestRevisionUri(codeFileId: string): Promise<string | undefined> {
   try {
-    const response = await sasViyaClient.get(
-      `/decisions/codeFiles/${encodeURIComponent(codeFileId)}/revisions`,
-      { headers: { Accept: 'application/vnd.sas.collection+json' } },
-    );
-    const items: Array<{ id?: string; majorRevision?: number; minorRevision?: number }> =
-      response.data?.items ?? [];
+    const items = await fetchAllPaginated<{
+      id?: string;
+      majorRevision?: number;
+      minorRevision?: number;
+    }>(`/decisions/codeFiles/${encodeURIComponent(codeFileId)}/revisions`, {
+      pageSize: 100,
+    });
     if (items.length === 0) return undefined;
 
     const latest = items.reduce((a, b) => {

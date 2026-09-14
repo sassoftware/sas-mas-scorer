@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { sasViyaClient } from './client';
+import { fetchAllPaginated } from './paginate';
 
 // --- Types ---
 
@@ -112,21 +113,22 @@ export const createScoreDefinition = async (
 /**
  * List scenario-type score definitions for a specific decision flow.
  * Uses the advanced filter to find Scenario input types that aren't trashed.
+ * Walks every page — a batch save creates one scenario per row, so a decision
+ * can easily hold more than one page of them.
  */
 export const listDecisionScenarios = async (
   decisionFlowId: string
 ): Promise<ScoreDefinitionSummary[]> => {
   const filter = `and(contains(objectDescriptor.uri,'/decisions/flows/${decisionFlowId}'),or(isNull(folderType),ne(folderType,'trashFolder')),eq(inputData.type,'Scenario'))`;
 
-  const response = await sasViyaClient.get('/scoreDefinitions/definitions', {
-    params: { filter, limit: 100 },
+  return fetchAllPaginated<ScoreDefinitionSummary>('/scoreDefinitions/definitions', {
+    params: { filter },
     headers: {
       Accept: 'application/vnd.sas.collection+json, application/json',
       'Accept-Item': 'application/vnd.sas.score.definition+json',
     },
+    pageSize: 100,
   });
-
-  return response.data.items ?? [];
 };
 
 /**

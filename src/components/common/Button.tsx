@@ -3,6 +3,14 @@
 
 import React from 'react';
 
+/**
+ * Which variant to use — the convention every dialog and toolbar follows:
+ * - `primary`   the one confirming / main action ("Save", "Score", "Import")
+ * - `tertiary`  cancel, close, back — the quiet way out of a dialog
+ * - `danger`    a destructive confirmation ("Delete", "Remove") — never the trigger
+ *               in a list row, only the confirm step
+ * - `secondary` a real alternative action alongside the primary ("Export", "Refresh")
+ */
 export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger';
 export type ButtonSize = 'small' | 'medium' | 'large';
 

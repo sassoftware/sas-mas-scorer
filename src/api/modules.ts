@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { apiClient, sasViyaClient, SAS_CONTENT_TYPES } from './client';
+import { fetchAllPaginated, paginateCollection } from './paginate';
 import {
   Module,
   ModuleCollection,
@@ -42,6 +43,25 @@ export const getModules = async (params: GetModulesParams = {}): Promise<ModuleC
     },
   });
   return response.data;
+};
+
+/**
+ * Every module matching `filter`/`sortBy`, for client-side filtering that the
+ * MAS filter grammar cannot express (module type is derived from stepsIds).
+ * One request when the service honours the large page; continues correctly
+ * when it caps the page instead.
+ */
+const ALL_MODULES_PAGE_SIZE = 10000;
+
+export const getAllModules = async (
+  params: Pick<GetModulesParams, 'filter' | 'sortBy'> = {}
+): Promise<Module[]> => {
+  return fetchAllPaginated<Module>('/modules', {
+    client: apiClient,
+    params: { filter: params.filter, sortBy: params.sortBy },
+    headers: { Accept: SAS_CONTENT_TYPES.COLLECTION },
+    pageSize: ALL_MODULES_PAGE_SIZE,
+  });
 };
 
 export const getModule = async (moduleId: string): Promise<Module> => {
@@ -129,6 +149,18 @@ export const getSubmodules = async (
     }
   );
   return response.data;
+};
+
+/**
+ * All submodules of a module. `getSubmodules` returns one page (the service
+ * default would be 10, our default 20), which a decision flow published to
+ * MAS routinely exceeds; this walks the whole collection.
+ */
+export const getAllSubmodules = async (moduleId: string): Promise<Submodule[]> => {
+  return fetchAllPaginated<Submodule>(`/modules/${moduleId}/submodules`, {
+    client: apiClient,
+    headers: { Accept: SAS_CONTENT_TYPES.COLLECTION },
+  });
 };
 
 export const getSubmodule = async (
@@ -258,15 +290,19 @@ export const getPublishedModelInfo = async (publishName: string): Promise<Publis
   };
 };
 
-// Fetch entries for Reference Data domains (Data type modules)
+// Fetch entries for Reference Data domains (Data type modules). The entries
+// collection defaults to 10 items, so it is walked page by page; `count` is
+// the total the service reported (or the number of items received when it
+// reports none), so a caller can tell when the walk hit the page cap.
 export const getEntries = async (sourceURI: string): Promise<EntriesResponse> => {
   // sourceURI is a relative path like /referenceData/domains/{id}
   // We need to append /entries to get the entries
   const entriesPath = `${sourceURI}/entries`;
-  const response = await sasViyaClient.get<EntriesResponse>(entriesPath, {
-    headers: {
-      Accept: 'application/json',
-    },
+  const result = await paginateCollection<Entry>(entriesPath, {
+    headers: { Accept: 'application/json' },
   });
-  return response.data;
+  return {
+    items: result.items,
+    count: result.total ?? result.items.length,
+  };
 };

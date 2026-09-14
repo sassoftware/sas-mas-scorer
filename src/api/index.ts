@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export * from './client';
+export * from './paginate';
 export * from './modules';
 export * from './steps';
 export * from './cas';

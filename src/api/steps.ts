@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { apiClient, SAS_CONTENT_TYPES } from './client';
+import { fetchAllPaginated } from './paginate';
 import {
   Step,
   StepCollection,
@@ -26,6 +27,18 @@ export const getSteps = async (
     }
   );
   return response.data;
+};
+
+/**
+ * All steps of a module. `getSteps` returns one page (default 20), which a
+ * Python module registered with one step per function can exceed; this walks
+ * the whole collection so step lists and deep links see every step.
+ */
+export const getAllSteps = async (moduleId: string): Promise<Step[]> => {
+  return fetchAllPaginated<Step>(`/modules/${moduleId}/steps`, {
+    client: apiClient,
+    headers: { Accept: SAS_CONTENT_TYPES.COLLECTION },
+  });
 };
 
 export const getStep = async (moduleId: string, stepId: string): Promise<Step> => {

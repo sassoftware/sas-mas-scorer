@@ -8,3 +8,7 @@ export * from './Badge';
 export * from './Alert';
 export * from './Card';
 export * from './DecimalInput';
+export * from './IconButton';
+export * from './Modal';
+export * from './EmptyState';
+export * from './SearchInput';

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
+import { IconButton } from './IconButton';
 
 export type AlertVariant = 'success' | 'warning' | 'error' | 'info';
 
@@ -51,11 +52,11 @@ export const Alert: React.FC<AlertProps> = ({
         <div className="sas-alert__message">{children}</div>
       </div>
       {dismissible && onClose && (
-        <button className="sas-alert__close" onClick={onClose} aria-label="Close alert">
+        <IconButton size="small" className="sas-alert__close" onClick={onClose} aria-label="Close alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </IconButton>
       )}
     </div>
   );

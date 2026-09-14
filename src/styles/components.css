@@ -9,9 +9,17 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   font-weight: var(--font-weight-medium);
+  /* Every variant shares this 1px border box so --secondary (which colours
+     the border) is the same height as --primary/--tertiary/--danger. */
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
   white-space: nowrap;
+}
+
+.sas-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .sas-button--small {
@@ -41,7 +49,7 @@
 .sas-button--secondary {
   background-color: var(--sas-white);
   color: var(--sas-blue-primary);
-  border: 1px solid var(--sas-blue-primary);
+  border-color: var(--sas-blue-primary); /* width/style come from .sas-button */
 }
 
 .sas-button--secondary:hover:not(:disabled) {
@@ -75,13 +83,13 @@
 }
 
 .sas-button__spinner {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .sas-button__icon {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 @keyframes spin {
@@ -89,7 +97,61 @@
   to { transform: rotate(360deg); }
 }
 
-/* Badge Component */
+/* Icon Button Component — a square, icon-only control (IconButton.tsx) */
+.sas-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--sas-gray-600);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sas-icon-button:hover:not(:disabled) {
+  color: var(--sas-gray-900);
+  background-color: var(--sas-gray-100);
+}
+
+.sas-icon-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.sas-icon-button--small {
+  width: var(--icon-lg);   /* 24px — WCAG 2.5.8 minimum target */
+  height: var(--icon-lg);
+}
+
+.sas-icon-button--small svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.sas-icon-button--medium {
+  width: 32px;
+  height: 32px;
+}
+
+.sas-icon-button--medium svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.sas-icon-button--danger {
+  color: var(--sas-error-dark);
+}
+
+.sas-icon-button--danger:hover:not(:disabled) {
+  color: var(--sas-white);
+  background-color: var(--sas-error-dark);
+}
+
+/* Badge Component — each variant pairs a *-light ground with its *-dark text
+   token; the tokens are tuned so every pair clears 4.5:1 at 11px. */
 .sas-badge {
   display: inline-flex;
   align-items: center;
@@ -98,12 +160,12 @@
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-full);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .sas-badge--small {
   padding: 2px var(--space-1);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .sas-badge--default {
@@ -143,27 +205,31 @@
 .sas-alert--success {
   background-color: var(--sas-success-light);
   border-color: var(--sas-success);
+  color: var(--sas-success-dark);
 }
 
 .sas-alert--warning {
   background-color: var(--sas-warning-light);
   border-color: var(--sas-warning);
+  color: var(--sas-warning-dark);
 }
 
 .sas-alert--error {
   background-color: var(--sas-error-light);
   border-color: var(--sas-error);
+  color: var(--sas-error-dark);
 }
 
 .sas-alert--info {
   background-color: var(--sas-info-light);
   border-color: var(--sas-info);
+  color: var(--sas-info-dark);
 }
 
 .sas-alert__icon {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 .sas-alert__content {
@@ -175,16 +241,10 @@
   margin-bottom: var(--space-1);
 }
 
-.sas-alert__close {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  color: var(--sas-gray-600);
-}
-
-.sas-alert__close:hover {
-  color: var(--sas-gray-800);
+/* Rendered as <IconButton size="small">; only the colour is alert-specific. */
+.sas-alert__close.sas-icon-button {
+  align-self: flex-start;
+  color: inherit;
 }
 
 /* Card Component */
@@ -202,6 +262,15 @@
 .sas-card--padding-small { padding: var(--space-3); }
 .sas-card--padding-medium { padding: var(--space-4); }
 .sas-card--padding-large { padding: var(--space-6); }
+
+/* A card composed from CardHeader/CardBody/CardFooter lets those parts own
+   the spacing, so the card's own padding modifier must not stack on top
+   (and the header/footer rules must reach the card edges). Direct-child
+   combinator so a Card nested inside another card's body cannot zero the
+   outer card. */
+.sas-card:has(> .sas-card__header, > .sas-card__body, > .sas-card__footer) {
+  padding: 0;
+}
 
 .sas-card__header {
   display: flex;
@@ -273,6 +342,46 @@
   z-index: var(--z-modal-backdrop);
 }
 
+/* Empty State Component (EmptyState.tsx) */
+.sas-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  color: var(--sas-text-muted);
+}
+
+.sas-empty-state__icon {
+  display: flex;
+  color: var(--sas-gray-400);
+}
+
+.sas-empty-state__icon svg {
+  width: var(--icon-2xl);
+  height: var(--icon-2xl);
+}
+
+.sas-empty-state__title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+}
+
+.sas-empty-state__hint {
+  margin: 0;
+  max-width: 48ch;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.sas-empty-state__action {
+  margin-top: var(--space-2);
+}
+
 /* Skeleton Loading */
 .sas-skeleton {
   display: flex;
@@ -313,7 +422,7 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-700);
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
   white-space: nowrap;
 }
 
@@ -330,8 +439,35 @@
   background-color: var(--sas-blue-light);
 }
 
-.sas-table--clickable .sas-table__row {
+/* Clickable rows: the whole row reacts to the mouse, and the first cell
+   carries a real <button> (.sas-table__row-button) so the same navigation is
+   reachable by keyboard — a focusable element inside a cell, not
+   role="button" on the <tr>. */
+.sas-table--clickable .sas-table__row,
+.sas-table__row--clickable {
   cursor: pointer;
+}
+
+.sas-table__row--clickable:focus-within {
+  background-color: var(--sas-blue-light);
+}
+
+.sas-table__row-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sas-table__row-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .sas-table__row--selected {
@@ -341,23 +477,6 @@
 .sas-table__td {
   padding: var(--space-3) var(--space-4);
   vertical-align: middle;
-}
-
-.sas-table__loading,
-.sas-table__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-12);
-  color: var(--sas-gray-500);
-}
-
-.sas-table__empty-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--sas-gray-400);
 }
 
 /* Form Inputs */
@@ -376,13 +495,13 @@
 .sas-textarea:focus {
   outline: none;
   border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 3px var(--sas-blue-light);
+  box-shadow: var(--focus-ring);
 }
 
 .sas-input:disabled,
 .sas-textarea:disabled {
   background-color: var(--sas-gray-100);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-disabled);
   cursor: not-allowed;
 }
 
@@ -393,5 +512,122 @@
 
 .sas-input::placeholder,
 .sas-textarea::placeholder {
+  color: var(--sas-text-muted);
+}
+
+/* Search Input Component (SearchInput.tsx) */
+.sas-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sas-search__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+.sas-search__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sas-search__icon {
+  position: absolute;
+  left: var(--space-3);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--sas-gray-400);
+  pointer-events: none;
+}
+
+.sas-search__input.sas-input {
+  padding-left: calc(var(--space-3) + var(--icon-sm) + var(--space-2));
+  padding-right: calc(var(--space-2) + var(--icon-lg) + var(--space-2));
+}
+
+/* The browser's own clear affordance would duplicate the IconButton */
+.sas-search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.sas-search__clear {
+  position: absolute;
+  right: var(--space-2);
+}
+
+/* Modal Component (Modal.tsx) */
+.sas-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background-color: var(--sas-overlay-bg);
+  z-index: var(--z-modal-backdrop);
+}
+
+.sas-modal-backdrop--elevated {
+  z-index: var(--z-modal-elevated);
+}
+
+.sas-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100%;
+  color: var(--sas-gray-900);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-modal);
+  outline: none; /* the dialog itself takes initial focus; the ring belongs on its controls */
+}
+
+.sas-modal--small { max-width: 400px; }
+.sas-modal--medium { max-width: 560px; }
+.sas-modal--large { max-width: 720px; }
+.sas-modal--wide { max-width: 960px; }
+
+.sas-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.sas-modal__title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sas-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.sas-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border-top: 1px solid var(--sas-gray-200);
+}
+
+/* Header controls sit on the (possibly custom) environment colour, where the
+   blue focus outline can vanish — draw it in the header foreground instead. */
+.sas-header :focus-visible {
+  outline-color: var(--env-header-fg, var(--sas-white));
 }

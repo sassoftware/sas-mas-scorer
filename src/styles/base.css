@@ -47,6 +47,15 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Keyboard focus: one visible ring for every focusable element.
+   Controls that draw their own ring (.sas-input etc.) set outline: none and
+   use box-shadow: var(--focus-ring) instead; on coloured surfaces override
+   outline-color (see .sas-header rules in components.css). */
+:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
 button {
   font-family: inherit;
   font-size: inherit;
