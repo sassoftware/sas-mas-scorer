@@ -122,6 +122,7 @@
   /* Layout */
   --header-height: 56px;
   --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
 
   /* Z-Index Scale.
      Modal layers sit above every hard-coded z-index in the app (feature CSS

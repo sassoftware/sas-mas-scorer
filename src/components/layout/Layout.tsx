@@ -7,6 +7,8 @@ import { Sidebar, ViewType } from './Sidebar';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
+const NAV_COLLAPSED_KEY = 'mas-scorer:nav-collapsed';
+
 interface LayoutProps {
   children: React.ReactNode;
   activeView: ViewType;
@@ -35,6 +37,26 @@ export const Layout: React.FC<LayoutProps> = ({
   // Below the layout breakpoint (layout.css) the sidebar is an off-canvas
   // drawer behind the header's toggle; above it these have no visible effect.
   const [navOpen, setNavOpen] = useState(false);
+
+  // Above the breakpoint the user can fold the sidebar to an icon rail. Default
+  // expanded; the choice persists per browser and survives a republish.
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(NAV_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? '1' : '0');
+    } catch {
+      // Storage unavailable (private window, embed): the choice lasts the session.
+    }
+  }, [navCollapsed]);
+  const toggleCollapsed = useCallback(() => {
+    setNavCollapsed((collapsed) => !collapsed);
+  }, []);
   const sidebarId = useId();
   const sidebarRef = useRef<HTMLElement>(null);
   const navToggleRef = useRef<HTMLButtonElement>(null);
@@ -93,7 +115,7 @@ export const Layout: React.FC<LayoutProps> = ({
   );
 
   return (
-    <div className="sas-layout">
+    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}`}>
       <Header
         onOpenSettings={onOpenSettings}
         activeConnectionName={activeConnectionName}
@@ -107,6 +129,8 @@ export const Layout: React.FC<LayoutProps> = ({
           ref={sidebarRef}
           id={sidebarId}
           open={navOpen}
+          collapsed={navCollapsed}
+          onToggleCollapsed={toggleCollapsed}
           activeView={activeView}
           onNavigate={handleNavigate}
           selectedModule={selectedModule}

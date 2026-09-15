@@ -802,9 +802,111 @@
   }
 }
 
+
+/* Collapsible sidebar (wide layouts only). The user can fold the sidebar to an
+   icon rail to give the page more room; the choice is remembered per browser.
+   Below the layout breakpoint the sidebar is a drawer and this has no effect. */
+.sas-sidebar__collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 32px; /* minimum pointer target */
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.sas-sidebar__collapse:hover {
+  background-color: var(--sas-gray-100);
+  color: var(--sas-gray-900);
+}
+
+.sas-sidebar__collapse svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 769px) {
+  .sas-sidebar {
+    transition: width var(--transition-normal);
+  }
+
+  .sas-layout__main {
+    transition: margin-left var(--transition-normal);
+  }
+
+  .sas-layout--nav-collapsed .sas-layout__main {
+    margin-left: var(--sidebar-collapsed-width);
+  }
+
+  .sas-sidebar--collapsed {
+    width: var(--sidebar-collapsed-width);
+    overflow-x: hidden;
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__nav {
+    padding: var(--space-4) var(--space-2);
+  }
+
+  /* Labels stay in the accessibility tree; only the paint goes. */
+  .sas-sidebar--collapsed .sas-sidebar__section-title,
+  .sas-sidebar--collapsed .sas-sidebar__module-name,
+  .sas-sidebar--collapsed .sas-sidebar__module-id,
+  .sas-sidebar--collapsed .sas-sidebar__menu-item span,
+  .sas-sidebar--collapsed .sas-sidebar__collapse span,
+  .sas-sidebar--collapsed .sas-sidebar__version {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Recent lists have no icons, so there is nothing to show in the rail. */
+  .sas-sidebar--collapsed .sas-sidebar__section:has(.sas-sidebar__recent-list) {
+    display: none;
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__menu-item {
+    justify-content: center;
+    padding: var(--space-2);
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__current-module {
+    padding: var(--space-1) 0;
+    background: none;
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__footer {
+    padding: var(--space-2);
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__collapse {
+    justify-content: center;
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .sas-sidebar__collapse {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sas-sidebar,
-  .sas-sidebar--open {
+  .sas-sidebar--open,
+  .sas-layout__main,
+  .sas-sidebar__collapse {
     transition: none;
   }
 }

@@ -19,6 +19,9 @@ interface SidebarProps {
   id?: string;
   /** Off-canvas state on narrow viewports; ignored above the layout breakpoint. */
   open?: boolean;
+  /** Icon-only rail on wide viewports; ignored below the layout breakpoint. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Sidebar(
@@ -32,6 +35,8 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
     onSelectUIApp,
     id,
     open = false,
+    collapsed = false,
+    onToggleCollapsed,
   },
   ref
 ) {
@@ -41,7 +46,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
     <aside
       ref={ref}
       id={id}
-      className={`sas-sidebar ${open ? 'sas-sidebar--open' : ''}`}
+      className={`sas-sidebar ${open ? 'sas-sidebar--open' : ''} ${collapsed ? 'sas-sidebar--collapsed' : ''}`}
       tabIndex={-1}
     >
       <nav className="sas-sidebar__nav" aria-label="Main">
@@ -54,7 +59,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'modules' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('modules')}
-              >
+              title={collapsed ? 'All Modules' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
@@ -67,7 +72,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   isUIView || activeView === 'ui-apps' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('ui-apps')}
-              >
+              title={collapsed ? 'UI Apps' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="3" width="7" height="7" rx="1" />
                   <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -83,7 +88,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'flows' || activeView === 'flow-detail' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('flows')}
-              >
+              title={collapsed ? 'View Flows' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="5" r="2" />
                   <circle cx="6" cy="19" r="2" />
@@ -99,7 +104,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'coverage' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('coverage')}
-              >
+              title={collapsed ? 'Test Coverage' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
@@ -112,7 +117,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'publishing-overview' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('publishing-overview')}
-              >
+              title={collapsed ? 'Publishing Overview' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 3v12" />
                   <path d="M7 8l5-5 5 5" />
@@ -127,7 +132,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'schema-builder' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('schema-builder')}
-              >
+              title={collapsed ? 'Schema → Code' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
                 </svg>
@@ -140,7 +145,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   activeView === 'rules-import' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
                 onClick={() => onNavigate('rules-import')}
-              >
+              title={collapsed ? 'Rules Import' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 16V4" />
                   <path d="M7 9l5-5 5 5" />
@@ -157,7 +162,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                     : ''
                 }`}
                 onClick={() => onNavigate('job-monitoring')}
-              >
+              title={collapsed ? 'Job Monitoring' : undefined}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 7v5l3 2" />
@@ -181,7 +186,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                       activeView === 'module-details' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
                     onClick={() => onNavigate('module-details')}
-                  >
+                  title={collapsed ? 'Details' : undefined}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -194,7 +199,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                       activeView === 'score' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
                     onClick={() => onNavigate('score')}
-                  >
+                  title={collapsed ? 'Execute Score' : undefined}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                       <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -245,6 +250,20 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
       </nav>
 
       <div className="sas-sidebar__footer">
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            className="sas-sidebar__collapse"
+            aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {collapsed ? <path d="M13 6l6 6-6 6M5 6l6 6-6 6" /> : <path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" />}
+            </svg>
+            <span>Collapse</span>
+          </button>
+        )}
         <div className="sas-sidebar__version">MAS Scorer v{__APP_VERSION__}</div>
       </div>
     </aside>
