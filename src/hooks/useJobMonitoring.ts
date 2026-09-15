@@ -240,6 +240,11 @@ export const useJobMonitoring = (
   const [completedHasMore, setCompletedHasMore] = useState<boolean>(false);
   const [completedLoading, setCompletedLoading] = useState<boolean>(enabled);
   const [completedError, setCompletedError] = useState<string | null>(null);
+  // Page size the service actually applies (the echoed `limit`, if it caps
+  // our request). The ref drives the page offset without re-creating
+  // fetchCompleted; the state feeds the table's range labels.
+  const effectivePageSizeRef = useRef<number>(pageSize);
+  const [effectivePageSize, setEffectivePageSize] = useState<number>(pageSize);
   const [page, setPageState] = useState<number>(0);
   const [search, setSearchState] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
@@ -463,15 +468,24 @@ export const useJobMonitoring = (
     setCompletedError(null);
     try {
       const result = await getCompletedJobs({
-        start: page * pageSize,
+        start: page * effectivePageSizeRef.current,
         limit: pageSize,
         filter: buildCompletedFilter(debouncedSearch, stateFilter),
         sortBy,
       });
       if (!mountedRef.current) return;
       if (tick !== completedTickRef.current) return;
+      // The service may cap the page below what we asked for. Its echoed
+      // `limit` is the real page size: "more available" is measured against
+      // it (a capped-but-full page still has more), and it becomes the page
+      // stride so the next page starts where this one ended.
+      const echoedLimit =
+        typeof result.limit === 'number' && result.limit > 0 ? result.limit : pageSize;
+      const appliedPageSize = Math.min(pageSize, echoedLimit);
+      effectivePageSizeRef.current = appliedPageSize;
+      setEffectivePageSize(appliedPageSize);
       setCompletedJobs(result.items);
-      setCompletedHasMore(result.items.length === pageSize);
+      setCompletedHasMore(result.items.length > 0 && result.items.length >= appliedPageSize);
       setCompletedBackoff(false);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -591,7 +605,7 @@ export const useJobMonitoring = (
       completedError,
       completedHasMore,
       page,
-      pageSize,
+      pageSize: effectivePageSize,
       search,
       stateFilter,
       sortBy,
@@ -616,7 +630,7 @@ export const useJobMonitoring = (
       completedError,
       completedHasMore,
       page,
-      pageSize,
+      effectivePageSize,
       search,
       stateFilter,
       sortBy,

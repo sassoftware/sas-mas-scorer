@@ -1,10 +1,10 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { UIDefinition } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
-import { buildShareHash, buildShareLink } from '../../utils/shareLink';
+import { encodeUIDefinition } from '../../utils/shareLink';
 
 interface Props {
   definition: UIDefinition;
@@ -26,8 +26,12 @@ export const ShareDialog: React.FC<Props> = ({ definition, onClose }) => {
   }, [onClose]);
 
   const standalone = mode === 'standalone';
-  const fullLink = buildShareLink(definition, standalone);
-  const suffix = buildShareHash(definition, standalone);
+  // Encoding stringifies and base64-encodes the whole definition; do it once
+  // per definition, not on every mode toggle / "Copied!" re-render. The two
+  // strings below are composed exactly as buildShareHash / buildShareLink do.
+  const token = useMemo(() => encodeUIDefinition(definition), [definition]);
+  const suffix = `#/ui-apps/${encodeURIComponent(definition.id)}?def=${token}${standalone ? '&standalone=true' : ''}`;
+  const fullLink = `${window.location.origin}${window.location.pathname}${suffix}`;
 
   const copy = async (text: string, which: 'link' | 'suffix') => {
     try {

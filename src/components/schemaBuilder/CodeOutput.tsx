@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-python';
@@ -19,9 +19,13 @@ interface Props {
 export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput }) => {
   const [copied, setCopied] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
+  const codeRef = useRef<HTMLElement>(null);
 
+  // Highlight this block only — highlightAll() would re-tokenize every Prism
+  // block in the document. The line-numbers plugin hooks `complete`, which
+  // highlightElement fires too.
   useEffect(() => {
-    if (code) Prism.highlightAll();
+    if (code && codeRef.current) Prism.highlightElement(codeRef.current);
   }, [code]);
 
   const handleCopy = async () => {
@@ -58,7 +62,7 @@ export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput }) =
         </Button>
       </div>
       <pre className="schema-builder__code-pre line-numbers language-python">
-        <code className="language-python">{code}</code>
+        <code ref={codeRef} className="language-python">{code}</code>
       </pre>
       <SaveToSidDialog code={code} signature={signature} exampleInput={exampleInput} open={saveOpen} onClose={() => setSaveOpen(false)} />
     </div>

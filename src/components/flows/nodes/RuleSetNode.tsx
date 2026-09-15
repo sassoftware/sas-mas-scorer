@@ -54,12 +54,12 @@ export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
               justifyContent: 'center',
             }}
           >
-            <span style={{ ...pill, color: '#ffffff', backgroundColor: colors.border }}>
+            <span style={{ ...pill, color: 'var(--sas-white)', backgroundColor: colors.badge }}>
               Rule Set
             </span>
             {issues > 0 && (
               <span
-                style={{ ...pill, color: '#ffffff', backgroundColor: '#dc2626' }}
+                style={{ ...pill, color: 'var(--sas-white)', backgroundColor: 'var(--sas-error-dark)' }}
                 title={`${issues} element${issues === 1 ? '' : 's'} reported invalid by SAS Intelligent Decisioning`}
               >
                 &#9888; {issues}
@@ -70,7 +70,7 @@ export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
             {data.label}
           </div>
           {subtitle && (
-            <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>
+            <div style={{ fontSize: '10px', color: 'var(--sas-gray-600)', marginTop: '2px' }}>
               {subtitle}
             </div>
           )}

@@ -1,6 +1,26 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ExecutionJobState } from '../../types/jobExecution';
+
+// Display labels for job states. The API values are camelCase ('timedOut')
+// and US-spelled ('canceled'); the badge, the filter chips and the stats
+// caption all read from here so one screen never mixes spellings or shows
+// "TIMEDOUT" without a word break.
+export const STATE_LABELS: Record<ExecutionJobState, string> = {
+  pending: 'Pending',
+  running: 'Running',
+  paused: 'Paused',
+  completed: 'Completed',
+  failed: 'Failed',
+  canceled: 'Canceled',
+  timedOut: 'Timed Out',
+};
+
+// Label for a state, falling back to the raw value for anything unexpected.
+export const formatJobState = (state: ExecutionJobState): string =>
+  STATE_LABELS[state] ?? state;
+
 // Format a millisecond duration as "1h 23m", "1m 14s", or "12s".
 export const formatDuration = (ms: number | null | undefined): string => {
   if (!ms || ms < 0) return '—';

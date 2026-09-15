@@ -7,6 +7,16 @@ import { StepParameter } from '../../types';
 import { getCompatibleWidgets, getDefaultWidget } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
 import { Button } from '../common/Button';
+import { IconButton } from '../common/IconButton';
+
+/** Default colour for a new gauge stop: SAS brand blue (--sas-blue-primary). */
+const DEFAULT_STOP_COLOR = '#0066B2';
+
+const CloseIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
 
 interface Props {
   field: UIField;
@@ -124,7 +134,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
       ...field.validation,
       gaugeConfig: {
         ...config,
-        colorStops: [...stops, { upTo: 100, color: '#1976d2' }],
+        colorStops: [...stops, { upTo: 100, color: DEFAULT_STOP_COLOR }],
       },
     });
   };
@@ -162,7 +172,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
     <div className="ui-builder__config-panel">
       <div className="ui-builder__config-header">
         <h4>Configure: {field.label}</h4>
-        <button className="ui-builder__config-close" onClick={onClose}>&times;</button>
+        <IconButton size="medium" onClick={onClose} title="Close" aria-label="Close configuration panel">
+          <CloseIcon />
+        </IconButton>
       </div>
 
       <div className="ui-builder__config-body">
@@ -426,10 +438,15 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   value={String(opt.value)}
                   onChange={(e) => handleOptionChange(i, 'value', e.target.value)}
                 />
-                <button
-                  className="ui-builder__option-remove"
+                <IconButton
+                  size="small"
+                  variant="danger"
                   onClick={() => handleRemoveOption(i)}
-                >&times;</button>
+                  title="Remove option"
+                  aria-label="Remove option"
+                >
+                  <CloseIcon />
+                </IconButton>
               </div>
             ))}
             <Button variant="tertiary" size="small" onClick={handleAddOption}>
@@ -489,10 +506,15 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   value={mapping.to}
                   onChange={(e) => handleMappingChange(i, 'to', e.target.value)}
                 />
-                <button
-                  className="ui-builder__option-remove"
+                <IconButton
+                  size="small"
+                  variant="danger"
                   onClick={() => handleRemoveMapping(i)}
-                >&times;</button>
+                  title="Remove mapping"
+                  aria-label="Remove mapping"
+                >
+                  <CloseIcon />
+                </IconButton>
               </div>
             ))}
             <Button variant="tertiary" size="small" onClick={handleAddMapping}>
@@ -560,13 +582,19 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   <input
                     type="color"
                     className="ui-builder__color-input"
-                    value={stop.color.startsWith('#') ? stop.color : '#1976d2'}
+                    value={stop.color.startsWith('#') ? stop.color : DEFAULT_STOP_COLOR}
                     onChange={(e) => handleColorStopChange(i, 'color', e.target.value)}
+                    aria-label="Stop color"
                   />
-                  <button
-                    className="ui-builder__option-remove"
+                  <IconButton
+                    size="small"
+                    variant="danger"
                     onClick={() => handleRemoveColorStop(i)}
-                  >&times;</button>
+                    title="Remove color stop"
+                    aria-label="Remove color stop"
+                  >
+                    <CloseIcon />
+                  </IconButton>
                 </div>
               ))}
               {(field.validation?.gaugeConfig?.colorStops ?? []).length === 0 && (

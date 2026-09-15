@@ -6,18 +6,18 @@
 .ui-builder {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 /* Toolbar */
 .ui-builder__toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--sas-white, #fff);
-  border: 1px solid var(--sas-gray-200, #e0e0e0);
-  border-radius: 8px;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
   flex-wrap: wrap;
 }
 
@@ -29,287 +29,241 @@
 .ui-builder__toolbar-center {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
 .ui-builder__toolbar-right {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ui-builder__name-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .ui-builder__name-input {
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
 }
 
 .ui-builder__desc-input {
-  font-size: 0.85rem;
-  color: var(--sas-gray-600, #666);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
 }
 
 .ui-builder__option-group {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 .ui-builder__option-label {
-  font-weight: 500;
-  color: var(--sas-gray-600, #666);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-text-muted);
   white-space: nowrap;
 }
 
 .ui-builder__col-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--sas-gray-300, #ccc);
-  border-radius: 4px;
-  background: var(--sas-white, #fff);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  background: var(--sas-white);
   cursor: pointer;
-  font-weight: 600;
-  color: var(--sas-gray-600, #666);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-text-muted);
 }
 
 .ui-builder__col-btn--active {
-  background: var(--sas-blue, #1976d2);
-  color: #fff;
-  border-color: var(--sas-blue, #1976d2);
+  background: var(--sas-blue-primary);
+  color: var(--sas-white);
+  border-color: var(--sas-blue-primary);
 }
 
 .ui-builder__select {
   max-width: 140px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 .ui-builder__submit-input {
   max-width: 120px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 /* Canvas */
 .ui-builder__canvas-wrapper {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ui-builder__canvas {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 /* Section */
 .ui-builder__section {
-  background: var(--sas-white, #fff);
-  border: 1px solid var(--sas-gray-200, #e0e0e0);
-  border-radius: 8px;
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .ui-builder__section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--sas-gray-50, #f5f5f5);
-  border-bottom: 1px solid var(--sas-gray-200, #e0e0e0);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--sas-gray-50);
+  border-bottom: 1px solid var(--sas-gray-200);
 }
 
 .ui-builder__section-title-input {
   flex: 1;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
   border: 1px dashed transparent;
   background: transparent;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.15s;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
 }
 
 .ui-builder__section-title-input:hover {
-  border-color: var(--sas-gray-300, #ccc);
-  background: var(--sas-white, #fff);
+  border-color: var(--sas-gray-300);
+  background: var(--sas-white);
 }
 
+/* Replaces the outline with the shared ring + a solid blue border (same
+   treatment as .sas-input:focus) so the dashed idle border does not show. */
 .ui-builder__section-title-input:focus {
   outline: none;
-  background: var(--sas-white, #fff);
-  border-color: var(--sas-blue, #1976d2);
+  background: var(--sas-white);
+  border-color: var(--sas-blue-primary);
   border-style: solid;
+  box-shadow: var(--focus-ring);
 }
 
-.ui-builder__section-remove {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--sas-red, #d32f2f);
-  font-size: 1.2rem;
-  border-radius: 4px;
-}
-
-.ui-builder__section-remove:hover {
-  background: var(--sas-red-50, #fce4ec);
-}
-
-.ui-builder__section-move {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ui-builder__move-btn {
-  width: 24px;
-  height: 16px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--sas-gray-400, #999);
-  font-size: 0.65rem;
-  padding: 0;
-  line-height: 1;
-  border-radius: 2px;
-}
-
-.ui-builder__move-btn:hover:not(:disabled) {
-  color: var(--sas-blue, #1976d2);
-  background: var(--sas-blue-50, #e3f2fd);
-}
-
-.ui-builder__move-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-/* Field List */
-.ui-builder__field-list {
-  padding: 4px;
-}
-
-.ui-builder__field-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.ui-builder__field-row:hover {
-  background: var(--sas-gray-50, #f5f5f5);
-}
-
-.ui-builder__field-row--selected {
-  background: var(--sas-blue-50, #e3f2fd);
-  border-color: var(--sas-blue, #1976d2);
-}
-
-.ui-builder__field-row--hidden {
-  opacity: 0.5;
-}
-
+/* Stacked move up / move down IconButtons for sections and fields */
+.ui-builder__section-move,
 .ui-builder__field-move {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
+/* Field List */
+.ui-builder__field-list {
+  padding: var(--space-1);
+}
+
+.ui-builder__field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ui-builder__field-row:hover {
+  background: var(--sas-gray-50);
+}
+
+.ui-builder__field-row--selected {
+  background: var(--sas-blue-light);
+  border-color: var(--sas-blue-primary);
+}
+
+.ui-builder__field-row--hidden {
+  opacity: 0.5;
+}
+
+/* The selectable part of a row is a real <button> (aria-pressed carries the
+   selected state) so the config panel opens from the keyboard; it sits beside
+   the move/remove buttons instead of wrapping them. */
 .ui-builder__field-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
 }
 
 .ui-builder__field-label {
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
 }
 
 .ui-builder__field-meta {
-  font-size: 0.75rem;
-  color: var(--sas-gray-500, #888);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
 }
 
 .ui-builder__field-badges {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-.ui-builder__hidden-badge {
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  background: var(--sas-gray-200, #e0e0e0);
-  border-radius: 4px;
-  color: var(--sas-gray-600, #666);
-}
-
+/* Inline "nothing here" note inside a section; the list-level empty states
+   use the shared EmptyState component. */
 .ui-builder__field-empty {
-  padding: 16px;
+  padding: var(--space-4);
   text-align: center;
-  color: var(--sas-gray-400, #999);
-  font-size: 0.85rem;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 /* Config Panel */
 .ui-builder__config-panel {
   width: 320px;
   min-width: 320px;
-  background: var(--sas-white, #fff);
-  border: 1px solid var(--sas-gray-200, #e0e0e0);
-  border-radius: 8px;
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   align-self: flex-start;
   position: sticky;
-  top: 16px;
+  top: var(--space-4);
 }
 
 .ui-builder__config-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--sas-gray-50, #f5f5f5);
-  border-bottom: 1px solid var(--sas-gray-200, #e0e0e0);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-gray-50);
+  border-bottom: 1px solid var(--sas-gray-200);
 }
 
 .ui-builder__config-header h4 {
   margin: 0;
-  font-size: 0.9rem;
-}
-
-.ui-builder__config-close {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  color: var(--sas-gray-500, #888);
-  border-radius: 4px;
-}
-
-.ui-builder__config-close:hover {
-  background: var(--sas-gray-100, #eee);
+  font-size: var(--font-size-sm);
 }
 
 .ui-builder__config-body {
-  padding: 16px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   max-height: 60vh;
   overflow-y: auto;
 }
@@ -317,18 +271,18 @@
 .ui-builder__config-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .ui-builder__config-field > label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--sas-gray-600, #666);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-text-muted);
 }
 
 .ui-builder__config-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ui-builder__config-row .ui-builder__config-field {
@@ -337,20 +291,20 @@
 
 .ui-builder__option-row {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .ui-builder__option-row .sas-input {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   min-width: 0;
 }
 
 .ui-builder__mapping-arrow {
-  font-size: 1rem;
-  color: var(--sas-gray-500, #888);
+  font-size: var(--font-size-base);
+  color: var(--sas-text-muted);
   flex-shrink: 0;
 }
 
@@ -358,141 +312,103 @@
   width: 36px;
   height: 30px;
   padding: 2px;
-  border: 1px solid var(--sas-gray-300, #ccc);
-  border-radius: 4px;
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.ui-builder__option-remove {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--sas-red, #d32f2f);
-  font-size: 1rem;
-}
-
 /* Config section titles */
 .ui-builder__config-section-title {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--sas-gray-500, #888);
-  padding-top: 8px;
-  border-top: 1px solid var(--sas-gray-200, #e0e0e0);
-  margin-top: 4px;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--sas-gray-700);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--sas-gray-200);
+  margin-top: var(--space-1);
 }
 
 .ui-builder__config-type-hint {
-  font-size: 0.75rem;
-  color: var(--sas-gray-500, #888);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
   font-style: italic;
-}
-
-/* Direction badges in field rows */
-.ui-builder__direction-badge {
-  display: inline-block;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  vertical-align: middle;
-}
-
-.ui-builder__direction-badge--input {
-  background: var(--sas-blue-50, #e3f2fd);
-  color: var(--sas-blue, #1976d2);
-}
-
-.ui-builder__direction-badge--output {
-  background: var(--sas-green-50, #e8f5e9);
-  color: var(--sas-green, #388e3c);
 }
 
 /* Markdown editor textarea */
 .ui-builder__markdown-editor {
-  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
   resize: vertical;
   min-height: 120px;
 }
 
 /* Field list actions */
 .ui-builder__field-list-actions {
-  padding: 4px 12px 8px;
+  padding: var(--space-1) var(--space-3) var(--space-2);
   display: flex;
   gap: 6px;
-}
-
-/* Static direction badge */
-.ui-builder__direction-badge--static {
-  background: var(--sas-yellow-50, #fff8e1);
-  color: var(--sas-yellow-800, #f57f17);
 }
 
 /* Preview */
 .ui-builder__preview {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
-.ui-builder__preview-banner {
+/* === Replace Module Dialog (rendered inside <Modal>) === */
+
+.replace-module__body {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--sas-yellow-50, #fff8e1);
-  border: 1px solid var(--sas-yellow, #f9a825);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  color: var(--sas-gray-700, #555);
+  flex-direction: column;
+  gap: var(--space-4);
 }
-
-/* === Replace Module Dialog === */
 
 .replace-module__current {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .replace-module__current-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
 }
 
 .replace-module__current-id {
-  color: var(--sas-gray-500, #888);
-  font-size: 0.8rem;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-xs);
 }
 
 .replace-module__list {
   max-height: 280px;
   overflow-y: auto;
-  border: 1px solid var(--sas-gray-200, #e0e0e0);
-  border-radius: 6px;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
 }
 
+/* The 3px selection bar is reserved on every row so selecting one does not
+   shift its content sideways. */
 .replace-module__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: none;
-  border-bottom: 1px solid var(--sas-gray-100, #f0f0f0);
-  background: var(--sas-white, #fff);
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--sas-gray-100);
+  background: var(--sas-white);
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s;
+  transition: background-color var(--transition-fast);
 }
 
 .replace-module__item:last-child {
@@ -500,17 +416,27 @@
 }
 
 .replace-module__item:hover {
-  background-color: var(--sas-gray-50, #f8f8f8);
+  background-color: var(--sas-gray-50);
+}
+
+/* Inside a scrolling list the default offset ring would be clipped */
+.replace-module__item:focus-visible {
+  outline-offset: -2px;
 }
 
 .replace-module__item--selected {
-  background-color: var(--sas-primary-light, #e3f2fd);
-  border-left: 3px solid var(--sas-primary, #005db6);
+  background-color: var(--sas-blue-light);
+  border-left-color: var(--sas-blue-primary);
 }
 
 .replace-module__search-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
+}
+
+.replace-module__search-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .replace-module__search-row select {
@@ -526,82 +452,62 @@
 }
 
 .replace-module__item-name {
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: var(--sas-gray-900, #222);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
 }
 
 .replace-module__item-id {
-  font-size: 0.75rem;
-  color: var(--sas-gray-500, #888);
-}
-
-.replace-module__empty {
-  padding: 24px;
-  text-align: center;
-  color: var(--sas-gray-500, #888);
-  font-size: 0.85rem;
-}
-
-.replace-module__error {
-  color: var(--sas-error, #d32f2f);
-  font-size: 0.85rem;
-  padding: 8px 0;
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
 }
 
 .replace-module__step-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .replace-module__step-params {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: var(--sas-gray-600, #666);
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
 }
 
 .replace-module__mapping-info {
-  font-size: 0.85rem;
-  color: var(--sas-gray-600, #666);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
   margin: 0;
 }
 
 .replace-module__mapping-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .replace-module__mapping-title {
   margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--sas-gray-700, #555);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
+/* Mapping table: .sas-table (inside .sas-table__wrapper) supplies the head
+   band, cell padding and type; these rules add only what is specific here.
+   The min-width makes the wrapper scroll in a narrow embed instead of
+   crushing the parameter names and selects. */
 .replace-module__mapping-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
+  min-width: 560px;
 }
 
-.replace-module__mapping-table th {
+/* DataTable aligns its headers inline; this hand-written table needs it here */
+.replace-module__mapping-table .sas-table__th {
   text-align: left;
-  padding: 6px 8px;
-  font-weight: 600;
-  color: var(--sas-gray-600, #666);
-  border-bottom: 2px solid var(--sas-gray-200, #e0e0e0);
-}
-
-.replace-module__mapping-table td {
-  padding: 8px;
-  border-bottom: 1px solid var(--sas-gray-100, #f0f0f0);
-  vertical-align: middle;
 }
 
 .replace-module__mapping-table select {
@@ -609,44 +515,29 @@
 }
 
 .replace-module__arrow {
-  text-align: center;
-  color: var(--sas-gray-400, #aaa);
-  font-size: 1.1rem;
   width: 30px;
+  padding-left: var(--space-1);
+  padding-right: var(--space-1);
+  text-align: center;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-md);
 }
 
 .replace-module__param-name {
   display: block;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .replace-module__param-id {
   display: block;
-  font-size: 0.75rem;
-  color: var(--sas-gray-500, #888);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
 }
 
 .replace-module__param-type {
-  font-weight: 400;
-  color: var(--sas-gray-500, #888);
-  font-size: 0.8rem;
-}
-
-.replace-module__mapping-warn {
-  font-size: 0.85rem;
-  color: var(--sas-warning, #e65100);
-  padding: 8px 12px;
-  background: var(--sas-yellow-50, #fff8e1);
-  border-radius: 6px;
-}
-
-.replace-module__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--sas-gray-200, #e0e0e0);
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-xs);
 }
 
 /* === Share Dialog === */
@@ -654,16 +545,16 @@
 .share-dialog__modes {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .share-dialog__mode {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
   cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--sas-gray-700, #555);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
 }
 
 .share-dialog__mode input {
@@ -673,12 +564,30 @@
 .share-dialog__link-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .share-dialog__link-row .save-scenario-dialog__input {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-family-mono, monospace);
-  font-size: 0.8rem;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ui-builder__toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ui-builder__canvas-wrapper {
+    flex-direction: column;
+  }
+
+  .ui-builder__config-panel {
+    width: 100%;
+    min-width: auto;
+    position: static;
+  }
 }

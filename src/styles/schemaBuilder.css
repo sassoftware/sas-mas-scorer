@@ -93,8 +93,10 @@
   gap: var(--space-1);
 }
 
+/* Content-sized on desktop; may compress below 280px in a narrow VA embed */
 .schema-builder__field--inline {
-  min-width: 280px;
+  flex: 0 1 280px;
+  min-width: 0;
 }
 
 .schema-builder__field label {
@@ -107,27 +109,7 @@
   color: var(--sas-error);
 }
 
-.schema-builder__input,
-.schema-builder__textarea,
-.schema-builder__schema-input {
-  font-family: var(--font-family-primary);
-  font-size: var(--font-size-base);
-  color: var(--sas-gray-900);
-  background: var(--sas-white);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
-  transition: border-color var(--transition-fast);
-}
-
-.schema-builder__input:focus,
-.schema-builder__textarea:focus,
-.schema-builder__schema-input:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
-}
-
+/* Text controls are .sas-input / .sas-textarea; only the deltas live here */
 .schema-builder__input--mono {
   font-family: var(--font-family-mono);
 }
@@ -136,15 +118,18 @@
   border-color: var(--sas-error);
 }
 
+/* rows={2} description box — keep it two lines, not .sas-textarea's 80px floor */
+.schema-builder__textarea {
+  min-height: 0;
+}
+
 .schema-builder__hint {
   font-size: var(--font-size-xs);
   color: var(--sas-gray-500);
 }
 
 .schema-builder__schema-input {
-  width: 100%;
-  min-height: 320px;
-  resize: vertical;
+  min-height: min(320px, 40vh);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
@@ -159,29 +144,23 @@
   border-radius: var(--radius-md);
 }
 
+/* Built on .sas-table; only the density differs from the shared table
+   (see components.css — a shared compact modifier would replace these). */
 .schema-builder__table {
-  width: 100%;
-  border-collapse: collapse;
   font-size: var(--font-size-sm);
 }
 
-.schema-builder__table th {
+.schema-builder__table .sas-table__th {
   text-align: left;
   padding: var(--space-2) var(--space-3);
-  background: var(--sas-gray-100);
-  color: var(--sas-gray-700);
-  font-weight: var(--font-weight-semibold);
-  border-bottom: 1px solid var(--sas-gray-200);
-  white-space: nowrap;
 }
 
-.schema-builder__table td {
+.schema-builder__table .sas-table__td {
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--sas-gray-100);
   vertical-align: top;
 }
 
-.schema-builder__table tr:last-child td {
+.schema-builder__table .sas-table__row:last-child {
   border-bottom: none;
 }
 
@@ -189,22 +168,40 @@
   background: var(--sas-blue-lighter);
 }
 
-.sb-col-num { width: 36px; color: var(--sas-gray-500); }
-.sb-col-length { width: 96px; }
-.sb-col-actions { width: 40px; text-align: center; }
-.sb-col-source code {
+.schema-builder__col-num { width: 36px; color: var(--sas-gray-500); }
+.schema-builder__col-length { width: 96px; }
+.schema-builder__col-actions { width: 40px; text-align: center; }
+.schema-builder__col-source code {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   color: var(--sas-gray-700);
 }
 
-.schema-builder__var-input {
+/* Compact in-row controls; all three share one focus treatment */
+.schema-builder__var-input,
+.schema-builder__length-input {
   width: 100%;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   border: 1px solid var(--sas-gray-300);
   border-radius: var(--radius-sm);
   padding: var(--space-1) var(--space-2);
+}
+
+.schema-builder__type-select {
+  font-size: var(--font-size-sm);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  background: var(--sas-white);
+}
+
+.schema-builder__var-input:focus,
+.schema-builder__length-input:focus,
+.schema-builder__type-select:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: var(--focus-ring);
 }
 
 .schema-builder__var-input--error {
@@ -226,46 +223,15 @@
   margin-top: 2px;
 }
 
-.schema-builder__length-input {
-  width: 100%;
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-}
-
 .schema-builder__length-na {
   color: var(--sas-gray-400);
   padding-left: var(--space-2);
-}
-
-.schema-builder__type-select {
-  font-size: var(--font-size-sm);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
-  background: var(--sas-white);
 }
 
 .schema-builder__sample-val {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   color: var(--sas-gray-600);
-}
-
-.schema-builder__row-delete {
-  background: none;
-  border: none;
-  color: var(--sas-gray-400);
-  font-size: var(--font-size-lg);
-  line-height: 1;
-  cursor: pointer;
-  padding: 0 var(--space-1);
-}
-
-.schema-builder__row-delete:hover {
-  color: var(--sas-error);
 }
 
 .schema-builder__empty {
@@ -310,29 +276,12 @@
   cursor: pointer;
 }
 
-/* DataGrid output advisory */
+/* DataGrid output advisory — rendered inside <Alert variant="warning">;
+   this wrapper only spaces the intro, the per-variable cards and the warning */
 .schema-builder__dg-notes {
-  border: 1px solid #fcd34d;
-  background: #fffbeb;
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-.schema-builder__dg-notes-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-weight: var(--font-weight-semibold);
-  color: #92400e;
-}
-
-.schema-builder__dg-notes-header svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
 }
 
 .schema-builder__dg-notes-intro,
@@ -345,9 +294,9 @@
 }
 
 .schema-builder__dg-notes-warning {
-  border-top: 1px dashed #fcd34d;
+  border-top: 1px dashed var(--sas-warning);
   padding-top: var(--space-3);
-  color: #92400e;
+  color: var(--sas-warning-dark);
 }
 
 .schema-builder__dg-note {
@@ -384,13 +333,13 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  background: var(--sas-gray-900, #1e293b);
+  background: var(--sas-gray-900);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
 
 .schema-builder__dg-note-code code {
-  color: #e2e8f0;
+  color: var(--sas-gray-200);
   font-size: var(--font-size-sm);
   word-break: break-all;
 }
@@ -399,7 +348,7 @@
   flex-shrink: 0;
   border: 1px solid var(--sas-gray-600);
   background: transparent;
-  color: #e2e8f0;
+  color: var(--sas-gray-200);
   font-size: var(--font-size-xs);
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
@@ -408,6 +357,11 @@
 
 .schema-builder__dg-note-copy:hover {
   background: var(--sas-gray-700);
+}
+
+/* Sits on the dark code panel, where the blue outline would vanish */
+.schema-builder__dg-note-copy:focus-visible {
+  outline-color: var(--sas-white);
 }
 
 /* Type legend */
@@ -420,95 +374,65 @@
   color: var(--sas-gray-700);
 }
 
+/* Seven type hues. Each chip pairs a light tint with a dark ink of the same
+   hue (the .sas-badge recipe; every pair clears 4.5:1 at 11px); the saturated
+   accent is only ever used as a border, never under text. */
+.schema-builder__legend,
+.schema-builder__table {
+  --sb-type-character-tint: #DBEAFE;
+  --sb-type-character-ink: #1E40AF;
+  --sb-type-character-accent: #60A5FA;
+  --sb-type-integer-tint: #EDE9FE;
+  --sb-type-integer-ink: #5B21B6;
+  --sb-type-integer-accent: #A78BFA;
+  --sb-type-decimal-tint: #FEF3C7;
+  --sb-type-decimal-ink: #92400E;
+  --sb-type-decimal-accent: #F59E0B;
+  --sb-type-boolean-tint: #D1FAE5;
+  --sb-type-boolean-ink: #065F46;
+  --sb-type-boolean-accent: #34D399;
+  --sb-type-date-tint: #FFEDD5;
+  --sb-type-date-ink: #9A3412;
+  --sb-type-date-accent: #FB923C;
+  --sb-type-datetime-tint: #FCE7F3;
+  --sb-type-datetime-ink: #9D174D;
+  --sb-type-datetime-accent: #F472B6;
+  --sb-type-datagrid-tint: #E0F2FE;
+  --sb-type-datagrid-ink: #075985;
+  --sb-type-datagrid-accent: #38BDF8;
+}
+
 .schema-builder__type-chip {
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  color: var(--sas-white);
 }
 
-.schema-builder__type--character { background: #60a5fa; }
-.schema-builder__type--integer { background: #a78bfa; }
-.schema-builder__type--decimal { background: #f59e0b; }
-.schema-builder__type--boolean { background: #34d399; }
-.schema-builder__type--date { background: #fb923c; }
-.schema-builder__type--datetime { background: #f472b6; }
-.schema-builder__type--datagrid { background: #38bdf8; }
+/* Scoped to the legend chip: the row <select> carries the same modifier but
+   must keep its white background and dark text */
+.schema-builder__type-chip.schema-builder__type--character { background: var(--sb-type-character-tint); color: var(--sb-type-character-ink); }
+.schema-builder__type-chip.schema-builder__type--integer { background: var(--sb-type-integer-tint); color: var(--sb-type-integer-ink); }
+.schema-builder__type-chip.schema-builder__type--decimal { background: var(--sb-type-decimal-tint); color: var(--sb-type-decimal-ink); }
+.schema-builder__type-chip.schema-builder__type--boolean { background: var(--sb-type-boolean-tint); color: var(--sb-type-boolean-ink); }
+.schema-builder__type-chip.schema-builder__type--date { background: var(--sb-type-date-tint); color: var(--sb-type-date-ink); }
+.schema-builder__type-chip.schema-builder__type--datetime { background: var(--sb-type-datetime-tint); color: var(--sb-type-datetime-ink); }
+.schema-builder__type-chip.schema-builder__type--datagrid { background: var(--sb-type-datagrid-tint); color: var(--sb-type-datagrid-ink); }
 
 /* Type-colored select borders for quick scanning */
-.schema-builder__type-select.schema-builder__type--character { border-left: 3px solid #60a5fa; }
-.schema-builder__type-select.schema-builder__type--integer { border-left: 3px solid #a78bfa; }
-.schema-builder__type-select.schema-builder__type--decimal { border-left: 3px solid #f59e0b; }
-.schema-builder__type-select.schema-builder__type--boolean { border-left: 3px solid #34d399; }
-.schema-builder__type-select.schema-builder__type--date { border-left: 3px solid #fb923c; }
-.schema-builder__type-select.schema-builder__type--datetime { border-left: 3px solid #f472b6; }
-.schema-builder__type-select.schema-builder__type--datagrid { border-left: 3px solid #38bdf8; }
+.schema-builder__type-select.schema-builder__type--character { border-left: 3px solid var(--sb-type-character-accent); }
+.schema-builder__type-select.schema-builder__type--integer { border-left: 3px solid var(--sb-type-integer-accent); }
+.schema-builder__type-select.schema-builder__type--decimal { border-left: 3px solid var(--sb-type-decimal-accent); }
+.schema-builder__type-select.schema-builder__type--boolean { border-left: 3px solid var(--sb-type-boolean-accent); }
+.schema-builder__type-select.schema-builder__type--date { border-left: 3px solid var(--sb-type-date-accent); }
+.schema-builder__type-select.schema-builder__type--datetime { border-left: 3px solid var(--sb-type-datetime-accent); }
+.schema-builder__type-select.schema-builder__type--datagrid { border-left: 3px solid var(--sb-type-datagrid-accent); }
 
-/* Save dialog */
-.schema-builder__dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: var(--space-4);
-}
-
-.schema-builder__dialog {
-  background: var(--sas-white);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  width: 100%;
-  max-width: 640px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.schema-builder__dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.schema-builder__dialog-header h2 {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  color: var(--sas-gray-900);
-}
-
-.schema-builder__dialog-close {
-  background: none;
-  border: none;
-  font-size: var(--font-size-2xl);
-  line-height: 1;
-  color: var(--sas-gray-500);
-  cursor: pointer;
-}
-
-.schema-builder__dialog-close:hover {
-  color: var(--sas-gray-900);
-}
-
-.schema-builder__dialog-body {
-  padding: var(--space-5);
-  overflow-y: auto;
+/* Save dialog (chrome comes from <Modal>) */
+.schema-builder__save-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.schema-builder__dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--sas-gray-200);
 }
 
 .schema-builder__mode-toggle {
@@ -527,11 +451,27 @@
   font-weight: var(--font-weight-medium);
   color: var(--sas-gray-700);
   cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+/* Guarded so the selected (white-on-blue) button never hovers to a pale tint */
+.schema-builder__mode-btn:hover:not(.schema-builder__mode-btn--active) {
+  background: var(--sas-blue-light);
+}
+
+/* Inside the clipped toggle an outset outline is cut off — draw it inset */
+.schema-builder__mode-btn:focus-visible {
+  outline-offset: -2px;
 }
 
 .schema-builder__mode-btn--active {
   background: var(--sas-blue-primary);
   color: var(--sas-white);
+}
+
+/* The inset blue outline would vanish on the blue selected button */
+.schema-builder__mode-btn--active:focus-visible {
+  outline-color: var(--sas-white);
 }
 
 .schema-builder__checkbox {

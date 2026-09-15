@@ -27,6 +27,12 @@
   margin: 0 auto;
 }
 
+/* Scrim behind the off-canvas sidebar; only rendered while it is open and
+   only visible below the layout breakpoint. */
+.sas-layout__scrim {
+  display: none;
+}
+
 /* Header */
 .sas-header {
   position: fixed;
@@ -37,10 +43,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   padding: 0 var(--space-4);
   /* --env-header-* properties are set per connection in the Electron app */
   background-color: var(--env-header-bg, var(--sas-blue-brand));
   color: var(--env-header-fg, var(--sas-white));
+  /* Default muted header text: 4.9:1 on the brand blue (12px labels need 4.5:1).
+     Overridden per environment colour by --env-header-fg-muted. */
+  --sas-header-fg-muted: rgba(255, 255, 255, 0.92);
   z-index: var(--z-sticky);
   box-shadow: var(--shadow-md);
 }
@@ -49,6 +59,29 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Off-canvas sidebar toggle — shown below the layout breakpoint only */
+.sas-header__nav-toggle {
+  display: none;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--env-header-fg, var(--sas-white));
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.sas-header__nav-toggle:hover {
+  background-color: var(--env-header-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.sas-header__nav-toggle svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .sas-header__logo {
@@ -75,8 +108,7 @@
 
 .sas-header__subtitle {
   font-size: var(--font-size-xs);
-  color: var(--env-header-fg-muted, var(--sas-gray-300));
-  opacity: 0.8;
+  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
 }
 
 .sas-header__nav {
@@ -86,7 +118,7 @@
 
 .sas-header__nav-link {
   padding: var(--space-2) var(--space-4);
-  color: var(--env-header-fg-muted, var(--sas-gray-300));
+  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
@@ -115,7 +147,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--env-header-fg-muted, var(--sas-gray-300));
+  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
@@ -133,10 +165,11 @@
 .sas-header__help-link {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--env-header-fg-muted, var(--sas-gray-300));
+  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
 }
@@ -178,7 +211,10 @@
   align-items: center;
   gap: var(--space-3);
   padding-right: var(--space-3);
+  /* Divider follows the header foreground so it stays visible on a light
+     environment colour; a per-connection --env-header-border wins if set. */
   border-right: 1px solid rgba(255, 255, 255, 0.2);
+  border-right-color: var(--env-header-border, color-mix(in srgb, currentColor 25%, transparent));
   margin-right: var(--space-1);
 }
 
@@ -225,7 +261,7 @@
 
 .sas-header__auth-text {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-300);
+  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
 }
 
 /* Sidebar */
@@ -243,6 +279,11 @@
   z-index: var(--z-sticky);
 }
 
+/* The drawer takes focus when it opens; keep the ring inside the panel. */
+.sas-sidebar:focus-visible {
+  outline-offset: -2px;
+}
+
 .sas-sidebar__nav {
   flex: 1;
   padding: var(--space-4);
@@ -255,9 +296,9 @@
 .sas-sidebar__section-title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
   margin-bottom: var(--space-2);
   padding: 0 var(--space-2);
 }
@@ -310,7 +351,7 @@
 
 .sas-sidebar__module-id {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-family: var(--font-family-mono);
   margin-bottom: var(--space-2);
 }
@@ -322,6 +363,7 @@
 .sas-sidebar__recent-item {
   display: block;
   width: 100%;
+  min-height: 32px; /* minimum pointer target */
   padding: var(--space-2);
   text-align: left;
   color: var(--sas-gray-600);
@@ -345,7 +387,7 @@
 
 .sas-sidebar__version {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-400);
+  color: var(--sas-text-muted);
   text-align: center;
 }
 
@@ -371,11 +413,14 @@
 }
 
 .sas-breadcrumbs__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px; /* minimum pointer target in a 12px row */
   color: var(--sas-blue-primary);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
+  padding: var(--space-2) 0;
 }
 
 .sas-breadcrumbs__link:hover {
@@ -426,4 +471,340 @@
 .sas-standalone .ui-runner {
   max-width: 1000px;
   margin: 0 auto;
+}
+
+/* Connection page (Electron first run — no connection configured yet) */
+.sas-connection-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-6);
+  background-color: var(--sas-gray-50);
+}
+
+.sas-connection-page__inner {
+  width: 100%;
+  max-width: 560px;
+}
+
+/* Connection Settings (Electron) — rendered inside a Card on the first-run
+   page and inside a Modal from the header's settings button. */
+.connection-settings__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}
+
+.connection-settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.connection-settings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-4);
+}
+
+.connection-settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.connection-settings__group--full {
+  grid-column: 1 / -1;
+}
+
+.connection-settings__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+.connection-settings__hint {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.connection-settings__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.connection-settings__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.connection-settings__swatch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.connection-settings__swatch {
+  position: relative;
+  display: inline-flex;
+  width: 32px; /* minimum pointer target */
+  height: 32px;
+  cursor: pointer;
+}
+
+/* The radio stays in the tree for keyboard and assistive tech; the coloured
+   circle next to it is what the user sees. */
+.connection-settings__swatch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.connection-settings__swatch-color {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-full);
+  color: var(--sas-white);
+}
+
+.connection-settings__swatch-input:checked + .connection-settings__swatch-color {
+  box-shadow: 0 0 0 2px var(--sas-white), 0 0 0 4px var(--sas-blue-primary);
+}
+
+.connection-settings__swatch-input:focus-visible + .connection-settings__swatch-color {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* The checked ring already occupies the 2-4px band, so the focus outline on the
+   checked swatch moves outward (gap at 4-6px, outline at 6-8px) to stay distinct */
+.connection-settings__swatch-input:checked:focus-visible + .connection-settings__swatch-color {
+  outline-offset: 6px;
+}
+
+/* Checkmark on the selected swatch; the shadow keeps it legible on a light colour */
+.connection-settings__swatch-check {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+}
+
+.connection-settings__custom-color {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.connection-settings__custom-color-input {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+}
+
+.connection-settings__custom-color--active .connection-settings__custom-color-input {
+  box-shadow: 0 0 0 2px var(--sas-white), 0 0 0 4px var(--sas-blue-primary);
+}
+
+/* Same as the checked swatch: keep the global focus outline clear of the active ring */
+.connection-settings__custom-color--active .connection-settings__custom-color-input:focus-visible {
+  outline-offset: 6px;
+}
+
+.connection-settings__empty {
+  padding: var(--space-6) 0;
+  text-align: center;
+  color: var(--sas-text-muted);
+}
+
+.connection-settings__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.connection-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
+}
+
+.connection-settings__row--active {
+  border-color: var(--sas-blue-primary);
+  background-color: var(--sas-blue-light);
+}
+
+.connection-settings__row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Same 8px dot as the header's connection indicator (same green) */
+.connection-settings__indicator {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background-color: var(--sas-gray-300);
+}
+
+.connection-settings__indicator--active {
+  background-color: var(--sas-success);
+}
+
+.connection-settings__color-chip {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex-shrink: 0;
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+}
+
+.connection-settings__row-text {
+  min-width: 0;
+}
+
+.connection-settings__row-name {
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-settings__active-label {
+  margin-left: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-success-dark);
+}
+
+.connection-settings__row-url {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-settings__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Narrow viewports (Visual Analytics / Job Execution embeds, small windows).
+   The sidebar becomes an off-canvas drawer behind the header's toggle and the
+   header drops its secondary text. The Electron window minimum (800px outer,
+   electron/main.ts) stays above this breakpoint, so the desktop app always
+   shows the full sidebar. */
+@media (max-width: 768px) {
+  .sas-layout__main {
+    margin-left: 0;
+  }
+
+  .sas-header {
+    padding: 0 var(--space-3);
+  }
+
+  .sas-header__nav-toggle {
+    display: flex;
+  }
+
+  .sas-header__subtitle {
+    display: none;
+  }
+
+  .sas-header__title-group {
+    min-width: 0;
+  }
+
+  .sas-header__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sas-header__actions {
+    gap: var(--space-2);
+  }
+
+  .sas-header__auth-text {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sas-sidebar {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--transition-normal), visibility 0s var(--transition-normal);
+  }
+
+  .sas-sidebar--open {
+    transform: none;
+    visibility: visible;
+    box-shadow: var(--shadow-xl);
+    transition: transform var(--transition-normal), visibility 0s;
+  }
+
+  .sas-layout__scrim {
+    display: block;
+    position: fixed;
+    inset: var(--header-height) 0 0 0;
+    background-color: var(--sas-overlay-bg);
+    z-index: calc(var(--z-sticky) - 1);
+  }
+}
+
+@media (max-width: 600px) {
+  .sas-layout__content,
+  .sas-standalone {
+    padding: var(--space-3);
+  }
+
+  .sas-header__title {
+    font-size: var(--font-size-base);
+  }
+
+  .sas-header__auth-text {
+    max-width: 96px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sas-sidebar,
+  .sas-sidebar--open {
+    transition: none;
+  }
 }

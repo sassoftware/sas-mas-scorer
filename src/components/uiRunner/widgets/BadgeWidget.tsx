@@ -3,36 +3,42 @@
 
 import React from 'react';
 import { UIField } from '../../../types/uiBuilder';
+import { BadgeVariant } from '../../common/Badge';
 
 interface Props {
   field: UIField;
   value: unknown;
 }
 
-const colorMap: Record<string, string> = {
-  accept: 'var(--sas-green, #388e3c)',
-  approve: 'var(--sas-green, #388e3c)',
-  approved: 'var(--sas-green, #388e3c)',
-  yes: 'var(--sas-green, #388e3c)',
-  pass: 'var(--sas-green, #388e3c)',
-  reject: 'var(--sas-red, #d32f2f)',
-  denied: 'var(--sas-red, #d32f2f)',
-  deny: 'var(--sas-red, #d32f2f)',
-  no: 'var(--sas-red, #d32f2f)',
-  fail: 'var(--sas-red, #d32f2f)',
-  review: 'var(--sas-yellow, #f9a825)',
-  pending: 'var(--sas-yellow, #f9a825)',
-  refer: 'var(--sas-yellow, #f9a825)',
+// Decision-style values map onto the shared .sas-badge variants, whose
+// light-ground / dark-text pairs are tuned to pass 4.5:1; anything else
+// renders as "info".
+const variantMap: Record<string, BadgeVariant> = {
+  accept: 'success',
+  approve: 'success',
+  approved: 'success',
+  yes: 'success',
+  pass: 'success',
+  reject: 'error',
+  denied: 'error',
+  deny: 'error',
+  no: 'error',
+  fail: 'error',
+  review: 'warning',
+  pending: 'warning',
+  refer: 'warning',
 };
 
-function getColor(val: string): string {
+function getVariant(val: string): BadgeVariant {
   const lower = val.toLowerCase().trim();
-  return colorMap[lower] ?? 'var(--sas-blue, #1976d2)';
+  return variantMap[lower] ?? 'info';
 }
+
+const badgeClass = (variant: BadgeVariant) => `sas-badge sas-badge--${variant} ui-runner__badge`;
 
 export const BadgeWidget: React.FC<Props> = ({ field, value }) => {
   if (value === null || value === undefined) {
-    return <span className="ui-runner__badge ui-runner__badge--null">--</span>;
+    return <span className={badgeClass('default')}>--</span>;
   }
 
   const rawStr = String(value);
@@ -55,10 +61,8 @@ export const BadgeWidget: React.FC<Props> = ({ field, value }) => {
     displayText = value.toFixed(decimals);
   }
 
-  const bg = getColor(displayText);
-
   return (
-    <span className="ui-runner__badge" style={{ backgroundColor: bg }}>
+    <span className={badgeClass(getVariant(displayText))}>
       {displayText}
     </span>
   );

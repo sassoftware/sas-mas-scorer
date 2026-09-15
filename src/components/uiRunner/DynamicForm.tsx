@@ -68,11 +68,13 @@ export const DynamicForm: React.FC<Props> = ({ layout, inputValues, outputValues
             className="ui-runner__section-header"
             onClick={() => toggleSection(section.id)}
             type="button"
+            aria-expanded={!isCollapsed}
           >
             <span className="ui-runner__section-title">{section.title}</span>
             <svg
               className={`ui-runner__section-chevron ${isCollapsed ? '' : 'ui-runner__section-chevron--open'}`}
               viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              aria-hidden="true"
             >
               <polyline points="6 9 12 15 18 9" />
             </svg>

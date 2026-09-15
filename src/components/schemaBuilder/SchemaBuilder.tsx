@@ -162,7 +162,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
                 value={inputVarName}
                 onChange={e => setInputVarName(e.target.value.replace(/[^A-Za-z0-9_]/g, ''))}
                 maxLength={32}
-                className="schema-builder__input schema-builder__input--mono"
+                className="sas-input schema-builder__input--mono"
               />
               <span className="schema-builder__hint">The SAS ID Character variable holding the raw string</span>
             </div>
@@ -180,7 +180,8 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
             </div>
           </div>
           <textarea
-            className="schema-builder__schema-input"
+            className="sas-textarea schema-builder__schema-input"
+            aria-label="Schema sample"
             placeholder="Paste your XML or JSON sample here..."
             value={inputText}
             onChange={e => setInputText(e.target.value)}

@@ -3,25 +3,31 @@
 
 import type { SidNodeType } from '../types/sid';
 
-/** Colors matching the SAS Intelligent Decisioning UI */
-export const NODE_COLORS: Record<SidNodeType, { bg: string; border: string; text: string }> = {
-  start:              { bg: '#ffffff', border: '#999999', text: '#333333' },
-  end:                { bg: '#ffffff', border: '#999999', text: '#333333' },
-  decision:           { bg: '#FDEAEB', border: '#E06050', text: '#333333' },
-  custom:             { bg: '#E0F2F1', border: '#26A69A', text: '#333333' },
-  ruleset:            { bg: '#DDEAF6', border: '#5B9BD5', text: '#333333' },
-  model:              { bg: '#E8DEF3', border: '#7B68AE', text: '#333333' },
-  code_file:          { bg: '#DDEAF6', border: '#5B9BD5', text: '#333333' },
-  condition:          { bg: '#FEF4D5', border: '#F4B942', text: '#333333' },
-  cond_expr:          { bg: '#FEF4D5', border: '#F4B942', text: '#333333' },
-  assignment:         { bg: '#E8F5E9', border: '#66BB6A', text: '#333333' },
-  abtest:             { bg: '#FFF3E0', border: '#FF9800', text: '#333333' },
-  parallel:           { bg: '#E3F2FD', border: '#42A5F5', text: '#333333' },
-  record_contact:     { bg: '#FCE4EC', border: '#EC407A', text: '#333333' },
-  treatment_group:    { bg: '#F3E5F5', border: '#AB47BC', text: '#333333' },
-  segmentation_tree:  { bg: '#E0F2F1', border: '#009688', text: '#333333' },
-  rest_api:           { bg: '#E8EAF6', border: '#3F51B5', text: '#333333' },
-  unknown:            { bg: '#F0F0F0', border: '#999999', text: '#333333' },
+/**
+ * Colors matching the SAS Intelligent Decisioning UI.
+ * `bg`/`border` draw the node; `text` is the label on `bg`; `badge` is a
+ * darker member of the same family for the type pill and the side-panel
+ * header chip, chosen so white text on it clears 4.5:1 (the `border` tints
+ * are too light for that — #5B9BD5 is 3:1, #FF9800 2.2:1).
+ */
+export const NODE_COLORS: Record<SidNodeType, { bg: string; border: string; text: string; badge: string }> = {
+  start:              { bg: '#ffffff', border: '#999999', text: '#333333', badge: '#595959' },
+  end:                { bg: '#ffffff', border: '#999999', text: '#333333', badge: '#595959' },
+  decision:           { bg: '#FDEAEB', border: '#E06050', text: '#333333', badge: '#B23A2C' },
+  custom:             { bg: '#E0F2F1', border: '#26A69A', text: '#333333', badge: '#00796B' },
+  ruleset:            { bg: '#DDEAF6', border: '#5B9BD5', text: '#333333', badge: '#2E6DA4' },
+  model:              { bg: '#E8DEF3', border: '#7B68AE', text: '#333333', badge: '#5A4A8C' },
+  code_file:          { bg: '#DDEAF6', border: '#5B9BD5', text: '#333333', badge: '#2E6DA4' },
+  condition:          { bg: '#FEF4D5', border: '#F4B942', text: '#333333', badge: '#8A5A00' },
+  cond_expr:          { bg: '#FEF4D5', border: '#F4B942', text: '#333333', badge: '#8A5A00' },
+  assignment:         { bg: '#E8F5E9', border: '#66BB6A', text: '#333333', badge: '#2E7031' },
+  abtest:             { bg: '#FFF3E0', border: '#FF9800', text: '#333333', badge: '#8A4B00' },
+  parallel:           { bg: '#E3F2FD', border: '#42A5F5', text: '#333333', badge: '#14579E' },
+  record_contact:     { bg: '#FCE4EC', border: '#EC407A', text: '#333333', badge: '#AD1457' },
+  treatment_group:    { bg: '#F3E5F5', border: '#AB47BC', text: '#333333', badge: '#6A1B9A' },
+  segmentation_tree:  { bg: '#E0F2F1', border: '#009688', text: '#333333', badge: '#00695C' },
+  rest_api:           { bg: '#E8EAF6', border: '#3F51B5', text: '#333333', badge: '#3F51B5' },
+  unknown:            { bg: '#F0F0F0', border: '#999999', text: '#333333', badge: '#595959' },
 };
 
 /** Map customObject.type values to our SidNodeType categories */

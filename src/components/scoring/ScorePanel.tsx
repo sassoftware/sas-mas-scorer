@@ -334,12 +334,9 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
           results[index] = result;
           completedCount++;
 
-          // Update progress
+          // Only the progress is published per row. The results table is not
+          // rendered while the batch runs, so the array is published once below.
           setBatchProgress({ current: completedCount, total: rows.length });
-
-          // Update results (sorted by rowIndex for consistent display)
-          const currentResults = results.filter(r => r !== undefined);
-          setBatchResults([...currentResults].sort((a, b) => a.rowIndex - b.rowIndex));
         }
       };
 
@@ -356,8 +353,9 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     const batchEndTime = performance.now();
     const totalRuntime = batchEndTime - batchStartTime;
 
-    // Sort final results (may be partial if stopped early)
-    const sortedResults = results.filter(r => r !== undefined).sort((a, b) => a.rowIndex - b.rowIndex);
+    // Each result sits at its own row index, so the filtered array is already
+    // in rowIndex order (it may be partial if stopped early).
+    const sortedResults = results.filter(r => r !== undefined);
     setBatchResults(sortedResults);
 
     // Calculate statistics on completed results
@@ -388,6 +386,16 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
   const handleStopBatch = useCallback(() => {
     batchAbortRef.current = true;
+  }, []);
+
+  // Leaving the panel mid-batch (breadcrumb, "Select Different Step") must not
+  // keep issuing scoring requests nobody will see: stop the worker loop on
+  // unmount. Requests already in flight (up to `concurrency`) still complete;
+  // cancelling those needs an AbortSignal on executeStep (src/api/steps.ts).
+  useEffect(() => {
+    return () => {
+      batchAbortRef.current = true;
+    };
   }, []);
 
   // Clear batch results
@@ -570,6 +578,11 @@ title;`;
 
     // --- Helper: Build input names/types for parallel ---
     const inputParamNames = (step.inputs ?? []).map(p => p.name);
+    const numericInputs = new Set(
+      (step.inputs ?? [])
+        .filter(p => ['decimal', 'integer', 'bigint'].includes(p.type))
+        .map(p => p.name)
+    );
 
     // --- PARALLEL MODE ---
     const pythonCode = `import requests
@@ -603,8 +616,7 @@ def score_row(index, row):
     """Score a single row and return the result."""
     payload = {
         "inputs": [${sampleInputs.map(inp => {
-          const param = (step.inputs ?? []).find(p => p.name === inp.name);
-          const isNumeric = param && ['decimal', 'integer', 'bigint'].includes(param.type);
+          const isNumeric = numericInputs.has(inp.name);
           return `{"name": "${inp.name}", "value": ${isNumeric ? `float(row["${inp.name}"])` : `row["${inp.name}"]`}}`;
         }).join(',\n                   ')}],
         "version": 1
@@ -674,8 +686,7 @@ console.log(\`Scoring \${inputRows.length} rows with \${nThreads} parallel worke
 async function scoreRow(index, row) {
   const payload = {
     inputs: [${sampleInputs.map(inp => {
-      const param = (step.inputs ?? []).find(p => p.name === inp.name);
-      const isNumeric = param && ['decimal', 'integer', 'bigint'].includes(param.type);
+      const isNumeric = numericInputs.has(inp.name);
       return `{ name: "${inp.name}", value: ${isNumeric ? `Number(row["${inp.name}"])` : `row["${inp.name}"]`} }`;
     }).join(',\n              ')}],
     version: 1
@@ -952,6 +963,18 @@ title;`;
     return { pythonCode, javascriptCode, sasCode };
   }, [module.id, step.id, step.inputs, step.outputs]);
 
+  // Built once per mode while the card is open, not on every keystroke in the
+  // input form (ScorePanel re-renders per character while it is mounted).
+  const apiCode = useMemo(
+    () => (showApiCall ? generateApiCode(apiCodeMode) : null),
+    [showApiCall, apiCodeMode, generateApiCode]
+  );
+  const apiCodeText = apiCodeLanguage === 'python'
+    ? apiCode?.pythonCode
+    : apiCodeLanguage === 'sas'
+    ? apiCode?.sasCode
+    : apiCode?.javascriptCode;
+
   // Build CSV string from batch results
   const buildResultsCsv = useCallback(() => {
     if (batchResults.length === 0) return '';
@@ -978,9 +1001,9 @@ title;`;
         row.push(toCsvValue(result.input[param]));
       });
 
+      const outputByName = new Map(result.output?.outputs?.map(o => [o.name, o.value]) ?? []);
       outputParams.forEach(param => {
-        const outputVar = result.output?.outputs?.find(o => o.name === param);
-        row.push(toCsvValue(outputVar?.value));
+        row.push(toCsvValue(outputByName.get(param)));
       });
 
       row.push(String(result.executionTime));
@@ -995,6 +1018,13 @@ title;`;
       ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
   }, [batchResults, sourceLink, moduleVersion]);
+
+  // The multi-megabyte CSV for a large batch is built when the upload dialog
+  // opens, not on every render while it is open; it is released on close.
+  const uploadCsv = useMemo(
+    () => (showCasUpload ? buildResultsCsv() : ''),
+    [showCasUpload, buildResultsCsv]
+  );
 
   // Download batch results as CSV
   const handleDownloadResults = useCallback(() => {
@@ -1102,11 +1132,7 @@ title;`;
                   variant="tertiary"
                   size="small"
                   onClick={() => {
-                    const codes = generateApiCode(apiCodeMode);
-                    const code = apiCodeLanguage === 'python' ? codes.pythonCode
-                      : apiCodeLanguage === 'sas' ? codes.sasCode
-                      : codes.javascriptCode;
-                    navigator.clipboard.writeText(code);
+                    if (apiCodeText) navigator.clipboard.writeText(apiCodeText);
                   }}
                 >
                   Copy Code
@@ -1137,13 +1163,7 @@ title;`;
               </Button>
             </div>
             <pre className="score-panel__source-code">
-              <code>
-                {apiCodeLanguage === 'python'
-                  ? generateApiCode(apiCodeMode).pythonCode
-                  : apiCodeLanguage === 'sas'
-                  ? generateApiCode(apiCodeMode).sasCode
-                  : generateApiCode(apiCodeMode).javascriptCode}
-              </code>
+              <code>{apiCodeText ?? ''}</code>
             </pre>
           </CardBody>
         </Card>
@@ -1344,7 +1364,8 @@ title;`;
       {/* CAS Upload Dialog */}
       {showCasUpload && (
         <CasUploadDialog
-          csvContent={buildResultsCsv()}
+          csvContent={uploadCsv}
+          rowCount={batchResults.length}
           defaultTableName={`${module.name}_${step.id}_results`.replace(/[^a-zA-Z0-9_]/g, '_')}
           onClose={() => setShowCasUpload(false)}
         />

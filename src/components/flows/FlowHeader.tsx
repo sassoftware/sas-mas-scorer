@@ -2,19 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { DecisionFlow, SignatureVar } from '../../types/sid';
+import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
+import type { RuleSetBundle } from '../../api/rulesets';
 import { formatTimestamp } from '../../utils/formatters';
 import { directionLabel, directionBadgeVariant } from '../../utils/direction';
 import { buildDecisionDeepLink } from '../../utils/deepLinks';
+import { Button } from '../common';
 import FlowDeepLink from './FlowDeepLink';
 import FlowExportButton from './FlowExportButton';
+import CollapsibleSection from './CollapsibleSection';
 
 interface FlowHeaderProps {
   flow: DecisionFlow;
   subDecisionCache?: Map<string, DecisionFlow>;
+  restApiCache?: Map<string, RestApiDefinitionDetail>;
+  ruleSetCache?: Map<string, RuleSetBundle>;
   onShowWorkflowHistory?: () => void;
 }
 
 const NULL_WF_ID = 'WF00000000-0000-0000-0000-000000000000';
+
+/**
+ * The workflow states SAS Intelligent Decisioning ships, keyed by the state
+ * name with case, spaces and punctuation removed. Any other state (a custom
+ * workflow) keeps the neutral base chip.
+ */
+const WF_STATE_VARIANT: Record<string, string> = {
+  developing: 'developing',
+  reviewready: 'review-ready',
+  approved: 'approved',
+  deploymentready: 'deployment-ready',
+};
+
+function wfBadgeClass(state?: string): string {
+  const key = (state ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const variant = WF_STATE_VARIANT[key];
+  return variant ? `flow-wf-badge flow-wf-badge--${variant}` : 'flow-wf-badge';
+}
 
 function defaultLength(dataType?: string): number {
   const t = (dataType ?? '').toLowerCase();
@@ -46,11 +70,11 @@ function MetaItem({ label, value, mono }: { label: string; value?: string; mono?
 function VarTable({ title, vars, badgeDirection }: { title: string; vars: SignatureVar[]; badgeDirection: string }) {
   return (
     <div className="flow-var-table">
-      <h4 className="flow-var-table__title">
+      <h5 className="flow-var-table__title">
         <span className={directionBadgeClass(badgeDirection)}>{directionLabel(badgeDirection)}</span>
-        {' '}{title} ({vars.length})
-      </h4>
-      <table className="flow-var-table__table">
+        {title} ({vars.length})
+      </h5>
+      <table className="flow-sp-table flow-sp-table--fixed">
         <thead>
           <tr>
             <th className="flow-var-table__col-name">Name</th>
@@ -82,7 +106,9 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
   );
 }
 
-export default function FlowHeader({ flow, subDecisionCache, onShowWorkflowHistory }: FlowHeaderProps) {
+export default function FlowHeader({
+  flow, subDecisionCache, restApiCache, ruleSetCache, onShowWorkflowHistory,
+}: FlowHeaderProps) {
   const sig = flow.signature ?? [];
   const inputs = sig.filter((v) => v.direction === 'input' || v.direction === 'inOut');
   const outputs = sig.filter((v) => v.direction === 'output' || v.direction === 'inOut');
@@ -103,14 +129,19 @@ export default function FlowHeader({ flow, subDecisionCache, onShowWorkflowHisto
           <h1 className="flow-header__title">{flow.name}</h1>
           {flow.description && <p className="flow-header__desc">{flow.description}</p>}
         </div>
-        <FlowExportButton flow={flow} subDecisionCache={subDecisionCache} />
+        <FlowExportButton
+          flow={flow}
+          subDecisionCache={subDecisionCache}
+          restApiCache={restApiCache}
+          ruleSetCache={ruleSetCache}
+        />
       </div>
 
       {/* Workflow status */}
       <div className="flow-header__workflow">
         {hasWorkflow ? (
           <>
-            <span className={`flow-wf-badge flow-wf-badge--${(wfState ?? '').toLowerCase().replace(/\s+/g, '-')}`}>
+            <span className={wfBadgeClass(wfState)}>
               {wfState ?? 'Active'}
             </span>
             {wfModifiedBy && (
@@ -119,13 +150,13 @@ export default function FlowHeader({ flow, subDecisionCache, onShowWorkflowHisto
               </span>
             )}
             {onShowWorkflowHistory && (
-              <button className="flow-wf-history-btn" onClick={onShowWorkflowHistory}>
+              <Button variant="secondary" size="small" onClick={onShowWorkflowHistory}>
                 View History
-              </button>
+              </Button>
             )}
           </>
         ) : (
-          <span className="flow-wf-badge flow-wf-badge--none">No Workflow</span>
+          <span className="flow-wf-badge">No Workflow</span>
         )}
       </div>
 
@@ -146,14 +177,13 @@ export default function FlowHeader({ flow, subDecisionCache, onShowWorkflowHisto
         </div>
       )}
       {sig.length > 0 && (
-        <details className="flow-header__vars-toggle">
-          <summary>Variables ({sig.length})</summary>
-          <div style={{ marginTop: '8px' }}>
+        <CollapsibleSection title={`Variables (${sig.length})`} defaultOpen={false}>
+          <div className="flow-header__vars">
             {inputs.length > 0 && <VarTable title="Input" vars={inputs} badgeDirection="input" />}
             {outputs.length > 0 && <VarTable title="Output" vars={outputs} badgeDirection="output" />}
             {temps.length > 0 && <VarTable title="Temporary" vars={temps} badgeDirection="none" />}
           </div>
-        </details>
+        </CollapsibleSection>
       )}
     </div>
   );

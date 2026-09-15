@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
+import { Modal } from '../common/Modal';
 import {
   getCasServers,
   getCaslibs,
@@ -16,12 +17,15 @@ import {
 
 interface CasUploadDialogProps {
   csvContent: string;
+  /** Number of data rows in `csvContent` (excluding the header). */
+  rowCount: number;
   defaultTableName: string;
   onClose: () => void;
 }
 
 export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
   csvContent,
+  rowCount,
   defaultTableName,
   onClose,
 }) => {
@@ -47,21 +51,27 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
 
   // Load CAS servers on mount
   useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
         const serverList = await getCasServers();
+        if (cancelled) return;
         setServers(serverList);
         if (serverList.length > 0) {
           setSelectedServer(serverList[0].name);
         }
       } catch (err: unknown) {
+        if (cancelled) return;
         const e = err as { message?: string };
         setError(e.message ?? 'Failed to load CAS servers');
       } finally {
-        setLoadingServers(false);
+        if (!cancelled) setLoadingServers(false);
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load caslibs when server changes
@@ -71,12 +81,14 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
       return;
     }
 
+    let cancelled = false;
     const load = async () => {
       setLoadingCaslibs(true);
       setSelectedCaslib('');
       setError(null);
       try {
         const caslibList = await getCaslibs(selectedServer);
+        if (cancelled) return;
         setCaslibs(caslibList);
         if (caslibList.length > 0) {
           // Prefer "Public" caslib if available
@@ -86,13 +98,17 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
           setSelectedCaslib(publicLib?.name ?? caslibList[0].name);
         }
       } catch (err: unknown) {
+        if (cancelled) return;
         const e = err as { message?: string };
         setError(e.message ?? 'Failed to load caslibs');
       } finally {
-        setLoadingCaslibs(false);
+        if (!cancelled) setLoadingCaslibs(false);
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedServer]);
 
   // Sanitize table name
@@ -155,163 +171,167 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
 
   const canUpload = selectedServer && selectedCaslib && tableName && !uploading;
 
-  // Count rows in CSV for display
-  const rowCount = csvContent.split('\n').filter(line => line.trim()).length - 1; // minus header
+  // An upload in flight cannot be abandoned from the dialog
+  const handleClose = useCallback(() => {
+    if (!uploading) onClose();
+  }, [uploading, onClose]);
 
   return (
-    <div className="cas-upload-overlay" onClick={onClose}>
-      <div className="cas-upload-dialog" onClick={e => e.stopPropagation()}>
-        <div className="cas-upload-dialog__header">
-          <h3>Upload to CAS</h3>
-          <button className="cas-upload-dialog__close" onClick={onClose}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="cas-upload-dialog__body">
-          {success ? (
-            <div className="cas-upload-dialog__success">
-              <Alert variant="success">
-                Table uploaded successfully!
-              </Alert>
-              <div className="cas-upload-dialog__result-info">
-                <div className="cas-upload-dialog__result-row">
-                  <span className="cas-upload-dialog__result-label">Server</span>
-                  <span className="cas-upload-dialog__result-value">{selectedServer}</span>
-                </div>
-                <div className="cas-upload-dialog__result-row">
-                  <span className="cas-upload-dialog__result-label">Caslib</span>
-                  <span className="cas-upload-dialog__result-value">{selectedCaslib}</span>
-                </div>
-                <div className="cas-upload-dialog__result-row">
-                  <span className="cas-upload-dialog__result-label">Table</span>
-                  <span className="cas-upload-dialog__result-value">{finalTableName}</span>
-                </div>
-                {success.tableInfo?.rowCount != null && (
-                  <div className="cas-upload-dialog__result-row">
-                    <span className="cas-upload-dialog__result-label">Rows</span>
-                    <span className="cas-upload-dialog__result-value">{success.tableInfo.rowCount}</span>
-                  </div>
-                )}
-                {success.tableInfo?.columnCount != null && (
-                  <div className="cas-upload-dialog__result-row">
-                    <span className="cas-upload-dialog__result-label">Columns</span>
-                    <span className="cas-upload-dialog__result-value">{success.tableInfo.columnCount}</span>
-                  </div>
-                )}
-              </div>
-              <div className="cas-upload-dialog__actions">
-                <Button variant="primary" onClick={onClose}>Done</Button>
-              </div>
+    <Modal
+      title="Upload to CAS"
+      onClose={handleClose}
+      closeOnBackdropClick={!uploading}
+      footer={
+        success ? (
+          <Button variant="primary" onClick={onClose}>Done</Button>
+        ) : (
+          <>
+            <Button variant="tertiary" onClick={onClose} disabled={uploading}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => handleUpload()}
+              disabled={!canUpload}
+              loading={uploading}
+            >
+              {uploading ? 'Uploading...' : 'Upload'}
+            </Button>
+          </>
+        )
+      }
+    >
+      {success ? (
+        <div className="cas-upload-dialog__success">
+          <Alert variant="success">
+            Table uploaded successfully!
+          </Alert>
+          {error && (
+            <Alert variant="warning">
+              {error}
+            </Alert>
+          )}
+          <div className="cas-upload-dialog__result-info">
+            <div className="cas-upload-dialog__result-row">
+              <span className="cas-upload-dialog__result-label">Server</span>
+              <span className="cas-upload-dialog__result-value">{selectedServer}</span>
             </div>
-          ) : (
-            <>
-              <p className="cas-upload-dialog__description">
-                Upload {rowCount} scored row{rowCount !== 1 ? 's' : ''} to a CAS table.
-              </p>
-
-              {/* Server selection */}
-              <div className="cas-upload-dialog__field">
-                <label className="cas-upload-dialog__label">CAS Server</label>
-                {loadingServers ? (
-                  <span className="cas-upload-dialog__loading">Loading servers...</span>
-                ) : (
-                  <select
-                    className="cas-upload-dialog__select"
-                    value={selectedServer}
-                    onChange={e => setSelectedServer(e.target.value)}
-                    disabled={uploading}
-                  >
-                    {servers.length === 0 && <option value="">No servers available</option>}
-                    {servers.map(s => (
-                      <option key={s.name} value={s.name}>{s.name}</option>
-                    ))}
-                  </select>
-                )}
+            <div className="cas-upload-dialog__result-row">
+              <span className="cas-upload-dialog__result-label">Caslib</span>
+              <span className="cas-upload-dialog__result-value">{selectedCaslib}</span>
+            </div>
+            <div className="cas-upload-dialog__result-row">
+              <span className="cas-upload-dialog__result-label">Table</span>
+              <span className="cas-upload-dialog__result-value">{finalTableName}</span>
+            </div>
+            {success.tableInfo?.rowCount != null && (
+              <div className="cas-upload-dialog__result-row">
+                <span className="cas-upload-dialog__result-label">Rows</span>
+                <span className="cas-upload-dialog__result-value">{success.tableInfo.rowCount}</span>
               </div>
-
-              {/* Caslib selection */}
-              <div className="cas-upload-dialog__field">
-                <label className="cas-upload-dialog__label">Caslib</label>
-                {loadingCaslibs ? (
-                  <span className="cas-upload-dialog__loading">Loading caslibs...</span>
-                ) : (
-                  <select
-                    className="cas-upload-dialog__select"
-                    value={selectedCaslib}
-                    onChange={e => setSelectedCaslib(e.target.value)}
-                    disabled={uploading || !selectedServer}
-                  >
-                    {caslibs.length === 0 && <option value="">No caslibs available</option>}
-                    {caslibs.map(c => (
-                      <option key={c.name} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
+            )}
+            {success.tableInfo?.columnCount != null && (
+              <div className="cas-upload-dialog__result-row">
+                <span className="cas-upload-dialog__result-label">Columns</span>
+                <span className="cas-upload-dialog__result-value">{success.tableInfo.columnCount}</span>
               </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="cas-upload-dialog__fields">
+          <p className="cas-upload-dialog__description">
+            Upload {rowCount} scored row{rowCount !== 1 ? 's' : ''} to a CAS table.
+          </p>
 
-              {/* Table name */}
-              <div className="cas-upload-dialog__field">
-                <label className="cas-upload-dialog__label">Table Name</label>
-                <input
-                  className="cas-upload-dialog__input"
-                  type="text"
-                  value={tableName}
-                  onChange={handleTableNameChange}
-                  placeholder="Enter table name"
-                  disabled={uploading}
-                />
-                <span className="cas-upload-dialog__hint">
-                  Only letters, numbers, and underscores allowed. A unique suffix will be appended automatically.
-                </span>
-              </div>
+          {/* Server selection */}
+          <div className="cas-upload-dialog__field">
+            <label className="cas-upload-dialog__label" htmlFor="cas-upload-server">CAS Server</label>
+            {loadingServers ? (
+              <span className="cas-upload-dialog__loading">Loading servers...</span>
+            ) : (
+              <select
+                id="cas-upload-server"
+                className="sas-input"
+                value={selectedServer}
+                onChange={e => setSelectedServer(e.target.value)}
+                disabled={uploading}
+              >
+                {servers.length === 0 && <option value="">No servers available</option>}
+                {servers.map(s => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
-              {/* Save to disk checkbox */}
-              <label className="cas-upload-dialog__checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={saveAfterUpload}
-                  onChange={e => setSaveAfterUpload(e.target.checked)}
-                  disabled={uploading}
-                />
-                <span>Save table to disk after upload</span>
-              </label>
+          {/* Caslib selection */}
+          <div className="cas-upload-dialog__field">
+            <label className="cas-upload-dialog__label" htmlFor="cas-upload-caslib">Caslib</label>
+            {loadingCaslibs ? (
+              <span className="cas-upload-dialog__loading">Loading caslibs...</span>
+            ) : (
+              <select
+                id="cas-upload-caslib"
+                className="sas-input"
+                value={selectedCaslib}
+                onChange={e => setSelectedCaslib(e.target.value)}
+                disabled={uploading || !selectedServer}
+              >
+                {caslibs.length === 0 && <option value="">No caslibs available</option>}
+                {caslibs.map(c => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
-              {/* Error */}
-              {error && (
-                <Alert variant="error">
-                  {error}
-                </Alert>
-              )}
+          {/* Table name */}
+          <div className="cas-upload-dialog__field">
+            <label className="cas-upload-dialog__label" htmlFor="cas-upload-table-name">Table Name</label>
+            <input
+              id="cas-upload-table-name"
+              className="sas-input"
+              type="text"
+              value={tableName}
+              onChange={handleTableNameChange}
+              placeholder="Enter table name"
+              disabled={uploading}
+              aria-describedby="cas-upload-table-name-hint"
+            />
+            <span className="cas-upload-dialog__hint" id="cas-upload-table-name-hint">
+              Only letters, numbers, and underscores allowed. A unique suffix will be appended automatically.
+            </span>
+          </div>
 
-              {/* Upload status */}
-              {uploading && uploadStatus && (
-                <div className="cas-upload-dialog__status">
-                  <div className="cas-upload-dialog__spinner" />
-                  <span>{uploadStatus}</span>
-                </div>
-              )}
+          {/* Save to disk checkbox */}
+          <label className="cas-upload-dialog__checkbox-label">
+            <input
+              type="checkbox"
+              checked={saveAfterUpload}
+              onChange={e => setSaveAfterUpload(e.target.checked)}
+              disabled={uploading}
+            />
+            <span>Save table to disk after upload</span>
+          </label>
 
-              {/* Actions */}
-              <div className="cas-upload-dialog__actions">
-                <Button variant="tertiary" onClick={onClose} disabled={uploading}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => handleUpload()}
-                  disabled={!canUpload}
-                >
-                  {uploading ? 'Uploading...' : 'Upload'}
-                </Button>
-              </div>
-            </>
+          {/* Error */}
+          {error && (
+            <Alert variant="error">
+              {error}
+            </Alert>
+          )}
+
+          {/* Upload status */}
+          {uploading && uploadStatus && (
+            <div className="cas-upload-dialog__status" role="status">
+              <div className="cas-upload-dialog__spinner" aria-hidden="true" />
+              <span>{uploadStatus}</span>
+            </div>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 };
 

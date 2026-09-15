@@ -1,7 +1,9 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect } from 'react';
+import React from 'react';
+import { Modal } from '../common/Modal';
+import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 
 interface ConfirmDialogProps {
@@ -13,7 +15,7 @@ interface ConfirmDialogProps {
   // so the button is red and the user has a moment to think twice.
   confirmVariant?: 'primary' | 'danger';
   // True while the underlying action is in flight; buttons are disabled and
-  // the confirm button shows a spinner. Backdrop / ESC are also no-ops so
+  // the confirm button shows a spinner. Backdrop / ESC / X are also no-ops so
   // the user can't accidentally dismiss mid-flight.
   busy?: boolean;
   error?: string | null;
@@ -21,6 +23,8 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
+// The chrome (scrim, z-index, Escape, focus trap, labelled dialog role) is
+// the shared <Modal>; this component only supplies the copy and the buttons.
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
   message,
@@ -32,43 +36,31 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) onCancel();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [busy, onCancel]);
+  const handleClose = () => {
+    if (!busy) onCancel();
+  };
 
   return (
-    <div
-      className="confirm-dialog__backdrop"
-      onClick={() => {
-        if (!busy) onCancel();
-      }}
-      role="presentation"
-    >
-      <div
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 id="confirm-dialog-title" className="confirm-dialog__title">
-          {title}
-        </h3>
-        <div className="confirm-dialog__message">{message}</div>
-        {error && <div className="confirm-dialog__error">{error}</div>}
-        <div className="confirm-dialog__actions">
+    <Modal
+      title={title}
+      size="small"
+      onClose={handleClose}
+      closeOnBackdropClick={!busy}
+      footer={
+        <>
           <Button variant="tertiary" onClick={onCancel} disabled={busy}>
             {cancelLabel}
           </Button>
           <Button variant={confirmVariant} onClick={onConfirm} loading={busy}>
             {confirmLabel}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <div className="confirm-dialog__body">
+        <div className="confirm-dialog__message">{message}</div>
+        {error && <Alert variant="error">{error}</Alert>}
       </div>
-    </div>
+    </Modal>
   );
 };

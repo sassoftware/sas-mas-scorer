@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId } from 'react';
 import { Button } from '../common/Button';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Alert } from '../common/Alert';
@@ -9,31 +9,84 @@ import { ENV_COLOR_PRESETS, applyEnvironmentColor } from '../../utils/envColor';
 
 const DEFAULT_HEADER_COLOR = '#0766D1'; // --sas-blue-brand, shown on the "Default" swatch
 
-const swatchStyle = (value: string, selected: boolean): React.CSSProperties => ({
-  width: '28px',
-  height: '28px',
-  borderRadius: '50%',
-  background: value,
-  border: '1px solid var(--sas-gray-300, #ccc)',
-  boxShadow: selected ? '0 0 0 2px var(--sas-white, #fff), 0 0 0 4px var(--sas-blue-primary, #0066B2)' : 'none',
-  cursor: 'pointer',
-  padding: 0,
-  flexShrink: 0,
-});
+/** The pieces of the current view that the surrounding chrome lays out. */
+export interface ConnectionSettingsFrameParts {
+  /** Heading for the current view ("Connections", "Add Connection", ...). */
+  title: string;
+  /** Header-level actions (the "Add Connection" button on the list view). */
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  /** Buttons for the bottom bar; absent when the view has none. */
+  footer?: React.ReactNode;
+}
 
 interface ConnectionSettingsProps {
   onSave: () => void;
   onCancel?: () => void;
   onConnectionSwitch?: () => void;
+  /**
+   * Chrome around the settings body. Defaults to a Card (the first-run page);
+   * App passes a Modal frame for the in-app dialog so no Card nests in a Modal.
+   */
+  frame?: (parts: ConnectionSettingsFrameParts) => React.ReactNode;
 }
 
 type ViewMode = 'list' | 'add' | 'edit';
+
+const cardFrame = ({ title, actions, children, footer }: ConnectionSettingsFrameParts) => (
+  <Card>
+    <CardHeader actions={actions}>
+      <h3>{title}</h3>
+    </CardHeader>
+    <CardBody>{children}</CardBody>
+    {footer && <CardFooter>{footer}</CardFooter>}
+  </Card>
+);
+
+interface ColorSwatchProps {
+  name: string;
+  value: string;
+  checked: boolean;
+  onSelect: () => void;
+}
+
+// A native radio gives the swatch its keyboard semantics, checked state and
+// accessible name; the checkmark makes the selection visible without colour.
+const ColorSwatch: React.FC<ColorSwatchProps> = ({ name, value, checked, onSelect }) => (
+  <label className="connection-settings__swatch" title={name}>
+    <input
+      type="radio"
+      name="envColor"
+      className="connection-settings__swatch-input"
+      aria-label={name}
+      checked={checked}
+      onChange={onSelect}
+    />
+    <span className="connection-settings__swatch-color" style={{ background: value }} aria-hidden="true">
+      {checked && (
+        <svg
+          className="connection-settings__swatch-check"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M5 13l4 4L19 7" />
+        </svg>
+      )}
+    </span>
+  </label>
+);
 
 export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
   onSave,
   onCancel,
   onConnectionSwitch,
+  frame = cardFrame,
 }) => {
+  const fieldId = useId();
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>('list');
@@ -196,134 +249,152 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
 
   // --- Add / Edit Form ---
   if (view === 'add' || view === 'edit') {
+    const isPresetColor = color === '' || ENV_COLOR_PRESETS.some((p) => p.value === color);
+    const nameId = `${fieldId}-name`;
+    const urlId = `${fieldId}-url`;
+    const clientIdId = `${fieldId}-client-id`;
+    const clientSecretId = `${fieldId}-client-secret`;
+    const colorLabelId = `${fieldId}-color-label`;
+
     return (
       <div className="connection-settings">
-        <Card padding="none">
-          <CardHeader>
-            <h3>{view === 'edit' ? 'Edit Connection' : 'Add Connection'}</h3>
-          </CardHeader>
-          <CardBody>
-            {error && (
-              <Alert variant="error" dismissible onClose={() => setError(null)}>
-                {error}
-              </Alert>
-            )}
-            <div className="input-form__grid" style={{ marginTop: error ? '16px' : 0 }}>
-              <div className="input-form__group input-form__group--full">
-                <label className="input-form__label">
-                  <span className="input-form__label-text">Connection Name</span>
-                  <span className="input-form__hint">A label for this connection (e.g. "Production", "Dev")</span>
-                </label>
-                <input
-                  type="text"
-                  className="sas-input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="My Viya Server"
-                  autoFocus
-                />
-              </div>
-              <div className="input-form__group input-form__group--full">
-                <label className="input-form__label">
-                  <span className="input-form__label-text">SAS Viya Server URL</span>
-                </label>
-                <input
-                  type="url"
-                  className="sas-input"
-                  value={viyaUrl}
-                  onChange={(e) => setViyaUrl(e.target.value)}
-                  placeholder="https://your-viya-server.example.com"
-                />
-              </div>
-              <div className="input-form__group">
-                <label className="input-form__label">
-                  <span className="input-form__label-text">Client ID</span>
-                  <span className="input-form__hint">Default: vscode (works with Viya 2022.11+)</span>
-                </label>
-                <input
-                  type="text"
-                  className="sas-input"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="vscode"
-                />
-              </div>
-              <div className="input-form__group">
-                <label className="input-form__label">
-                  <span className="input-form__label-text">Client Secret</span>
-                  <span className="input-form__hint">Leave empty for default public client</span>
-                </label>
-                <input
-                  type="password"
-                  className="sas-input"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="(empty)"
-                />
-              </div>
-              <div className="input-form__group input-form__group--full">
-                <label className="input-form__label">
-                  <span className="input-form__label-text">Environment Color</span>
-                  <span className="input-form__hint">
-                    Colors the app header while this connection is active, so you can tell environments apart at a glance
-                  </span>
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    title="Default (SAS blue)"
-                    onClick={() => setColor('')}
-                    style={swatchStyle(DEFAULT_HEADER_COLOR, color === '')}
-                  />
-                  {ENV_COLOR_PRESETS.map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      title={preset.name}
-                      onClick={() => setColor(preset.value)}
-                      style={swatchStyle(preset.value, color === preset.value)}
-                    />
-                  ))}
-                  <label
-                    title="Custom color"
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginLeft: '4px' }}
-                  >
-                    <input
-                      type="color"
-                      value={color || DEFAULT_HEADER_COLOR}
-                      onChange={(e) => setColor(e.target.value)}
-                      style={{ width: '36px', height: '28px', padding: 0, border: '1px solid var(--sas-gray-300, #ccc)', borderRadius: '6px', cursor: 'pointer', background: 'none' }}
-                    />
-                    <span className="input-form__hint">Custom</span>
+        {frame({
+          title: view === 'edit' ? 'Edit Connection' : 'Add Connection',
+          children: (
+            <div className="connection-settings__form">
+              {error && (
+                <Alert variant="error" dismissible onClose={() => setError(null)}>
+                  {error}
+                </Alert>
+              )}
+              <div className="connection-settings__grid">
+                <div className="connection-settings__group connection-settings__group--full">
+                  <label className="connection-settings__label" htmlFor={nameId}>
+                    <span className="connection-settings__label-text">Connection Name</span>
+                    <span className="connection-settings__hint">A label for this connection (e.g. "Production", "Dev")</span>
                   </label>
+                  <input
+                    id={nameId}
+                    type="text"
+                    className="sas-input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="My Viya Server"
+                    autoFocus
+                  />
+                </div>
+                <div className="connection-settings__group connection-settings__group--full">
+                  <label className="connection-settings__label" htmlFor={urlId}>
+                    <span className="connection-settings__label-text">SAS Viya Server URL</span>
+                  </label>
+                  <input
+                    id={urlId}
+                    type="url"
+                    className="sas-input"
+                    value={viyaUrl}
+                    onChange={(e) => setViyaUrl(e.target.value)}
+                    placeholder="https://your-viya-server.example.com"
+                  />
+                </div>
+                <div className="connection-settings__group">
+                  <label className="connection-settings__label" htmlFor={clientIdId}>
+                    <span className="connection-settings__label-text">Client ID</span>
+                    <span className="connection-settings__hint">Default: vscode (works with Viya 2022.11+)</span>
+                  </label>
+                  <input
+                    id={clientIdId}
+                    type="text"
+                    className="sas-input"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="vscode"
+                  />
+                </div>
+                <div className="connection-settings__group">
+                  <label className="connection-settings__label" htmlFor={clientSecretId}>
+                    <span className="connection-settings__label-text">Client Secret</span>
+                    <span className="connection-settings__hint">Leave empty for default public client</span>
+                  </label>
+                  <input
+                    id={clientSecretId}
+                    type="password"
+                    className="sas-input"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder="(empty)"
+                  />
+                </div>
+                <div className="connection-settings__group connection-settings__group--full">
+                  <div className="connection-settings__label">
+                    <span className="connection-settings__label-text" id={colorLabelId}>Environment Color</span>
+                    <span className="connection-settings__hint">
+                      Colors the app header while this connection is active, so you can tell environments apart at a glance
+                    </span>
+                  </div>
+                  <div className="connection-settings__swatches">
+                    <div className="connection-settings__swatch-group" role="radiogroup" aria-labelledby={colorLabelId}>
+                      <ColorSwatch
+                        name="Default (SAS blue)"
+                        value={DEFAULT_HEADER_COLOR}
+                        checked={color === ''}
+                        onSelect={() => setColor('')}
+                      />
+                      {ENV_COLOR_PRESETS.map((preset) => (
+                        <ColorSwatch
+                          key={preset.value}
+                          name={preset.name}
+                          value={preset.value}
+                          checked={color === preset.value}
+                          onSelect={() => setColor(preset.value)}
+                        />
+                      ))}
+                    </div>
+                    <label
+                      className={`connection-settings__custom-color ${
+                        isPresetColor ? '' : 'connection-settings__custom-color--active'
+                      }`}
+                      title="Custom color"
+                    >
+                      <input
+                        type="color"
+                        className="connection-settings__custom-color-input"
+                        aria-label="Custom color"
+                        value={color || DEFAULT_HEADER_COLOR}
+                        onChange={(e) => setColor(e.target.value)}
+                      />
+                      <span className="connection-settings__hint">Custom</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="connection-settings__group connection-settings__group--full">
+                  <label className="connection-settings__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={insecureSsl}
+                      onChange={(e) => setInsecureSsl(e.target.checked)}
+                    />
+                    <span className="connection-settings__label-text">Skip SSL certificate verification</span>
+                  </label>
+                  {insecureSsl && (
+                    <Alert variant="warning">
+                      SSL verification is disabled. Only use this for development or testing environments with self-signed certificates.
+                    </Alert>
+                  )}
                 </div>
               </div>
-              <div className="input-form__group input-form__group--full">
-                <label className="input-form__label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={insecureSsl}
-                    onChange={(e) => setInsecureSsl(e.target.checked)}
-                  />
-                  <span className="input-form__label-text">Skip SSL certificate verification</span>
-                </label>
-                {insecureSsl && (
-                  <Alert variant="warning">
-                    SSL verification is disabled. Only use this for development or testing environments with self-signed certificates.
-                  </Alert>
-                )}
-              </div>
             </div>
-          </CardBody>
-          <CardFooter>
-            <Button variant="tertiary" onClick={handleBackToList}>
-              {connections.length === 0 && onCancel ? 'Cancel' : 'Back'}
-            </Button>
-            <Button variant="primary" onClick={handleSave}>
-              {view === 'edit' ? 'Update Connection' : 'Save Connection'}
-            </Button>
-          </CardFooter>
-        </Card>
+          ),
+          footer: (
+            <>
+              <Button variant="tertiary" onClick={handleBackToList}>
+                {connections.length === 0 && onCancel ? 'Cancel' : 'Back'}
+              </Button>
+              <Button variant="primary" onClick={handleSave}>
+                {view === 'edit' ? 'Update Connection' : 'Save Connection'}
+              </Button>
+            </>
+          ),
+        })}
       </div>
     );
   }
@@ -331,76 +402,50 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
   // --- List View ---
   return (
     <div className="connection-settings">
-      <Card padding="none">
-        <CardHeader
-          actions={
-            <Button variant="primary" size="small" onClick={openAddForm}>
-              Add Connection
-            </Button>
-          }
-        >
-          <h3>Connections</h3>
-        </CardHeader>
-        <CardBody>
-          {connections.length === 0 ? (
-            <p style={{ color: 'var(--sas-gray-500)', textAlign: 'center', padding: '24px 0' }}>
-              No connections configured.
-            </p>
+      {frame({
+        title: 'Connections',
+        actions: (
+          <Button variant="primary" size="small" onClick={openAddForm}>
+            Add Connection
+          </Button>
+        ),
+        children:
+          connections.length === 0 ? (
+            <p className="connection-settings__empty">No connections configured.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <ul className="connection-settings__list">
               {connections.map((conn) => {
                 const isActive = conn.id === activeId;
                 return (
-                  <div
+                  <li
                     key={conn.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: `1px solid ${isActive ? 'var(--sas-blue-300, #66b2ff)' : 'var(--sas-gray-200, #e0e0e0)'}`,
-                      background: isActive ? 'var(--sas-blue-50, #e6f2ff)' : 'transparent',
-                    }}
+                    className={`connection-settings__row ${isActive ? 'connection-settings__row--active' : ''}`}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                    <div className="connection-settings__row-main">
                       <span
-                        style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          background: isActive ? 'var(--sas-green-500, #28a745)' : 'var(--sas-gray-300, #ccc)',
-                          flexShrink: 0,
-                        }}
+                        className={`connection-settings__indicator ${
+                          isActive ? 'connection-settings__indicator--active' : ''
+                        }`}
+                        aria-hidden="true"
                       />
                       {conn.color && (
                         <span
+                          className="connection-settings__color-chip"
+                          style={{ background: conn.color }}
+                          role="img"
+                          aria-label="Environment color"
                           title="Environment color"
-                          style={{
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '4px',
-                            background: conn.color,
-                            border: '1px solid var(--sas-gray-300, #ccc)',
-                            flexShrink: 0,
-                          }}
                         />
                       )}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="connection-settings__row-text">
+                        <div className="connection-settings__row-name">
                           {conn.name}
-                          {isActive && (
-                            <span style={{ fontWeight: 400, fontSize: '0.8em', color: 'var(--sas-green-600, #218838)', marginLeft: '8px' }}>
-                              Active
-                            </span>
-                          )}
+                          {isActive && <span className="connection-settings__active-label">Active</span>}
                         </div>
-                        <div style={{ fontSize: '0.85em', color: 'var(--sas-gray-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {conn.viyaUrl}
-                        </div>
+                        <div className="connection-settings__row-url">{conn.viyaUrl}</div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0, marginLeft: '12px' }}>
+                    <div className="connection-settings__actions">
                       {!isActive && (
                         <Button variant="primary" size="small" onClick={() => handleSwitch(conn.id)}>
                           Switch
@@ -411,8 +456,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                       </Button>
                       {deleteConfirmId === conn.id ? (
                         <>
-                          <Button variant="tertiary" size="small" onClick={() => handleDelete(conn.id)}
-                            style={{ color: 'var(--sas-red-500, #dc3545)' }}>
+                          <Button variant="danger" size="small" onClick={() => handleDelete(conn.id)}>
                             Confirm
                           </Button>
                           <Button variant="tertiary" size="small" onClick={() => setDeleteConfirmId(null)}>
@@ -425,20 +469,17 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                         </Button>
                       )}
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
-          )}
-        </CardBody>
-        {onCancel && (
-          <CardFooter>
-            <Button variant="tertiary" onClick={onCancel}>
-              Close
-            </Button>
-          </CardFooter>
-        )}
-      </Card>
+            </ul>
+          ),
+        footer: onCancel ? (
+          <Button variant="tertiary" onClick={onCancel}>
+            Close
+          </Button>
+        ) : undefined,
+      })}
     </div>
   );
 };

@@ -1,21 +1,14 @@
 /* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* Decision Flow Visualization Styles */
-
-/* ─── Keyframes ─── */
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+/* Decision Flow Visualization Styles.
+   Buttons, inputs, alerts, spinners and dialogs come from the shared
+   components (components.css); this file only styles what is specific to the
+   flows feature. The `spin` keyframes live in components.css. */
 
 /* ─── Flow List ─── */
 
-.flow-list {
-  padding: var(--space-6);
-}
-
+/* The page gutter comes from .sas-layout__content; feature roots add none. */
 .flow-list__header {
   display: flex;
   align-items: center;
@@ -32,42 +25,24 @@
 
 .flow-list__count {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
+/* <SearchInput> wrapper; the field itself is a .sas-input */
 .flow-list__search {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-family: var(--font-family-primary);
-  font-size: var(--font-size-base);
-  color: var(--sas-gray-800);
-  margin-bottom: var(--space-4);
-  transition: border-color var(--transition-fast);
-}
-
-.flow-list__search:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px rgba(0, 102, 178, 0.15);
-}
-
-.flow-list__error {
-  padding: var(--space-3) var(--space-4);
-  background: var(--sas-error-light);
-  color: var(--sas-error-dark);
-  border: 1px solid var(--sas-error);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
   margin-bottom: var(--space-4);
 }
 
+.flow-list__alert {
+  margin-bottom: var(--space-4);
+}
+
+/* A scroll container still clips to its own radius, so the corners survive. */
 .flow-list__table-wrap {
   border: 1px solid var(--sas-gray-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .flow-list__table {
@@ -83,7 +58,7 @@
   color: var(--sas-gray-700);
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--letter-spacing-wide);
   border-bottom: 1px solid var(--sas-gray-200);
 }
 
@@ -93,12 +68,53 @@
   border-bottom: 1px solid var(--sas-gray-100);
 }
 
-.flow-list__table tbody tr {
+/* The sort control is a real button inside the header cell */
+.flow-list__sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.flow-list__sort-btn:hover {
+  color: var(--sas-blue-primary);
+}
+
+.flow-list__col--modified {
+  width: 144px;
+}
+
+.flow-list__col--modified-by {
+  width: 112px;
+}
+
+.flow-list__table td.flow-list__col--desc,
+.flow-list__table td.flow-list__col--modified-by {
+  color: var(--sas-text-muted);
+}
+
+.flow-list__table td.flow-list__col--modified {
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* Rows open the flow on click; the name link is the keyboard path, so the
+   row highlights for :focus-within exactly as it does for :hover. */
+.flow-list__row {
   cursor: pointer;
   transition: background-color var(--transition-fast);
 }
 
-.flow-list__table tbody tr:hover {
+.flow-list__row:hover,
+.flow-list__row:focus-within {
   background: var(--sas-blue-lighter);
 }
 
@@ -106,21 +122,28 @@
   border-bottom: none;
 }
 
+.flow-list__row-link {
+  display: block;
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+  text-decoration: none;
+}
+
+.flow-list__row-link:hover {
+  color: var(--sas-blue-primary);
+  text-decoration: none;
+}
+
 .flow-list__empty {
   text-align: center;
   padding: var(--space-8) var(--space-4);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-size: var(--font-size-base);
-}
-
-.flow-list__pagination {
-  margin-top: var(--space-4);
 }
 
 /* ─── Flow Detail ─── */
 
 .flow-detail {
-  padding: var(--space-6);
   transition: margin-right var(--transition-normal);
 }
 
@@ -128,27 +151,59 @@
   margin-right: 384px;
 }
 
-.flow-detail__back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--sas-blue-primary);
-  font-size: var(--font-size-sm);
-  text-decoration: none;
+.flow-detail__alert {
   margin-bottom: var(--space-4);
-  cursor: pointer;
-  transition: color var(--transition-fast);
 }
 
-.flow-detail__back:hover {
-  color: var(--sas-blue-dark);
+/* <Button variant="tertiary"> */
+.flow-detail__back {
+  margin-bottom: var(--space-4);
 }
 
-.flow-detail__loading {
-  text-align: center;
-  padding: var(--space-12);
+/* Discreet background-fetch hint above an already painted diagram */
+.flow-detail__loading-hint {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+/* ─── Collapsible sections (side panel, legend, header variables) ─── */
+
+.flow-section__heading {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.flow-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-1) 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-500);
-  font-size: var(--font-size-md);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.flow-section__toggle:hover {
+  color: var(--sas-gray-700);
+}
+
+.flow-section__arrow {
+  flex-shrink: 0;
+  color: var(--sas-gray-400);
+}
+
+.flow-section__body {
+  margin-top: var(--space-2);
 }
 
 /* ─── Flow Header ─── */
@@ -166,6 +221,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: var(--space-4);
   margin-bottom: var(--space-3);
 }
 
@@ -196,7 +252,7 @@
 }
 
 .flow-header__meta-label {
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   margin-right: var(--space-1);
 }
 
@@ -236,20 +292,55 @@
   border-radius: var(--radius-full);
 }
 
+/* Expanded variable tables: stacked with a gap, no trailing margin */
+.flow-header__vars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.flow-var-table__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+}
+
+.flow-var-table__col-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-var-table__col-desc {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ─── Workflow ─── */
 
 .flow-header__workflow {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
 .flow-header__workflow-meta {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
+/* Workflow state chip. The base is a neutral chip so a state outside the
+   four SAS ships (a customer workflow) still renders as a chip; the
+   modifiers are the *-light / *-dark token pairs, which pass 4.5:1. */
 .flow-wf-badge {
   display: inline-flex;
   align-items: center;
@@ -257,93 +348,37 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-full);
-}
-
-.flow-wf-badge--none {
   background: var(--sas-gray-100);
-  color: var(--sas-gray-500);
+  color: var(--sas-gray-700);
 }
 
 .flow-wf-badge--developing {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--sas-info-light);
+  color: var(--sas-info-dark);
 }
 
-.flow-wf-badge--reviewready {
-  background: #fef3c7;
-  color: #92400e;
+.flow-wf-badge--review-ready {
+  background: var(--sas-warning-light);
+  color: var(--sas-warning-dark);
 }
 
 .flow-wf-badge--approved {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--sas-success-light);
+  color: var(--sas-success-dark);
 }
 
-.flow-wf-badge--deploymentready {
-  background: #ede9fe;
-  color: #5b21b6;
+.flow-wf-badge--deployment-ready {
+  background: var(--sas-blue-light);
+  color: var(--sas-blue-dark);
 }
 
-.flow-wf-history-btn {
-  padding: var(--space-1) var(--space-3);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-blue-600, #2563eb);
-  background: transparent;
-  border: 1px solid var(--sas-blue-600, #2563eb);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-.flow-wf-history-btn:hover {
-  background: var(--sas-blue-600, #2563eb);
-  color: #fff;
-}
-
-/* ─── Workflow History Modal ─── */
-
-.flow-wf-history__dialog {
-  background: var(--sas-gray-900, #111827);
-  border-radius: var(--radius-lg, 12px);
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
-}
-
-.flow-wf-history__dialog .flow-code-modal__header {
-  border-bottom-color: var(--sas-gray-700, #374151);
-}
-
-.flow-wf-history__dialog .flow-code-modal__title {
-  color: var(--sas-gray-100, #f3f4f6);
-}
-
-.flow-wf-history__dialog .flow-code-modal__close-btn {
-  color: var(--sas-gray-300, #d1d5db);
-}
-
-.flow-wf-history__body {
-  padding: var(--space-4, 16px) var(--space-5, 20px);
-  overflow-y: auto;
-  flex: 1;
-}
-
-.flow-wf-history__title {
-  margin: 0 0 var(--space-3, 12px);
-  font-size: var(--font-size-base, 16px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--sas-gray-100, #f3f4f6);
-}
+/* ─── Workflow History Modal (body of a <Modal>) ─── */
 
 .flow-wf-history__timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 20px;
   position: relative;
-  padding-left: 20px;
 }
 
 .flow-wf-history__timeline::before {
@@ -353,7 +388,7 @@
   top: 8px;
   bottom: 8px;
   width: 2px;
-  background: var(--sas-gray-600, #4b5563);
+  background: var(--sas-gray-300);
 }
 
 .flow-wf-history__entry {
@@ -368,8 +403,8 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--sas-blue-600, #2563eb);
-  border: 2px solid var(--sas-gray-900, #111827);
+  background: var(--sas-blue-primary);
+  border: 2px solid var(--sas-white);
 }
 
 .flow-wf-history__content {
@@ -379,46 +414,35 @@
 .flow-wf-history__transition {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  font-size: var(--font-size-sm, 14px);
+  font-size: var(--font-size-sm);
 }
 
 .flow-wf-history__state {
-  padding: 2px 8px;
-  border-radius: var(--radius-sm, 4px);
-  background: var(--sas-gray-700, #374151);
-  color: var(--sas-gray-100, #f3f4f6);
-  font-size: var(--font-size-xs, 12px);
-  font-weight: var(--font-weight-medium, 500);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--sas-gray-100);
+  color: var(--sas-gray-800);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
 }
 
 .flow-wf-history__arrow {
-  color: var(--sas-gray-400, #9ca3af);
+  color: var(--sas-gray-400);
 }
 
 .flow-wf-history__meta {
-  font-size: var(--font-size-xs, 12px);
-  color: var(--sas-gray-400, #9ca3af);
-  margin-top: var(--space-1, 4px);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+  margin-top: var(--space-1);
 }
 
 .flow-wf-history__comment {
-  font-size: var(--font-size-xs, 12px);
-  color: var(--sas-gray-300, #d1d5db);
-  margin-top: var(--space-1, 4px);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-700);
+  margin-top: var(--space-1);
   font-style: italic;
-}
-
-.flow-header__vars-toggle {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-blue-primary);
-  cursor: pointer;
-  user-select: none;
-}
-
-.flow-header__vars-toggle:hover {
-  color: var(--sas-blue-dark);
 }
 
 /* ─── Flow Diagram ─── */
@@ -433,24 +457,12 @@
 }
 
 .flow-diagram__legend {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--sas-white);
   border: 1px solid var(--sas-gray-200);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
   box-shadow: var(--shadow-sm);
   max-width: 340px;
-}
-
-.flow-diagram__legend-toggle {
-  all: unset;
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-bottom: var(--space-2);
-  display: block;
 }
 
 .flow-diagram__legend-items {
@@ -484,6 +496,8 @@
 
 /* ─── Flow Side Panel ─── */
 
+/* Sits above the fixed sidebar (both --z-sticky; the panel is later in the
+   DOM) and below every modal. Below 720px it becomes a full-width sheet. */
 .flow-side-panel {
   position: fixed;
   top: var(--header-height);
@@ -493,10 +507,22 @@
   background: var(--sas-white);
   border-left: 1px solid var(--sas-gray-200);
   box-shadow: var(--shadow-lg);
-  z-index: 50;
+  z-index: var(--z-sticky);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .flow-side-panel {
+    left: 0;
+    width: 100%;
+    border-left: none;
+  }
+
+  .flow-detail--panel-open {
+    margin-right: 0;
+  }
 }
 
 .flow-side-panel__header {
@@ -510,6 +536,7 @@
 
 .flow-side-panel__type-badge {
   display: inline-block;
+  align-self: flex-start;
   padding: var(--space-1) var(--space-3);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
@@ -527,7 +554,7 @@
 
 .flow-side-panel__subtitle {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   margin: calc(-1 * var(--space-2)) 0 0;
 }
 
@@ -559,69 +586,43 @@
   padding: var(--space-4) var(--space-5);
 }
 
-.flow-side-panel__loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-8);
-  color: var(--sas-gray-500);
-  font-size: var(--font-size-sm);
-}
-
-.flow-side-panel__spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--sas-gray-200);
-  border-top-color: var(--sas-blue-primary);
-  border-radius: var(--radius-full);
-  animation: spin 0.6s linear infinite;
-}
-
-.flow-side-panel__errors {
-  padding: var(--space-3);
-  background: var(--sas-error-light);
-  color: var(--sas-error-dark);
-  font-size: var(--font-size-sm);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
-}
-
-.flow-side-panel__section {
+.flow-side-panel__content > .flow-section {
   margin-bottom: var(--space-5);
 }
 
-.flow-side-panel__section-toggle {
-  all: unset;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  margin-bottom: var(--space-3);
+.flow-side-panel__alert {
+  margin-bottom: var(--space-4);
 }
 
-.flow-side-panel__section-arrow {
-  font-size: var(--font-size-xs);
-  color: var(--sas-gray-400);
-  flex-shrink: 0;
+.flow-side-panel__error-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
 }
 
+/* Sub-headings inside a section (h5/h6) */
 .flow-side-panel__section-title {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-500);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--letter-spacing-wide);
   margin: 0;
 }
 
 /* ─── Side Panel Data Display ─── */
 
+/* The one dense table of the feature: side-panel lists, parameter tables
+   and the header's signature tables. --fixed for tables whose columns
+   truncate (see .flow-var-table__col-*). */
 .flow-sp-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--font-size-sm);
+}
+
+.flow-sp-table--fixed {
+  table-layout: fixed;
 }
 
 .flow-sp-table th {
@@ -658,23 +659,9 @@
   overflow-x: auto;
 }
 
+/* <Button variant="primary"> */
 .flow-sp-view-code-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: #ffffff;
-  background-color: var(--sas-blue-600, #2563eb);
-  border: 2px solid var(--sas-blue-700, #1d4ed8);
-  border-radius: var(--radius-md);
-  cursor: pointer;
   margin-bottom: var(--space-3);
-}
-
-.flow-sp-view-code-btn:hover {
-  background-color: var(--sas-blue-700, #1d4ed8);
 }
 
 .flow-sp-detail {
@@ -691,7 +678,7 @@
 }
 
 .flow-sp-detail__label {
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   flex-shrink: 0;
   margin-right: var(--space-3);
 }
@@ -731,34 +718,6 @@
   margin: 0 0 var(--space-2);
 }
 
-.flow-sp-preview {
-  background: var(--sas-gray-900);
-  color: var(--sas-gray-100);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  white-space: pre-wrap;
-  overflow-x: auto;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.flow-sp-raw-json {
-  margin-top: var(--space-4);
-}
-
-.flow-sp-raw-json summary {
-  font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
-  cursor: pointer;
-  user-select: none;
-}
-
-.flow-sp-raw-json summary:hover {
-  color: var(--sas-gray-700);
-}
-
 .flow-sp-badge {
   display: inline-block;
   padding: var(--space-1) var(--space-2);
@@ -774,8 +733,8 @@
 }
 
 .flow-sp-badge--challenger {
-  background: #F3E8FF;
-  color: #7C3AED;
+  background: var(--sas-info-light);
+  color: var(--sas-info-dark);
 }
 
 .flow-sp-badge--active {
@@ -785,30 +744,7 @@
 
 .flow-sp-badge--inactive {
   background: var(--sas-gray-100);
-  color: var(--sas-gray-500);
-}
-
-.flow-sp-var-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-  table-layout: fixed;
-}
-
-.flow-sp-var-table th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  background: var(--sas-gray-50);
-  color: var(--sas-gray-600);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.flow-sp-var-table td {
-  padding: var(--space-2) var(--space-3);
-  color: var(--sas-gray-800);
-  border-bottom: 1px solid var(--sas-gray-100);
+  color: var(--sas-gray-700);
 }
 
 .flow-sp-links-list {
@@ -833,7 +769,7 @@
 .flow-sp-link-uri {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-  color: var(--sas-blue-600, #2563eb);
+  color: var(--sas-blue-primary);
   word-break: break-all;
   text-decoration: none;
 }
@@ -842,86 +778,12 @@
   text-decoration: underline;
 }
 
-/* ─── Variable table columns (shared by header + side panel) ─── */
-
-.flow-var-table__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-  table-layout: fixed;
-}
-
-.flow-var-table__table th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  background: var(--sas-gray-50);
-  color: var(--sas-gray-600);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.flow-var-table__table td {
-  padding: var(--space-2) var(--space-3);
-  color: var(--sas-gray-800);
-  border-bottom: 1px solid var(--sas-gray-100);
-  vertical-align: top;
-}
-
-.flow-var-table__col-name {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.flow-var-table__col-desc {
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ─── Code Modal ─── */
-
-.flow-code-modal__backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: var(--z-modal-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.flow-code-modal__dialog {
-  background: var(--sas-white);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  width: 90%;
-  max-width: 800px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  z-index: var(--z-modal);
-  overflow: hidden;
-}
-
-.flow-code-modal__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--sas-gray-200);
-  flex-shrink: 0;
-}
+/* ─── Code Modal (body of a <Modal>) ─── */
 
 .flow-code-modal__title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-900);
-  margin: 0;
-  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .flow-code-modal__lang-badge {
@@ -934,89 +796,13 @@
   border-radius: var(--radius-full);
 }
 
-.flow-code-modal__copy-btn {
-  padding: var(--space-1) var(--space-3);
-  background: var(--sas-white);
-  border: 1px solid var(--sas-gray-300);
+/* Prism's tomorrow theme paints the dark code surface; this only shapes it.
+   Element+class selector so it outranks Prism's pre[class*="language-"]. */
+pre.flow-code-modal__code {
+  margin: 0;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-  cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.flow-code-modal__copy-btn:hover {
-  background: var(--sas-gray-50);
-  border-color: var(--sas-gray-400);
-}
-
-.flow-code-modal__close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--space-1);
-  color: var(--sas-gray-500);
-  border-radius: var(--radius-md);
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.flow-code-modal__close-btn:hover {
-  background: var(--sas-gray-100);
-  color: var(--sas-gray-800);
-}
-
-.flow-code-modal__body {
-  flex: 1;
-  background: var(--sas-gray-900);
-  color: var(--sas-gray-100);
-  padding: var(--space-5);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
-  white-space: pre-wrap;
-  overflow: auto;
   line-height: var(--line-height-relaxed);
-}
-
-/* ─── Export Button ─── */
-
-.flow-export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--sas-blue-primary);
-  color: var(--sas-white);
-  border: none;
-  border-radius: var(--radius-md);
-  font-family: var(--font-family-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-}
-
-.flow-export-btn:hover {
-  background: var(--sas-blue-dark);
-}
-
-.flow-export-btn--exporting {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.flow-export-btn__spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: var(--sas-white);
-  border-radius: var(--radius-full);
-  animation: spin 0.6s linear infinite;
-}
-
-.flow-export-btn__icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 
 /* ─── Deep Link ─── */
@@ -1052,7 +838,7 @@
   border-radius: var(--radius-full);
   line-height: 1;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .flow-dir-badge--input {
@@ -1075,35 +861,14 @@
   color: var(--sas-gray-600);
 }
 
-/* ─── Pagination ─── */
+/* ─── Pagination (buttons are <Button variant="secondary" size="small">) ─── */
 
 .flow-pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
   padding: var(--space-3) 0;
-}
-
-.flow-pagination__btn {
-  padding: var(--space-2) var(--space-4);
-  background: var(--sas-white);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-family: var(--font-family-primary);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-  cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.flow-pagination__btn:hover:not(:disabled) {
-  background: var(--sas-gray-50);
-  border-color: var(--sas-gray-400);
-}
-
-.flow-pagination__btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .flow-pagination__info {
@@ -1127,6 +892,7 @@
   border-radius: var(--radius-md);
 }
 
+/* HTTP verb chip: white on the semantic *-dark tokens (all >= 4.5:1) */
 .flow-sp-method {
   flex-shrink: 0;
   padding: var(--space-1) var(--space-2);
@@ -1134,22 +900,22 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.03em;
-  color: #ffffff;
-  background: #3f51b5;
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--sas-white);
+  background: var(--sas-info-dark);
 }
 
 .flow-sp-method--post {
-  background: #2e7d32;
+  background: var(--sas-success-dark);
 }
 
 .flow-sp-method--put,
 .flow-sp-method--patch {
-  background: #ef6c00;
+  background: var(--sas-warning-dark);
 }
 
 .flow-sp-method--delete {
-  background: #c62828;
+  background: var(--sas-error-dark);
 }
 
 .flow-sp-rest-uri {
@@ -1163,8 +929,8 @@
 .flow-sp-ph {
   padding: 0 2px;
   border-radius: var(--radius-sm);
-  background: #e8eaf6;
-  color: #3f51b5;
+  background: var(--sas-info-light);
+  color: var(--sas-info-dark);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -1173,8 +939,8 @@
 /* ------------------------------------------------------------------ */
 
 .flow-sp-rule--invalid {
-  border-color: #f0b4b4;
-  background: #fdf4f4;
+  border-color: var(--sas-error);
+  background: var(--sas-error-light);
 }
 
 .flow-sp-rule__seq {
@@ -1193,7 +959,7 @@
 .flow-sp-rule__tracked {
   margin-left: var(--space-2);
   padding: 0 var(--space-2);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   background: var(--sas-gray-200);
   color: var(--sas-gray-600);
   font-size: var(--font-size-xs);
@@ -1209,7 +975,7 @@
 }
 
 .flow-sp-rule__line--invalid {
-  color: #b42318;
+  color: var(--sas-error-dark);
 }
 
 .flow-sp-rule__lead {
@@ -1231,14 +997,14 @@
 }
 
 .flow-sp-rule__line--invalid .flow-sp-rule__expr {
-  color: #b42318;
+  color: var(--sas-error-dark);
 }
 
 .flow-sp-rule__kind,
 .flow-sp-rule__ref {
   flex-shrink: 0;
   padding: 0 var(--space-2);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   background: var(--sas-gray-200);
   color: var(--sas-gray-600);
@@ -1246,39 +1012,28 @@
 
 .flow-sp-rule__ref {
   font-family: var(--font-family-mono);
-  background: #e8eaf6;
-  color: #3f51b5;
+  background: var(--sas-info-light);
+  color: var(--sas-info-dark);
 }
 
 .flow-sp-rule__msg {
   flex-basis: 100%;
   font-size: var(--font-size-xs);
-  color: #b42318;
+  color: var(--sas-error-dark);
 }
 
+/* <Alert variant="error"> wrapper; __item/__rules are its content */
 .flow-sp-rule-alert {
-  padding: var(--space-3);
   margin-bottom: var(--space-3);
-  border: 1px solid #f0b4b4;
-  border-radius: var(--radius-md);
-  background: #fdf4f4;
-}
-
-.flow-sp-rule-alert__title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: #b42318;
-  margin-bottom: var(--space-2);
 }
 
 .flow-sp-rule-alert__item {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-800);
   margin-bottom: var(--space-1);
 }
 
 .flow-sp-rule-alert__rules {
   display: block;
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-size: var(--font-size-xs);
 }

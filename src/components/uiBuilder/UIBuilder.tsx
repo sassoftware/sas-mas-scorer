@@ -55,11 +55,15 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
       setLoading(false);
       return;
     }
+    let cancelled = false;
     setLoading(true);
     getModule(effectiveModuleId)
-      .then(m => setModule(m))
-      .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load module'))
-      .finally(() => setLoading(false));
+      .then(m => { if (!cancelled) setModule(m); })
+      .catch(err => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load module');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [effectiveModuleId]);
 
   // Auto-detect step and generate default UI for new definitions
@@ -89,7 +93,9 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     try {
       await saveUIDefinition(def);
       setSaveMessage('Saved successfully');
-      setTimeout(() => setSaveMessage(null), 2000);
+      // onSaved navigates away, so the message is never on screen long enough
+      // to need an auto-dismiss; the Alert below is dismissible for the
+      // failure path, which is the only one that stays mounted.
       onSaved(def.id);
     } catch (err) {
       setSaveMessage(`Save failed: ${err instanceof Error ? err.message : 'Unknown error'}`);

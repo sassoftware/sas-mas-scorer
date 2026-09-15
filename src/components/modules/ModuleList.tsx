@@ -6,6 +6,8 @@ import { Module, ModuleType, getModuleStepCount, getModuleType } from '../../typ
 import { DataTable, Column } from '../common/DataTable';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
+import { Alert } from '../common/Alert';
+import { SearchInput } from '../common/SearchInput';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
 
@@ -87,10 +89,6 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     onSearch(debouncedSearch);
   }, [debouncedSearch, onSearch]);
 
-  const handleClearSearch = useCallback(() => {
-    setSearchTerm('');
-  }, []);
-
   // Handle column header click for sorting
   const handleSortClick = useCallback((field: string) => {
     let newDirection: 'asc' | 'desc' = 'asc';
@@ -142,11 +140,12 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       key: 'name',
       header: renderSortableHeader('Module Name', 'name'),
       width: '25%',
+      // Inline wrapper: DataTable puts the first column inside a <button>.
       render: (module) => (
-        <div className="module-name-cell">
-          <span className="module-name-cell__name">{module.name}</span>
-          <span className="module-name-cell__id">{module.id}</span>
-        </div>
+        <span className="module-list__name-cell">
+          <span className="module-list__name-cell-name">{module.name}</span>
+          <span className="module-list__name-cell-id">{module.id}</span>
+        </span>
       ),
     },
     {
@@ -183,7 +182,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       header: renderSortableHeader('Last Modified', 'modifiedTimeStamp'),
       width: '20%',
       render: (module) => (
-        <span className="date-cell">
+        <span className="module-list__date">
           {new Date(module.modifiedTimeStamp).toLocaleString()}
         </span>
       ),
@@ -194,7 +193,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       width: '15%',
       align: 'center',
       render: (module) => (
-        <div className="action-buttons">
+        <div className="module-list__actions">
           <Button
             variant="tertiary"
             size="small"
@@ -271,47 +270,22 @@ export const ModuleList: React.FC<ModuleListProps> = ({
             <option value="Decision">Decision</option>
           </select>
         </div>
-        <div className="module-list__search">
-          <svg
-            className="module-list__search-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            className="module-list__search-input"
-            placeholder="Search all modules by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button
-              className="module-list__search-clear"
-              onClick={handleClearSearch}
-              type="button"
-              aria-label="Clear search"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <SearchInput
+          className="module-list__search"
+          aria-label="Search all modules by name"
+          placeholder="Search all modules by name..."
+          value={searchTerm}
+          onChange={setSearchTerm}
+        />
       </div>
 
       {error && (
-        <div className="module-list__error">
-          <span>{error}</span>
+        <Alert variant="error" title="Failed to load modules">
+          {error}{' '}
           <Button variant="tertiary" size="small" onClick={onRefresh}>
             Retry
           </Button>
-        </div>
+        </Alert>
       )}
 
       <DataTable

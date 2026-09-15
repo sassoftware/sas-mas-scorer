@@ -6,36 +6,38 @@
 .ui-runner {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ui-runner__header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
+/* Chrome-less standalone mode: one rank below the page header on purpose */
 .ui-runner__standalone-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
-  background: var(--sas-white, #fff);
-  border: 1px solid var(--sas-gray-200, #e0e0e0);
-  border-radius: 8px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
   margin-bottom: 0;
 }
 
 .ui-runner__standalone-title {
-  font-weight: 600;
-  font-size: 1rem;
-  color: var(--sas-gray-900, #222);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  color: var(--sas-gray-900);
 }
 
 .ui-runner__content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ui-runner__content--side-by-side {
@@ -48,40 +50,43 @@
   min-width: 0;
 }
 
-.ui-runner__output-meta {
-  display: flex;
-  gap: 8px;
-}
-
 /* Section */
 .ui-runner__section {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .ui-runner__section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   width: 100%;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
   border: none;
   background: none;
   cursor: pointer;
-  border-bottom: 1px solid var(--sas-gray-200, #e0e0e0);
-  margin-bottom: 12px;
+  border-bottom: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-3);
+}
+
+.ui-runner__section-header:hover .ui-runner__section-title,
+.ui-runner__section-header:hover .ui-runner__section-chevron {
+  color: var(--sas-blue-primary);
 }
 
 .ui-runner__section-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--sas-gray-700, #555);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  transition: color var(--transition-fast);
 }
 
 .ui-runner__section-chevron {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.2s;
-  color: var(--sas-gray-400, #999);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  transition: transform var(--transition-normal), color var(--transition-fast);
+  color: var(--sas-gray-600);
 }
 
 .ui-runner__section-chevron--open {
@@ -91,7 +96,7 @@
 /* Fields Grid */
 .ui-runner__fields {
   display: grid;
-  gap: 12px 16px;
+  gap: var(--space-3) var(--space-4);
 }
 
 .ui-runner__fields--cols-1 {
@@ -110,36 +115,42 @@
   grid-column: 1 / -1;
 }
 
-.ui-runner__field--half {
+/* "1/2" and "1/3" are fractions of the row: in a three-column layout a half
+   field spans two tracks; in a two-column layout a third cannot be drawn and
+   takes one track, like a half. */
+.ui-runner__field--half,
+.ui-runner__field--third {
   grid-column: span 1;
 }
 
-.ui-runner__field--third {
-  grid-column: span 1;
+.ui-runner__fields--cols-3 .ui-runner__field--half {
+  grid-column: span 2;
 }
 
 .ui-runner__field-label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--sas-gray-700, #555);
-  margin-bottom: 4px;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+  margin-bottom: var(--space-1);
 }
 
+/* Focusable "?" tooltip trigger: 24px so it is a usable keyboard/touch target */
 .ui-runner__field-hint {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 6px;
-  font-size: 0.7rem;
-  background: var(--sas-gray-200, #e0e0e0);
-  border-radius: 50%;
-  color: var(--sas-gray-600, #666);
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  margin-left: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  background: var(--sas-gray-200);
+  border-radius: var(--radius-full);
+  color: var(--sas-text-muted);
   cursor: help;
 }
 
@@ -147,26 +158,26 @@
 .ui-runner__field-hint::after {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + var(--space-2));
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
   width: max-content;
   max-width: 260px;
   padding: 6px 9px;
-  background: var(--sas-gray-900, #1a1a1a);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: var(--font-weight-normal, 400);
+  background: var(--sas-gray-900);
+  color: var(--sas-white);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
   line-height: 1.35;
   text-align: left;
   white-space: normal;
-  border-radius: var(--radius-md, 6px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--transition-fast);
 }
 
 /* Small arrow pointing down at the hint icon */
@@ -178,10 +189,10 @@
   transform: translateX(-50%);
   z-index: 20;
   border: 5px solid transparent;
-  border-top-color: var(--sas-gray-900, #1a1a1a);
+  border-top-color: var(--sas-gray-900);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--transition-fast);
 }
 
 .ui-runner__field-hint:hover::after,
@@ -192,11 +203,11 @@
   visibility: visible;
 }
 
-/* Slider */
+/* Slider — keeps the browser focus outline (global :focus-visible rule) */
 .ui-runner__slider {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .ui-runner__slider-input {
@@ -204,9 +215,8 @@
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--sas-gray-200, #e0e0e0);
+  background: var(--sas-gray-200);
   border-radius: 3px;
-  outline: none;
 }
 
 .ui-runner__slider-input::-webkit-slider-thumb {
@@ -214,15 +224,24 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--sas-blue, #1976d2);
+  background: var(--sas-blue-primary);
+  cursor: pointer;
+}
+
+.ui-runner__slider-input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: var(--sas-blue-primary);
   cursor: pointer;
 }
 
 .ui-runner__slider-value {
   min-width: 48px;
   text-align: right;
-  font-weight: 500;
-  font-size: 0.9rem;
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-sm);
 }
 
 /* Radio */
@@ -235,24 +254,24 @@
 .ui-runner__radio-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
 .ui-runner__radio-empty {
-  color: var(--sas-gray-400, #999);
-  font-size: 0.85rem;
-  font-style: italic;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 /* Toggle */
 .ui-runner__toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   background: none;
   border: none;
+  border-radius: var(--radius-md);
   cursor: pointer;
   padding: 0;
 }
@@ -260,14 +279,14 @@
 .ui-runner__toggle-track {
   width: 40px;
   height: 22px;
-  background: var(--sas-gray-300, #ccc);
-  border-radius: 11px;
+  background: var(--sas-gray-300);
+  border-radius: var(--radius-full);
   position: relative;
-  transition: background 0.2s;
+  transition: background var(--transition-normal);
 }
 
 .ui-runner__toggle--on .ui-runner__toggle-track {
-  background: var(--sas-blue, #1976d2);
+  background: var(--sas-blue-primary);
 }
 
 .ui-runner__toggle-thumb {
@@ -276,9 +295,9 @@
   left: 2px;
   width: 18px;
   height: 18px;
-  background: #fff;
+  background: var(--sas-white);
   border-radius: 50%;
-  transition: transform 0.2s;
+  transition: transform var(--transition-normal);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
@@ -287,40 +306,40 @@
 }
 
 .ui-runner__toggle-label {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 /* Readonly */
 .ui-runner__readonly {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
   padding: 6px 0;
-  color: var(--sas-gray-800, #333);
+  color: var(--sas-gray-800);
 }
 
 .ui-runner__readonly--null {
-  color: var(--sas-gray-400, #999);
+  color: var(--sas-text-muted);
   font-style: italic;
 }
 
 .ui-runner__readonly--json {
-  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
-  font-size: 0.85rem;
-  background: var(--sas-gray-50, #f5f5f5);
-  padding: 8px;
-  border-radius: 4px;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  background: var(--sas-gray-50);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
   overflow-x: auto;
 }
 
 /* Gauge */
 .ui-runner__gauge {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .ui-runner__gauge-bar {
   height: 10px;
-  background: var(--sas-gray-200, #e0e0e0);
+  background: var(--sas-gray-200);
   border-radius: 5px;
   overflow: hidden;
   margin-bottom: 6px;
@@ -339,57 +358,52 @@
 }
 
 .ui-runner__gauge-value {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
 }
 
 .ui-runner__gauge-label {
-  font-size: 0.8rem;
-  color: var(--sas-gray-500, #888);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
 }
 
-/* Badge */
+/* Decision badge: BadgeWidget.tsx composes `sas-badge sas-badge--<variant>`
+   with this class, so radius, padding and the light-ground/dark-text colour
+   pairs come from the shared component. Output values are shown exactly as
+   mapped (not upper-cased) and one step larger than a label badge, because
+   they are the result the user is reading. */
 .ui-runner__badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.ui-runner__badge--null {
-  background: var(--sas-gray-300, #ccc);
-  color: var(--sas-gray-600, #666);
+  text-transform: none;
+  font-size: var(--font-size-sm);
 }
 
 /* Markdown */
 .ui-runner__markdown {
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   line-height: 1.6;
-  color: var(--sas-gray-800, #333);
+  color: var(--sas-gray-800);
 }
 
 .ui-runner__markdown h2 {
-  font-size: 1.2rem;
-  font-weight: 600;
-  margin: 0 0 8px;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-2);
 }
 
 .ui-runner__markdown h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   margin: 0 0 6px;
 }
 
 .ui-runner__markdown h4 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin: 0 0 4px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin: 0 0 var(--space-1);
 }
 
 .ui-runner__markdown p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 
 .ui-runner__markdown p:last-child {
@@ -398,12 +412,12 @@
 
 .ui-runner__markdown hr {
   border: none;
-  border-top: 1px solid var(--sas-gray-200, #e0e0e0);
-  margin: 12px 0;
+  border-top: 1px solid var(--sas-gray-200);
+  margin: var(--space-3) 0;
 }
 
 .ui-runner__markdown a {
-  color: var(--sas-blue, #1976d2);
+  color: var(--sas-blue-primary);
   text-decoration: none;
 }
 
@@ -414,29 +428,29 @@
 .ui-runner__markdown-img {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
-  margin: 4px 0;
+  border-radius: var(--radius-md);
+  margin: var(--space-1) 0;
 }
 
 .ui-runner__markdown-code {
-  background: var(--sas-gray-100, #eee);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+  background: var(--sas-gray-100);
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
   font-size: 0.85em;
 }
 
-/* === UI Apps List Styles === */
+/* === UI Apps List Styles (src/components/uiApps) === */
 
 .ui-apps-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .ui-apps-list__actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ui-apps-list__search {
@@ -446,54 +460,45 @@
 .ui-apps-list__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-}
-
-.ui-apps-list__empty {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--sas-gray-500, #888);
-}
-
-.ui-apps-list__empty p {
-  margin: 4px 0;
+  gap: var(--space-4);
 }
 
 /* UI App Card */
 .ui-app-card {
-  transition: box-shadow 0.15s;
+  transition: box-shadow var(--transition-fast);
 }
 
 .ui-app-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .ui-app-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .ui-app-card__name {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
 }
 
 .ui-app-card__description {
-  color: var(--sas-gray-600, #666);
-  font-size: 0.85rem;
-  margin: 0 0 8px;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-2);
 }
 
 .ui-app-card__meta {
   display: flex;
   justify-content: space-between;
-  font-size: 0.8rem;
-  color: var(--sas-gray-500, #888);
-  margin-bottom: 12px;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+  margin-bottom: var(--space-3);
 }
 
 .ui-app-card__module {
@@ -509,37 +514,6 @@
   flex-wrap: wrap;
 }
 
-/* Raw output fallback */
-.ui-runner__raw-outputs {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--sas-gray-200, #e0e0e0);
-  margin-top: 12px;
-}
-
-.ui-runner__raw-output {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 8px;
-  background: var(--sas-gray-50, #f5f5f5);
-  border-radius: 4px;
-}
-
-.ui-runner__raw-output-name {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--sas-gray-600, #666);
-}
-
-.ui-runner__raw-output-value {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--sas-gray-800, #333);
-}
-
 /* Responsive */
 @media (max-width: 768px) {
   .ui-runner__fields--cols-2,
@@ -547,23 +521,15 @@
     grid-template-columns: 1fr;
   }
 
+  /* Every field takes the single column (a "half" would otherwise still
+     span two tracks and create an implicit second column). */
+  .ui-runner__fields--cols-2 .ui-runner__field,
+  .ui-runner__fields--cols-3 .ui-runner__field {
+    grid-column: 1 / -1;
+  }
+
   .ui-runner__content--side-by-side {
     flex-direction: column;
-  }
-
-  .ui-builder__canvas-wrapper {
-    flex-direction: column;
-  }
-
-  .ui-builder__config-panel {
-    width: 100%;
-    min-width: auto;
-    position: static;
-  }
-
-  .ui-builder__toolbar {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .ui-apps-list__grid {

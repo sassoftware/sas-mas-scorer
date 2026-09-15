@@ -68,10 +68,12 @@ export const RulesImportPage: React.FC = () => {
   // when the same target is hit again.
   const [focusTarget, setFocusTarget] = useState<{ row: number; col: number | null; nonce: number } | null>(null);
   const lastErrorJumpRef = useRef<number>(-1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Derived validation state ----
-  const clientIssues = useMemo(() => [...fileIssues, ...validateRows(rows)], [rows, fileIssues]);
+  // groups first: validateRows reuses it instead of grouping the file a second time.
   const groups = useMemo(() => groupRuleSets(rows), [rows]);
+  const clientIssues = useMemo(() => [...fileIssues, ...validateRows(rows, groups)], [rows, groups, fileIssues]);
   const groupSignature = useMemo(() => JSON.stringify(groups.map((g) => g.key).sort()), [groups]);
   const preflightStale = preflight !== null && preflight.forSignature !== groupSignature;
   const serverIssues = useMemo(() => outcome?.serverIssues ?? [], [outcome]);
@@ -117,14 +119,15 @@ export const RulesImportPage: React.FC = () => {
     [clientIssues, preflight, preflightStale, idConflictIssues, serverIssues]
   );
 
-  const issuesByCell = useMemo(() => {
-    const index = new Map<string, CellIssue[]>();
+  // Issues per grid row (row-level and cell-level together); the grid splits
+  // them by column inside its memoized row component.
+  const issuesByRow = useMemo(() => {
+    const index = new Map<number, CellIssue[]>();
     for (const issue of allIssues) {
       if (issue.row < 0) continue;
-      const key = issue.col === null ? `${issue.row}:*` : `${issue.row}:${issue.col}`;
-      const list = index.get(key) ?? [];
+      const list = index.get(issue.row) ?? [];
       list.push(issue);
-      index.set(key, list);
+      index.set(issue.row, list);
     }
     return index;
   }, [allIssues]);
@@ -313,9 +316,13 @@ export const RulesImportPage: React.FC = () => {
   };
 
   /** Rows still carrying a ruleset_id or rule_id from the environment they were exported from. */
-  const rowsWithIds = rows.reduce(
-    (n, row) => (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '' ? n + 1 : n),
-    0
+  const rowsWithIds = useMemo(
+    () =>
+      rows.reduce(
+        (n, row) => (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '' ? n + 1 : n),
+        0
+      ),
+    [rows]
   );
 
   /**
@@ -543,16 +550,10 @@ export const RulesImportPage: React.FC = () => {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
           >
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              className="rules-import__file-input"
-              id="rules-import-file-input"
-            />
-            <label htmlFor="rules-import-file-input" className="rules-import__file-label">
+            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} hidden />
+            <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
               Choose a CSV file
-            </label>
+            </Button>
             <span className="rules-import__dropzone-hint">or drag &amp; drop it here</span>
           </div>
           {fileName && (
@@ -583,7 +584,7 @@ export const RulesImportPage: React.FC = () => {
               <Button variant="tertiary" size="small" onClick={handleStartOver}>
                 Start over
               </Button>
-              <Button variant="primary" onClick={() => setActiveStep('review')}>
+              <Button variant="primary" size="small" onClick={() => setActiveStep('review')}>
                 Review &amp; fix rows
               </Button>
             </div>
@@ -649,7 +650,7 @@ export const RulesImportPage: React.FC = () => {
 
           <RulesGrid
             rows={rows}
-            issuesByCell={issuesByCell}
+            issuesByRow={issuesByRow}
             visibleRowIndexes={visibleRowIndexes}
             onCellChange={handleCellChange}
             highlightRowIndexes={scopeSet ?? undefined}
@@ -737,25 +738,25 @@ export const RulesImportPage: React.FC = () => {
             </Alert>
           )}
           {preflight && !preflightStale && (
-            <table className="rules-import__preflight-table">
-              <thead>
+            <table className="sas-table rules-import__preflight-table">
+              <thead className="sas-table__head">
                 <tr>
-                  <th>Rule set</th>
-                  <th>Folder</th>
-                  <th>Folder exists</th>
-                  <th>Action</th>
-                  <th>Details</th>
+                  <th scope="col" className="sas-table__th">Rule set</th>
+                  <th scope="col" className="sas-table__th">Folder</th>
+                  <th scope="col" className="sas-table__th">Folder exists</th>
+                  <th scope="col" className="sas-table__th">Action</th>
+                  <th scope="col" className="sas-table__th">Details</th>
                 </tr>
               </thead>
               <tbody>
                 {preflight.results.map((result) => (
-                  <tr key={result.key}>
-                    <td>{result.name}</td>
-                    <td className="rules-import__preflight-folder">{result.folderPath}</td>
-                    <td>
+                  <tr key={result.key} className="sas-table__row">
+                    <td className="sas-table__td">{result.name}</td>
+                    <td className="sas-table__td rules-import__preflight-folder">{result.folderPath}</td>
+                    <td className="sas-table__td">
                       {result.folderExists === null ? '?' : result.folderExists ? 'yes' : 'no (will be created)'}
                     </td>
-                    <td>
+                    <td className="sas-table__td">
                       <Badge
                         variant={result.action === 'create' ? 'success' : result.action === 'update' ? 'warning' : 'default'}
                         size="small"
@@ -763,7 +764,7 @@ export const RulesImportPage: React.FC = () => {
                         {result.action.toUpperCase()}
                       </Badge>
                     </td>
-                    <td className="rules-import__preflight-details">
+                    <td className="sas-table__td rules-import__preflight-details">
                       {result.action === 'update' && result.existingRevision && `current revision ${result.existingRevision}`}
                       {result.checkError && ` ${result.checkError}`}
                     </td>
@@ -798,6 +799,7 @@ export const RulesImportPage: React.FC = () => {
               </Button>
               <Button
                 variant="primary"
+                size="small"
                 onClick={() => setPhase('confirming')}
                 loading={importing}
                 disabled={importBlockedReason !== null}

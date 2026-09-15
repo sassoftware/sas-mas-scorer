@@ -5,13 +5,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PublishedItem, PublishedKind } from '../../types/modelPublish';
 import { DataTable, Column } from '../common/DataTable';
 import { Badge, BadgeVariant } from '../common/Badge';
+import { Button } from '../common/Button';
+import { SearchInput } from '../common/SearchInput';
 import {
   extractDecisionFlowId,
   getPublishedKind,
 } from '../../utils/publishHelpers';
 import { buildDeepLink } from '../../utils/deepLinks';
+import { formatTimestamp } from '../../utils/formatters';
 
 type KindFilter = 'all' | PublishedKind;
+
+/** Rows rendered per page; the filters and counts still cover the whole list. */
+const PAGE_SIZE = 25;
 
 interface PublishedItemsTableProps {
   items: PublishedItem[];
@@ -41,11 +47,17 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
   const [codeTypeFilter, setCodeTypeFilter] = useState<string>('all');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchText), 200);
     return () => clearTimeout(timer);
   }, [searchText]);
+
+  // A changed filter or search term starts again from the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, kindFilter, destinationFilter, codeTypeFilter]);
 
   const destinations = useMemo(() => {
     const s = new Set<string>();
@@ -95,6 +107,14 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
     });
   }, [enrichedItems, debouncedSearch, kindFilter, destinationFilter, codeTypeFilter]);
 
+  // Clamp rather than only reset so a shrinking list never shows an empty page.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage]
+  );
+
   const columns: Column<Row>[] = [
     {
       key: 'name',
@@ -138,9 +158,7 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
       header: 'Created',
       width: '14%',
       render: ({ item }) => (
-        <span className="date-cell">
-          {new Date(item.creationTimeStamp).toLocaleString()}
-        </span>
+        <span className="publishing__date">{formatTimestamp(item.creationTimeStamp)}</span>
       ),
     },
     {
@@ -266,38 +284,13 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
           </label>
         </div>
 
-        <div className="publishing__search">
-          <svg
-            className="publishing__search-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            className="publishing__search-input"
-            placeholder="Search name, kind, or code type..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          {searchText && (
-            <button
-              className="publishing__search-clear"
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setSearchText('')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <SearchInput
+          className="publishing__search"
+          aria-label="Search published items by name, kind, or code type"
+          placeholder="Search name, kind, or code type..."
+          value={searchText}
+          onChange={setSearchText}
+        />
       </div>
 
       <div className="publishing__items-count">
@@ -306,10 +299,34 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={pageItems}
         keyField="id"
         emptyMessage="No published items match the current filters."
       />
+
+      {pageCount > 1 && (
+        <nav className="publishing__pagination" aria-label="Published items pages">
+          <Button
+            variant="tertiary"
+            size="small"
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            Previous
+          </Button>
+          <span className="publishing__pagination-info">
+            Page {currentPage + 1} of {pageCount}
+          </span>
+          <Button
+            variant="tertiary"
+            size="small"
+            disabled={currentPage >= pageCount - 1}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            Next
+          </Button>
+        </nav>
+      )}
     </div>
   );
 };

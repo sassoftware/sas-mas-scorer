@@ -3,11 +3,15 @@
 
 /* Test Coverage Analysis Styles */
 
-/* ─── Progress Card ─── */
-
-.coverage-progress-card {
-  margin-bottom: var(--space-6);
+/* The page container owns the vertical rhythm (like .publishing and
+   .module-list), so cards and alerts need no margins of their own. */
+.coverage-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
 }
+
+/* ─── Progress Card ─── */
 
 .coverage-progress {
   padding: var(--space-4);
@@ -55,7 +59,7 @@
 
 .coverage-progress__step {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
 /* ─── Welcome State ─── */
@@ -89,7 +93,7 @@
 
 .coverage-welcome__note {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   margin: 0 auto var(--space-6);
   font-style: italic;
 }
@@ -100,7 +104,6 @@
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: var(--space-6);
-  margin-bottom: var(--space-6);
 }
 
 @media (max-width: 800px) {
@@ -212,10 +215,6 @@
 
 /* ─── Coverage by Type Bars ─── */
 
-.coverage-by-type-card {
-  margin-bottom: var(--space-6);
-}
-
 .coverage-type-bars {
   display: flex;
   flex-direction: column;
@@ -249,7 +248,7 @@
 
 .coverage-type-row__count {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -289,8 +288,11 @@
 
 /* ─── Detail Table ─── */
 
-.coverage-detail-card {
-  margin-bottom: var(--space-6);
+/* The filter block is passed as CardHeader actions; let it drop under the
+   title in a narrow VA embed. Redundant once .sas-card__header wraps. */
+.coverage-detail-card > .sas-card__header {
+  flex-wrap: wrap;
+  row-gap: var(--space-3);
 }
 
 .coverage-detail__filters {
@@ -300,91 +302,142 @@
   flex-wrap: wrap;
 }
 
+/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
 .coverage-detail__search {
-  padding: 6px 12px;
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family-primary);
   min-width: 200px;
-  outline: none;
-  transition: border-color var(--transition-fast);
 }
 
-.coverage-detail__search:focus {
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
+.coverage-detail__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.coverage-detail__select {
-  padding: 6px 12px;
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
+.coverage-detail__filter-label {
   font-size: var(--font-size-sm);
-  font-family: var(--font-family-primary);
-  background: var(--sas-white);
-  cursor: pointer;
-  outline: none;
-}
-
-.coverage-detail__select:focus {
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
-}
-
-/* ─── Coverage Badge ─── */
-
-.coverage-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
   white-space: nowrap;
 }
 
-.coverage-badge--covered {
-  background: var(--sas-success-light);
-  color: var(--sas-success-dark);
+.coverage-detail__select {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--sas-white);
+  color: var(--sas-gray-900);
+  cursor: pointer;
 }
 
-.coverage-badge--uncovered {
-  background: var(--sas-error-light);
-  color: var(--sas-error-dark);
+.coverage-detail__select:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.coverage-detail__empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--sas-text-muted);
+}
+
+.coverage-detail__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.coverage-detail__pagination-info {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
 }
 
 /* ─── Deep Link ─── */
 
+.coverage-detail__links {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Icon-only link/button: the icon is 16px, the target is 32px. */
 .coverage-deep-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: var(--radius-md);
   color: var(--sas-blue-primary);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .coverage-deep-link:hover {
   color: var(--sas-blue-dark);
+  background-color: var(--sas-gray-100);
 }
 
 /* ─── Sortable Headers ─── */
 
-.sas-table__th--sortable {
+/* Same pattern as .module-list__sort-header: a real button inside the <th>. */
+.coverage-detail__sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: inherit;
+  color: var(--sas-gray-700);
+  cursor: pointer;
   user-select: none;
+  transition: color var(--transition-fast);
 }
 
-.sas-table__th--sortable:hover {
-  background: var(--sas-gray-100);
+.coverage-detail__sort-header:hover {
+  color: var(--sas-blue-primary);
+}
+
+.coverage-detail__sort-header--active {
+  color: var(--sas-blue-primary);
+}
+
+.coverage-detail__sort-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.coverage-detail__sort-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ─── Expandable Rows ─── */
+
+/* Keyboard focus on the row's toggle or links highlights the row, the way
+   DataTable's clickable rows do. Scoped under the table modifier so it
+   outranks the --striped even-row tint. */
+.sas-table--hoverable .coverage-row:focus-within {
+  background-color: var(--sas-blue-light);
+}
 
 .coverage-row--expandable {
   cursor: pointer;
 }
 
-.coverage-row--expandable:hover {
-  background: var(--sas-blue-lighter) !important;
+/* Hover uses the shared .sas-table--hoverable tint; the chevron reinforces
+   that the row is clickable. */
+.coverage-row--expandable:hover .coverage-row__chevron {
+  color: var(--sas-blue-primary);
 }
 
 .coverage-row--expanded {
@@ -431,7 +484,7 @@
   color: var(--sas-gray-700);
   margin-bottom: var(--space-3);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .coverage-scenarios__table {
@@ -467,6 +520,6 @@
 }
 
 .coverage-scenarios__none {
-  color: var(--sas-gray-400);
+  color: var(--sas-text-muted);
   font-style: italic;
 }

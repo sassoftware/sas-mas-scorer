@@ -10,9 +10,9 @@ interface Props {
 }
 
 const defaultColorStops = [
-  { upTo: 30, color: 'var(--sas-red, #d32f2f)' },
-  { upTo: 70, color: 'var(--sas-yellow, #f9a825)' },
-  { upTo: 100, color: 'var(--sas-green, #388e3c)' },
+  { upTo: 30, color: 'var(--sas-error)' },
+  { upTo: 70, color: 'var(--sas-warning)' },
+  { upTo: 100, color: 'var(--sas-success)' },
 ];
 
 export const GaugeWidget: React.FC<Props> = ({ field, value }) => {
@@ -43,7 +43,7 @@ export const GaugeWidget: React.FC<Props> = ({ field, value }) => {
     for (const stop of colorStops) {
       if (percentage <= stop.upTo) return stop.color;
     }
-    return colorStops[colorStops.length - 1]?.color ?? 'var(--sas-blue, #1976d2)';
+    return colorStops[colorStops.length - 1]?.color ?? 'var(--sas-blue-primary)';
   };
 
   return (

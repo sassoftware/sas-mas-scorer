@@ -13,6 +13,7 @@ import { NODE_TYPE_LABELS, CODE_TYPE_LABELS } from './constants';
 import { buildDeepLink, buildDecisionDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../utils/deepLinks';
 import { getRuleSet, getRuleSetBundle, type RuleSetDetail, type BusinessRule, type RuleSetBundle } from '../api/rulesets';
 import { buildRuleSetView, type RuleElementView, type RuleSetView } from '../utils/ruleSetView';
+import { ruleSetViewOf } from './ruleSetViewCache';
 import { getSidModel, type SidModelDetail } from '../api/sidModels';
 import { getCodeFileDetail, getFileContent, stripLeadingJsonComment, type CodeFileDetail } from '../api/codeFiles';
 import { getTreatmentGroupByUri, getTreatmentDefinitionByRevision, type TreatmentGroupDetail, type TreatmentDefinitionDetail } from '../api/treatments';
@@ -492,6 +493,8 @@ function extractIdFromUri(uri: string): string | null {
 interface FetchedNodeDetails {
   ruleSet?: RuleSetDetail;
   rules?: BusinessRule[];
+  /** The readable chain of `rules`, shared with the diagram via ruleSetViewOf. */
+  ruleSetView?: RuleSetView;
   model?: SidModelDetail;
   codeFile?: CodeFileDetail;
   codeContent?: string;
@@ -504,30 +507,74 @@ interface FetchedNodeDetails {
   restApi?: RestApiDefinitionDetail;
 }
 
+/**
+ * In-flight and settled requests for the objects several nodes commonly
+ * share (every custom node of one kind points at the same decisionNodeType;
+ * a model or code file is often reused across branches). Storing the promise
+ * rather than the value lets concurrent members of one fetch batch share a
+ * single request. A rejected promise is shared too, which is fine here: every
+ * caller already swallows the failure and omits the section.
+ */
+interface SharedObjectFetches {
+  models: Map<string, Promise<SidModelDetail>>;
+  codeFiles: Map<string, Promise<{ codeFile: CodeFileDetail; codeContent?: string }>>;
+  nodeTypes: Map<string, Promise<DecisionNodeTypeDetail>>;
+}
+
+function newSharedObjectFetches(): SharedObjectFetches {
+  return { models: new Map(), codeFiles: new Map(), nodeTypes: new Map() };
+}
+
+function memoFetch<T>(cache: Map<string, Promise<T>>, key: string, fetch: () => Promise<T>): Promise<T> {
+  let pending = cache.get(key);
+  if (!pending) {
+    pending = fetch();
+    cache.set(key, pending);
+  }
+  return pending;
+}
+
+async function fetchCodeFileWithContent(uri: string): Promise<{ codeFile: CodeFileDetail; codeContent?: string }> {
+  const codeFile = await getCodeFileDetail(uri);
+  const fileContentLink = codeFile.links?.find(
+    (l) => l.rel === 'content' || (l.href ?? l.uri ?? '').includes('/files/files/'),
+  );
+  const contentPath = fileContentLink ? (fileContentLink.href ?? fileContentLink.uri) : codeFile.fileUri;
+  if (!contentPath) return { codeFile };
+  try {
+    const raw = await getFileContent(contentPath);
+    return { codeFile, codeContent: stripLeadingJsonComment(raw).code };
+  } catch {
+    return { codeFile };
+  }
+}
+
 async function fetchNodeDetails(
   step: Step,
   subDecisionCache: Map<string, DecisionFlow>,
   restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
   ruleSetCache: Map<string, RuleSetBundle> = new Map(),
+  shared: SharedObjectFetches = newSharedObjectFetches(),
 ): Promise<FetchedNodeDetails> {
   const details: FetchedNodeDetails = {};
 
   if (step.ruleset?.id) {
-    const cached = ruleSetCache.get(step.ruleset.id);
-    if (cached) {
-      details.ruleSet = cached.detail;
-      details.rules = cached.rules;
-    } else {
-      try {
-        const bundle = await getRuleSetBundle(step.ruleset.id);
-        details.ruleSet = bundle.detail;
-        details.rules = bundle.rules;
-      } catch { /* skip */ }
+    let bundle = ruleSetCache.get(step.ruleset.id);
+    if (!bundle) {
+      try { bundle = await getRuleSetBundle(step.ruleset.id); } catch { /* skip */ }
+    }
+    if (bundle) {
+      details.ruleSet = bundle.detail;
+      details.rules = bundle.rules;
+      details.ruleSetView = ruleSetViewOf(bundle);
     }
   }
 
   if (step.model?.id) {
-    try { details.model = await getSidModel(step.model.id); } catch { /* skip */ }
+    const modelId = step.model.id;
+    try {
+      details.model = await memoFetch(shared.models, modelId, () => getSidModel(modelId));
+    } catch { /* skip */ }
   }
 
   const customObjType = step.customObject?.type ?? '';
@@ -535,19 +582,11 @@ async function fetchNodeDetails(
     ? step.customObject.uri : null;
   if (codeFileUri) {
     try {
-      const cf = await getCodeFileDetail(codeFileUri);
-      details.codeFile = cf;
-      const fileContentLink = cf.links?.find(
-        (l) => l.rel === 'content' || (l.href ?? l.uri ?? '').includes('/files/files/'),
+      const { codeFile, codeContent } = await memoFetch(
+        shared.codeFiles, codeFileUri, () => fetchCodeFileWithContent(codeFileUri),
       );
-      const contentPath = fileContentLink ? (fileContentLink.href ?? fileContentLink.uri) : cf.fileUri;
-      if (contentPath) {
-        try {
-          const raw = await getFileContent(contentPath);
-          const { code } = stripLeadingJsonComment(raw);
-          details.codeContent = code;
-        } catch { /* skip */ }
-      }
+      details.codeFile = codeFile;
+      details.codeContent = codeContent;
     } catch { /* skip */ }
   }
 
@@ -557,7 +596,9 @@ async function fetchNodeDetails(
   if (ntLink) {
     const ntId = extractIdFromUri(ntLink.href ?? ntLink.uri);
     if (ntId) {
-      try { details.nodeType = await getDecisionNodeType(ntId); } catch { /* skip */ }
+      try {
+        details.nodeType = await memoFetch(shared.nodeTypes, ntId, () => getDecisionNodeType(ntId));
+      } catch { /* skip */ }
     }
   }
 
@@ -654,8 +695,7 @@ function formatRuleElement(element: RuleElementView, lead: string): string {
  * A rule set as the ordered if / else if / else chain it actually is, with the
  * terms it reads and writes and anything the service flags as invalid.
  */
-function formatRuleChain(rules: BusinessRule[]): string {
-  const view = buildRuleSetView(rules);
+function formatRuleChain(view: RuleSetView): string {
   let md = '';
 
   if (view.invalidCount > 0) {
@@ -903,7 +943,8 @@ function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDe
       }
     }
     const rules = details.rules ?? details.ruleSet?.rules;
-    if (rules && rules.length > 0) md += formatRuleChain(rules);
+    const view = details.ruleSetView ?? (rules && rules.length > 0 ? buildRuleSetView(rules) : undefined);
+    if (view && view.rules.length > 0) md += formatRuleChain(view);
   }
 
   if (step.model) {
@@ -1099,43 +1140,55 @@ function extractSubDecisionUris(steps: Step[]): string[] {
   return uris;
 }
 
+/**
+ * Breadth-first: one request burst per nesting level, so siblings' subtrees
+ * load together instead of one sibling at a time, and a grandchild shared by
+ * two children is requested once. Mirrors FlowDetailPage.fetchSubDecisions.
+ */
 async function fetchAllSubDecisions(
   flow: DecisionFlow,
   cache: Map<string, DecisionFlow>,
-  depth: number = 0,
   maxDepth: number = 3,
 ): Promise<void> {
-  if (depth >= maxDepth) return;
-  const steps = flow.flow?.steps ?? [];
-  const uris = [...new Set(extractSubDecisionUris(steps))];
-  const newUris = uris.filter((uri) => !cache.has(uri));
-  if (newUris.length === 0) return;
-
-  const results = await Promise.allSettled(
-    newUris.map((uri) => getDecisionRevision(uri)),
-  );
-  for (let i = 0; i < results.length; i++) {
-    if (results[i].status === 'fulfilled') {
-      const subFlow = (results[i] as PromiseFulfilledResult<DecisionFlow>).value;
-      cache.set(newUris[i], subFlow);
-      await fetchAllSubDecisions(subFlow, cache, depth + 1, maxDepth);
+  let frontier: DecisionFlow[] = [flow];
+  for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
+    const uris = new Set<string>();
+    for (const f of frontier) {
+      for (const uri of extractSubDecisionUris(f.flow?.steps ?? [])) {
+        if (!cache.has(uri)) uris.add(uri);
+      }
     }
+    const newUris = [...uris];
+    if (newUris.length === 0) return;
+
+    const results = await Promise.allSettled(newUris.map((uri) => getDecisionRevision(uri)));
+    frontier = [];
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        cache.set(newUris[i], result.value);
+        frontier.push(result.value);
+      }
+    });
   }
 }
 
-/** Fetch every REST API definition referenced by the decision and its sub-decisions. */
+/**
+ * Every REST API definition referenced by the decision and its sub-decisions.
+ * Seeded from `existing` (the page's cache) so only the missing ones are fetched.
+ */
 async function fetchAllRestApiDefinitions(
   flow: DecisionFlow,
   subDecisionCache: Map<string, DecisionFlow>,
+  existing?: Map<string, RestApiDefinitionDetail>,
 ): Promise<Map<string, RestApiDefinitionDetail>> {
-  const cache = new Map<string, RestApiDefinitionDetail>();
+  const cache = new Map<string, RestApiDefinitionDetail>(existing ?? []);
   const uris = new Set(collectCustomObjectUris(flow.flow?.steps ?? [], REST_API_DEFINITION_TYPE));
   for (const sub of subDecisionCache.values()) {
     for (const uri of collectCustomObjectUris(sub.flow?.steps ?? [], REST_API_DEFINITION_TYPE)) {
       uris.add(uri);
     }
   }
-  const list = [...uris];
+  const list = [...uris].filter((uri) => !cache.has(uri));
   const results = await Promise.allSettled(list.map((uri) => getRestApiDefinitionByUri(uri)));
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') cache.set(list[i], result.value);
@@ -1143,16 +1196,18 @@ async function fetchAllRestApiDefinitions(
   return cache;
 }
 
+/** Every rule set the decision and its sub-decisions execute, seeded like the REST definitions. */
 async function fetchAllRuleSets(
   flow: DecisionFlow,
   subDecisionCache: Map<string, DecisionFlow>,
+  existing?: Map<string, RuleSetBundle>,
 ): Promise<Map<string, RuleSetBundle>> {
-  const cache = new Map<string, RuleSetBundle>();
+  const cache = new Map<string, RuleSetBundle>(existing ?? []);
   const ids = new Set(collectRuleSetIds(flow.flow?.steps ?? []));
   for (const sub of subDecisionCache.values()) {
     for (const id of collectRuleSetIds(sub.flow?.steps ?? [])) ids.add(id);
   }
-  const list = [...ids];
+  const list = [...ids].filter((id) => !cache.has(id));
   const results = await Promise.allSettled(list.map((id) => getRuleSetBundle(id)));
   results.forEach((result, i) => {
     if (result.status === 'fulfilled') cache.set(list[i], result.value);
@@ -1171,18 +1226,27 @@ export interface ExportProgress {
   phase?: string;
 }
 
+/**
+ * The three optional caches are the ones the flow detail page has already
+ * filled; passing them in means the export only fetches what the page has
+ * not reached yet.
+ */
 export async function generateMarkdownExport(
   flow: DecisionFlow,
   onProgress?: (progress: ExportProgress) => void,
   existingSubDecisionCache?: Map<string, DecisionFlow>,
+  existingRestApiCache?: Map<string, RestApiDefinitionDetail>,
+  existingRuleSetCache?: Map<string, RuleSetBundle>,
 ): Promise<string> {
   const subDecisionCache = new Map<string, DecisionFlow>(existingSubDecisionCache ?? []);
   onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching sub-decisions...' });
   await fetchAllSubDecisions(flow, subDecisionCache);
-  onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching REST API definitions...' });
-  const restApiCache = await fetchAllRestApiDefinitions(flow, subDecisionCache);
-  onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching rule sets...' });
-  const ruleSetCache = await fetchAllRuleSets(flow, subDecisionCache);
+  // Both read only the sub-decision cache, so they can run together.
+  onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching REST API definitions and rule sets...' });
+  const [restApiCache, ruleSetCache] = await Promise.all([
+    fetchAllRestApiDefinitions(flow, subDecisionCache, existingRestApiCache),
+    fetchAllRuleSets(flow, subDecisionCache, existingRuleSetCache),
+  ]);
 
   const mermaid = generateMermaid(flow, subDecisionCache);
   const sig = flow.signature ?? [];
@@ -1200,7 +1264,7 @@ export async function generateMarkdownExport(
   for (const n of ruleSetNodes) {
     const bundle = ruleSetCache.get(n.step.ruleset!.id);
     if (!bundle) continue;
-    const view = buildRuleSetView(bundle.rules);
+    const view = ruleSetViewOf(bundle);
     ruleSetViews.set(n.step.ruleset!.id, view);
     for (const ref of view.references) {
       referenceRows.push({
@@ -1364,7 +1428,9 @@ export async function generateMarkdownExport(
     });
     md += '\n';
 
-    // Fetch all node details in parallel (batch of 5)
+    // Fetch all node details in parallel (batch of 5); objects shared by
+    // several nodes are requested once across all batches.
+    const shared = newSharedObjectFetches();
     const detailsMap = new Map<number, FetchedNodeDetails>();
     const fetchableNodes = nodes
       .map((n, i) => ({ node: n, index: i }))
@@ -1380,7 +1446,7 @@ export async function generateMarkdownExport(
             nodeName: node.name,
             phase: 'Fetching node details',
           });
-          return fetchNodeDetails(node.step, subDecisionCache, restApiCache, ruleSetCache);
+          return fetchNodeDetails(node.step, subDecisionCache, restApiCache, ruleSetCache, shared);
         }),
       );
       batchResults.forEach((result, bi) => {

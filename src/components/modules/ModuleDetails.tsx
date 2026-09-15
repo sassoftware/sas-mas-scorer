@@ -44,6 +44,8 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
 
   // Entries state for Data type modules
   const [entries, setEntries] = useState<Entry[]>([]);
+  // Server-reported total; only differs from entries.length when the walk was capped.
+  const [entriesCount, setEntriesCount] = useState(0);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [entriesError, setEntriesError] = useState<string | null>(null);
 
@@ -68,6 +70,9 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
     return match ? match[1] : null;
   }, [moduleType, sourceURI]);
 
+  // The three fetches below guard every state write with a `cancelled` flag so
+  // a response for a previous module (or an unmounted panel) cannot land.
+
   // Fetch decision source info for Decision type modules
   useEffect(() => {
     if (moduleType !== 'Decision' || !sourceURI) {
@@ -75,9 +80,11 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
       return;
     }
 
+    let cancelled = false;
     getDecisionSourceInfo(sourceURI)
-      .then(setDecisionInfo)
-      .catch(() => setDecisionInfo(null));
+      .then((info) => { if (!cancelled) setDecisionInfo(info); })
+      .catch(() => { if (!cancelled) setDecisionInfo(null); });
+    return () => { cancelled = true; };
   }, [moduleType, sourceURI]);
 
   // Fetch published model info for Model type modules
@@ -87,33 +94,43 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
       return;
     }
 
+    let cancelled = false;
     getPublishedModelInfo(module.name)
-      .then(setModelInfo)
-      .catch(() => setModelInfo(null));
+      .then((info) => { if (!cancelled) setModelInfo(info); })
+      .catch(() => { if (!cancelled) setModelInfo(null); });
+    return () => { cancelled = true; };
   }, [moduleType, module.name]);
 
   // Fetch entries for Data type modules
   useEffect(() => {
     if (moduleType !== 'Data' || !sourceURI) {
       setEntries([]);
+      setEntriesCount(0);
       return;
     }
 
+    let cancelled = false;
     const fetchEntries = async () => {
       setLoadingEntries(true);
       setEntriesError(null);
       try {
         const response = await getEntries(sourceURI);
-        setEntries(response.items ?? []);
+        if (cancelled) return;
+        const items = response.items ?? [];
+        setEntries(items);
+        setEntriesCount(response.count ?? items.length);
       } catch (err) {
+        if (cancelled) return;
         setEntriesError(err instanceof Error ? err.message : 'Failed to load entries');
         setEntries([]);
+        setEntriesCount(0);
       } finally {
-        setLoadingEntries(false);
+        if (!cancelled) setLoadingEntries(false);
       }
     };
 
     fetchEntries();
+    return () => { cancelled = true; };
   }, [moduleType, sourceURI]);
 
   // Extract source application link from sourceURI property
@@ -251,7 +268,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           { label: module.name },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <>
             {onViewFlow && decisionFlowId && (
               <Button variant="secondary" onClick={() => onViewFlow(decisionFlowId)}>
                 View Flow
@@ -265,7 +282,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
             <Button variant="tertiary" onClick={onBack}>
               Back to List
             </Button>
-          </div>
+          </>
         }
       />
 
@@ -385,7 +402,14 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
         {moduleType === 'Data' && (
           <Card className="module-details__entries-card">
             <CardHeader>
-              <h3>Entries {!loadingEntries && `(${entries.length})`}</h3>
+              <h3>
+                Entries{' '}
+                {!loadingEntries && (
+                  entriesCount > entries.length
+                    ? `(${entries.length} of ${entriesCount})`
+                    : `(${entries.length})`
+                )}
+              </h3>
             </CardHeader>
             <CardBody>
               {loadingEntries ? (

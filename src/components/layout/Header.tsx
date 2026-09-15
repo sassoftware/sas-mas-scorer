@@ -14,9 +14,24 @@ const isElectron = !!window.electronAPI;
 interface HeaderProps {
   onOpenSettings?: () => void;
   activeConnectionName?: string | null;
+  /** Whether the off-canvas sidebar (narrow viewports) is open. */
+  navOpen?: boolean;
+  /** Toggles the off-canvas sidebar; the button only shows below the layout breakpoint. */
+  onToggleNav?: () => void;
+  /** id of the sidebar the toggle controls. */
+  navId?: string;
+  /** Lets Layout give focus back to the toggle when the sidebar closes. */
+  navToggleRef?: React.RefObject<HTMLButtonElement>;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnectionName }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenSettings,
+  activeConnectionName,
+  navOpen = false,
+  onToggleNav,
+  navId,
+  navToggleRef,
+}) => {
   const { isAuthenticated, isLoading, login, logout } = useSasAuth();
 
   const handleAuthClick = async () => {
@@ -41,6 +56,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
   return (
     <header className="sas-header">
       <div className="sas-header__brand">
+        {onToggleNav && (
+          <button
+            ref={navToggleRef}
+            type="button"
+            className="sas-header__nav-toggle"
+            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={navOpen}
+            aria-controls={navId}
+            onClick={onToggleNav}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {navOpen ? <path d="M6 18L18 6M6 6l12 12" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+            </svg>
+          </button>
+        )}
         <div className="sas-header__logo">
           <svg viewBox="0 0 40 40" className="sas-header__logo-icon">
             {/* White tile with brand-blue mark stays visible on any environment color */}
@@ -63,8 +93,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
       <div className="sas-header__actions">
         {isElectron && onOpenSettings && (
           <button
+            type="button"
             className="sas-header__help-link"
             title="Connection Settings"
+            aria-label="Connection settings"
             onClick={onOpenSettings}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,6 +111,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
           rel="noopener noreferrer"
           className="sas-header__help-link"
           title="User Guide"
+          aria-label="User guide (opens in a new tab)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />

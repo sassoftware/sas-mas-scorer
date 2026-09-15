@@ -15,22 +15,36 @@ interface SidebarProps {
   onSelectModule?: (module: Module) => void;
   recentUIApps?: UIDefinitionSummary[];
   onSelectUIApp?: (id: string) => void;
+  /** id referenced by the header's nav toggle (aria-controls). */
+  id?: string;
+  /** Off-canvas state on narrow viewports; ignored above the layout breakpoint. */
+  open?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  activeView,
-  onNavigate,
-  selectedModule,
-  recentModules = [],
-  onSelectModule,
-  recentUIApps = [],
-  onSelectUIApp,
-}) => {
+export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Sidebar(
+  {
+    activeView,
+    onNavigate,
+    selectedModule,
+    recentModules = [],
+    onSelectModule,
+    recentUIApps = [],
+    onSelectUIApp,
+    id,
+    open = false,
+  },
+  ref
+) {
   const isUIView = activeView.startsWith('ui-app');
 
   return (
-    <aside className="sas-sidebar">
-      <nav className="sas-sidebar__nav">
+    <aside
+      ref={ref}
+      id={id}
+      className={`sas-sidebar ${open ? 'sas-sidebar--open' : ''}`}
+      tabIndex={-1}
+    >
+      <nav className="sas-sidebar__nav" aria-label="Main">
         <div className="sas-sidebar__section">
           <h3 className="sas-sidebar__section-title">Navigation</h3>
           <ul className="sas-sidebar__menu">
@@ -235,6 +249,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </aside>
   );
-};
+});
 
 export default Sidebar;

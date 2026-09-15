@@ -49,7 +49,7 @@ export const JobStatsCards: React.FC<JobStatsCardsProps> = ({ stats }) => {
         <div className="job-monitoring__stat-label">Failed / Other</div>
         <div className="job-monitoring__stat-sub">
           {counts && counts.failed !== null && counts.other !== null
-            ? `${counts.failed} failed · ${counts.other} cancelled/other`
+            ? `${counts.failed} failed · ${counts.other} canceled/other`
             : counts && counts.failed !== null
               ? `${counts.failed} failed`
               : ' '}

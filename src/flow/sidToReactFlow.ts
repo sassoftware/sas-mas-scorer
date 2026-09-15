@@ -6,7 +6,7 @@ import type { Step, DecisionFlow, SidNodeData, SidNodeType } from '../types/sid'
 import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression } from '../utils/classify';
 import { uriTemplateHost, type RestApiDefinitionDetail } from '../api/restApiDefinitions';
 import type { RuleSetBundle } from '../api/rulesets';
-import { buildRuleSetView } from '../utils/ruleSetView';
+import { ruleSetViewOf } from './ruleSetViewCache';
 
 interface Pending {
   nodeId: string;
@@ -58,7 +58,7 @@ function ruleSetNodeData(
   return {
     ruleCount: bundle.rules.length,
     ruleSetType: bundle.detail.ruleSetType,
-    ruleIssueCount: buildRuleSetView(bundle.rules).invalidCount,
+    ruleIssueCount: ruleSetViewOf(bundle).invalidCount,
   };
 }
 
@@ -121,9 +121,9 @@ function addEdge(
     style: dotted ? { strokeDasharray: '6 3', opacity: 0.7 } : undefined,
     animated: dotted,
     labelStyle: label === 'Yes'
-      ? { fill: '#16a34a', fontWeight: 600, fontSize: 11 }
+      ? { fill: 'var(--sas-success-dark)', fontWeight: 600, fontSize: 11 }
       : label === 'No'
-        ? { fill: '#dc2626', fontWeight: 600, fontSize: 11 }
+        ? { fill: 'var(--sas-error-dark)', fontWeight: 600, fontSize: 11 }
         : { fontSize: 11 },
   });
 }

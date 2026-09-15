@@ -29,8 +29,8 @@ export default function ModelNode({ data }: NodeProps<ModelNodeType>) {
               display: 'inline-block',
               padding: '2px 8px',
               borderRadius: '9999px',
-              color: '#ffffff',
-              backgroundColor: colors.border,
+              color: 'var(--sas-white)',
+              backgroundColor: colors.badge,
             }}
           >
             Model

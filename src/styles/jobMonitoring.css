@@ -39,16 +39,14 @@
   to { transform: rotate(360deg); }
 }
 
-.job-monitoring__error {
+/* Error banners are <Alert variant="error">; this row lays out the message
+ * and its Retry button inside the alert's content slot. */
+.job-monitoring__alert-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--sas-error-light);
-  border: 1px solid var(--sas-error);
-  border-radius: var(--radius-md);
-  color: var(--sas-error-dark);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
 }
 
 /* Stats */
@@ -76,9 +74,9 @@
 .job-monitoring__stat-card--runtime    { border-left-color: var(--sas-blue-primary); }
 
 .job-monitoring__stat-value {
-  font-size: 2.25rem;
-  line-height: 1.1;
-  font-weight: 700;
+  font-size: var(--font-size-3xl);
+  line-height: 1.1; /* deliberately tighter than --line-height-tight for a KPI figure */
+  font-weight: var(--font-weight-bold);
   color: var(--sas-gray-900);
 }
 
@@ -86,12 +84,12 @@
   font-size: var(--font-size-sm);
   color: var(--sas-gray-600);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .job-monitoring__stat-sub {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
 /* Sections */
@@ -109,14 +107,19 @@
   gap: var(--space-3);
 }
 
+/* Title plus its live count sit together as one flex child of the header so
+ * the count hugs the heading without being part of its accessible name. */
+.job-monitoring__section-title-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
 .job-monitoring__section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
   margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 .job-monitoring__section-meta {
@@ -154,7 +157,7 @@
 }
 
 .job-monitoring__running-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
   word-break: break-word;
 }
@@ -175,22 +178,12 @@
 
 .job-monitoring__running-meta strong {
   color: var(--sas-gray-800);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .job-monitoring__running-actions {
   display: flex;
   justify-content: flex-end;
-}
-
-.job-monitoring__empty {
-  color: var(--sas-gray-600);
-  margin: 0;
-  padding: var(--space-4);
-  text-align: center;
-  background-color: var(--sas-white);
-  border: 1px dashed var(--sas-gray-300);
-  border-radius: var(--radius-md);
 }
 
 /* Completed jobs table toolbar */
@@ -205,26 +198,11 @@
   border: 1px solid var(--sas-gray-200);
 }
 
+/* Sizing hook for the shared <SearchInput>; the field itself is .sas-input. */
 .job-monitoring__search {
-  position: relative;
   flex: 1;
   max-width: 360px;
   min-width: 220px;
-}
-
-.job-monitoring__search-input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-base);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  background-color: var(--sas-white);
-}
-
-.job-monitoring__search-input:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 3px var(--sas-blue-light);
 }
 
 .job-monitoring__chips {
@@ -237,7 +215,7 @@
   padding: var(--space-1) var(--space-3);
   background-color: var(--sas-white);
   border: 1px solid var(--sas-gray-300);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
   color: var(--sas-gray-700);
   cursor: pointer;
@@ -265,7 +243,8 @@
   white-space: nowrap;
 }
 
-/* Table cells */
+/* Table cells. The name cell is an inline <span> because DataTable wraps the
+ * first column of a clickable row in <button class="sas-table__row-button">. */
 .job-monitoring__cell-name {
   display: flex;
   flex-direction: column;
@@ -273,25 +252,26 @@
 }
 
 .job-monitoring__cell-name-main {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
   word-break: break-word;
 }
 
 .job-monitoring__cell-name-sub {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
-/* When the row is interactive, underline the job name on row hover so the
- * "click me" affordance is obvious without needing a tooltip. */
-.sas-table__row:hover .job-monitoring__cell-name--link .job-monitoring__cell-name-main {
+/* When the row is interactive, underline the job name on row hover — and on
+ * keyboard focus of the row button — so the affordance is obvious. */
+.sas-table__row:hover .job-monitoring__cell-name--link .job-monitoring__cell-name-main,
+.sas-table__row--clickable:focus-within .job-monitoring__cell-name--link .job-monitoring__cell-name-main {
   color: var(--sas-blue-primary);
   text-decoration: underline;
 }
 
-/* Right-edge chevron that fades in on row hover. The static dimmed state
- * still hints that the row is interactive even before hover. */
+/* Right-edge chevron that brightens on row hover/focus. The static dimmed
+ * state still hints that the row is interactive even before hover. */
 .job-monitoring__row-chevron {
   display: inline-flex;
   align-items: center;
@@ -300,7 +280,8 @@
   transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
-.sas-table__row:hover .job-monitoring__row-chevron {
+.sas-table__row:hover .job-monitoring__row-chevron,
+.sas-table__row--clickable:focus-within .job-monitoring__row-chevron {
   color: var(--sas-blue-primary);
   transform: translateX(2px);
 }
@@ -310,7 +291,7 @@
   align-items: center;
   gap: var(--space-1);
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-style: italic;
   white-space: nowrap;
 }
@@ -351,60 +332,29 @@
   padding: 0 var(--space-2);
 }
 
-/* Confirm dialog (used for Cancel Job / Delete Job) */
-.confirm-dialog__backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-4);
-  z-index: 1000;
-}
-
-.confirm-dialog {
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  max-width: 480px;
-  width: 100%;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+/* Confirm dialog (Cancel Job / Delete Job) — the chrome is the shared <Modal>;
+ * only the body copy is styled here. */
+.confirm-dialog__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
 
-.confirm-dialog__title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--sas-gray-900);
+.confirm-dialog__message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  color: var(--sas-gray-700);
+  line-height: var(--line-height-normal);
+  font-size: var(--font-size-base);
 }
 
-.confirm-dialog__message {
-  color: var(--sas-gray-700);
-  line-height: 1.5;
-  font-size: var(--font-size-base);
+.confirm-dialog__message p {
+  margin: 0;
 }
 
 .confirm-dialog__message strong {
   color: var(--sas-gray-900);
-}
-
-.confirm-dialog__error {
-  padding: var(--space-2) var(--space-3);
-  background-color: var(--sas-error-light);
-  border: 1px solid var(--sas-error);
-  border-radius: var(--radius-md);
-  color: var(--sas-error-dark);
-  font-size: var(--font-size-sm);
-}
-
-.confirm-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
 }
 
 /* Pulse animation for running state */
@@ -417,6 +367,20 @@
   animation: job-monitoring-pulse 1.4s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .job-monitoring__pulse {
+    animation: none;
+  }
+
+  /* A frozen ring with a transparent quarter reads as broken; show a dim
+   * complete ring instead. */
+  .job-monitoring__scanning-spinner {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.5;
+  }
+}
+
 /* ---------- Job Detail Page ---------- */
 .job-detail {
   display: flex;
@@ -424,40 +388,23 @@
   gap: var(--space-5);
 }
 
-.job-detail__back {
-  background: none;
-  border: none;
-  color: var(--sas-blue-primary);
-  cursor: pointer;
-  padding: 0;
-  font-size: var(--font-size-sm);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  align-self: flex-start;
-}
-
-.job-detail__back:hover { text-decoration: underline; }
-
+/* The shared PageHeader supplies the breadcrumb, title and actions; the meta
+ * row directly below belongs to the same header block, so drop the page
+ * header's own bottom margin and let the header's gap space them. */
 .job-detail__header {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 
-.job-detail__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+.job-detail__header .sas-page-header {
+  margin-bottom: 0;
 }
 
-.job-detail__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--sas-gray-900);
-  margin: 0;
+.job-detail__header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .job-detail__meta {
@@ -470,13 +417,7 @@
 
 .job-detail__meta strong {
   color: var(--sas-gray-800);
-  font-weight: 500;
-}
-
-.job-detail__description {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
+  font-weight: var(--font-weight-medium);
 }
 
 .job-detail__tabs {
@@ -493,7 +434,7 @@
   cursor: pointer;
   color: var(--sas-gray-600);
   font-size: var(--font-size-base);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   margin-bottom: -1px;
 }
 
@@ -534,15 +475,18 @@
   color: var(--sas-gray-700);
 }
 
-.job-log__toolbar-actions {
+.job-log__toolbar-actions,
+.job-code__toolbar-actions {
   display: inline-flex;
   gap: var(--space-2);
 }
 
+/* Every line is one fixed-height, non-wrapping row, which is what lets
+ * JobLogViewer window the list (render only the rows in view). */
 .job-log__lines {
   font-family: var(--font-family-mono);
   font-size: 0.8125rem;
-  line-height: 1.5;
+  line-height: var(--line-height-normal);
   background-color: #1e1e1e;
   color: #e6e6e6;
   border-radius: var(--radius-md);
@@ -579,14 +523,14 @@
   color: #fca5a5;
   background-color: rgba(239, 68, 68, 0.14);
   border-left-color: #ef4444;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .job-log__line--fatal {
   color: #fecaca;
   background-color: rgba(239, 68, 68, 0.22);
   border-left-color: #dc2626;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 
 .job-log__line--warning {
@@ -620,24 +564,24 @@
   font-style: italic;
 }
 
-/* Title and highlighted form a size hierarchy. In the listing tab, title is
- * the page header and highlighted is mid-emphasis (column headers, summary
- * rows). In the log, title gets the same treatment so SAS page banners
- * stand out. */
+/* Title and highlighted form an emphasis hierarchy expressed with weight,
+ * colour and background only — never font-size, because the block is
+ * white-space: pre and SAS's space-padded columns must stay aligned with the
+ * rows above and below (bold keeps the monospace advance width). In the
+ * listing tab, title is the page header and highlighted is mid-emphasis
+ * (column headers, summary rows). */
 .job-log__line--title {
   color: #a3e635;
   background-color: rgba(163, 230, 53, 0.10);
   border-left-color: #84cc16;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
 }
 
 .job-log__line--highlighted {
   color: #fde68a;
   background-color: rgba(253, 224, 71, 0.08);
   border-left-color: #facc15;
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Code panel */
@@ -678,13 +622,13 @@
 }
 
 .job-params__value-default {
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-style: italic;
 }
 
 .job-params__value-override {
   color: var(--sas-gray-900);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .job-params__override-tag {
@@ -694,5 +638,5 @@
   font-size: var(--font-size-xs);
   background-color: var(--sas-blue-light);
   color: var(--sas-blue-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }

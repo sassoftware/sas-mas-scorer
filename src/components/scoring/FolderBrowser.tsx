@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getRootFolders, getFolder, getFolderMembers } from '../../api/folders';
 
 interface BreadcrumbEntry {
@@ -24,6 +24,8 @@ interface FolderBrowserProps {
   onSelectFile?: (fileId: string, fileName: string) => void;
 }
 
+const PAGE_SIZE = 50;
+
 export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   selectedFolderId,
   onSelect,
@@ -37,10 +39,18 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({ start: 0, limit: 50, count: 0 });
+  const [pagination, setPagination] = useState({ start: 0, limit: PAGE_SIZE, count: 0 });
+
+  // Every navigation takes a new token; a response whose token is no longer
+  // current is dropped, so a slow earlier listing cannot overwrite a newer one
+  // (same idiom as useJobMonitoring's statsTokenRef).
+  const requestIdRef = useRef(0);
+  const nextRequest = () => ++requestIdRef.current;
+  const isCurrent = (token: number) => token === requestIdRef.current;
 
   // Load root folders
   const loadRoot = useCallback(async () => {
+    const token = nextRequest();
     setLoading(true);
     setError(null);
     try {
@@ -48,6 +58,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
         getRootFolders(),
         getFolder('@myFolder'),
       ]);
+      if (!isCurrent(token)) return;
 
       const items: Array<{ id: string; name: string }> = [];
 
@@ -67,21 +78,34 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
       setFolders(items);
       setFiles([]);
       setBreadcrumbs([]);
-      setPagination({ start: 0, limit: 50, count: items.length });
+      setPagination({ start: 0, limit: PAGE_SIZE, count: items.length });
     } catch (err: unknown) {
+      if (!isCurrent(token)) return;
       const e = err as { message?: string };
       setError(e.message ?? 'Failed to load folders');
     } finally {
-      setLoading(false);
+      if (isCurrent(token)) setLoading(false);
     }
   }, []);
 
-  // Load folder members
-  const loadFolder = useCallback(async (folderId: string, _folderName: string, newBreadcrumbs: BreadcrumbEntry[], start = 0) => {
+  // Load folder members. `newBreadcrumbs` may still be resolving (the restored
+  // folder path looks its parent up) — it is awaited alongside the members
+  // request so the two round trips overlap instead of running in series.
+  const loadFolder = useCallback(async (
+    folderId: string,
+    newBreadcrumbs: BreadcrumbEntry[] | Promise<BreadcrumbEntry[]>,
+    start = 0
+  ) => {
+    const token = nextRequest();
     setLoading(true);
     setError(null);
     try {
-      const response = await getFolderMembers(folderId, start, 50);
+      const [response, crumbs] = await Promise.all([
+        getFolderMembers(folderId, start, PAGE_SIZE),
+        newBreadcrumbs,
+      ]);
+      if (!isCurrent(token)) return;
+
       const folderItems = response.items
         .filter(m => m.contentType === 'folder')
         .map(m => {
@@ -100,20 +124,21 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
         setFiles([]);
       }
 
-      setBreadcrumbs(newBreadcrumbs);
+      setBreadcrumbs(crumbs);
       setPagination({ start: response.start, limit: response.limit, count: response.count });
     } catch (err: unknown) {
+      if (!isCurrent(token)) return;
       const e = err as { message?: string };
       setError(e.message ?? 'Failed to load folder contents');
     } finally {
-      setLoading(false);
+      if (isCurrent(token)) setLoading(false);
     }
   }, [pickFileUriPrefix]);
 
   // Navigate into a folder
   const handleOpenFolder = useCallback((folderId: string, folderName: string) => {
     const newBreadcrumbs = [...breadcrumbs, { id: folderId, name: folderName }];
-    loadFolder(folderId, folderName, newBreadcrumbs);
+    loadFolder(folderId, newBreadcrumbs);
   }, [breadcrumbs, loadFolder]);
 
   // Navigate via breadcrumb
@@ -125,7 +150,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
     }
     const target = breadcrumbs[index];
     const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
-    loadFolder(target.id, target.name, newBreadcrumbs);
+    loadFolder(target.id, newBreadcrumbs);
   }, [breadcrumbs, loadRoot, loadFolder]);
 
   // Pagination
@@ -136,13 +161,13 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   const handleNextPage = useCallback(() => {
     if (!currentFolderId) return;
     const newStart = pagination.start + pagination.limit;
-    loadFolder(currentFolderId, breadcrumbs[breadcrumbs.length - 1].name, breadcrumbs, newStart);
+    loadFolder(currentFolderId, breadcrumbs, newStart);
   }, [currentFolderId, pagination, breadcrumbs, loadFolder]);
 
   const handlePrevPage = useCallback(() => {
     if (!currentFolderId) return;
     const newStart = Math.max(0, pagination.start - pagination.limit);
-    loadFolder(currentFolderId, breadcrumbs[breadcrumbs.length - 1].name, breadcrumbs, newStart);
+    loadFolder(currentFolderId, breadcrumbs, newStart);
   }, [currentFolderId, pagination, breadcrumbs, loadFolder]);
 
   // Initial load
@@ -155,9 +180,10 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
           onSelect(folder.id, folder.name);
           if (folder.parentFolderUri) {
             const parentId = folder.parentFolderUri.replace('/folders/folders/', '');
-            getFolder(parentId).then(parent => {
-              loadFolder(parentId, parent.name, [{ id: parentId, name: parent.name }]);
-            }).catch(() => loadRoot());
+            // The parent's name is only needed for the breadcrumb label, so the
+            // lookup runs concurrently with the members request inside loadFolder.
+            const crumbs = getFolder(parentId).then(parent => [{ id: parentId, name: parent.name }]);
+            loadFolder(parentId, crumbs).catch(() => loadRoot());
           } else {
             loadRoot();
           }
@@ -172,34 +198,37 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   return (
     <div className="folder-browser">
       {/* Breadcrumbs */}
-      <div className="folder-browser__breadcrumbs">
+      <nav className="folder-browser__breadcrumbs" aria-label="Folder path">
         <button
           className="folder-browser__breadcrumb"
           onClick={() => handleBreadcrumbClick(-1)}
           type="button"
+          disabled={loading}
         >
           SAS Content
         </button>
         {breadcrumbs.map((bc, i) => (
           <React.Fragment key={bc.id}>
-            <span className="folder-browser__breadcrumb-sep">/</span>
+            <span className="folder-browser__breadcrumb-sep" aria-hidden="true">/</span>
             <button
               className="folder-browser__breadcrumb"
               onClick={() => handleBreadcrumbClick(i)}
               type="button"
+              disabled={loading}
+              aria-current={i === breadcrumbs.length - 1 ? 'location' : undefined}
             >
               {bc.name}
             </button>
           </React.Fragment>
         ))}
-      </div>
+      </nav>
 
       {/* Folder list */}
-      <div className="folder-browser__list">
+      <div className="folder-browser__list" aria-busy={loading}>
         {loading ? (
-          <div className="folder-browser__loading">Loading folders...</div>
+          <div className="folder-browser__loading" role="status">Loading folders...</div>
         ) : error ? (
-          <div className="folder-browser__error">{error}</div>
+          <div className="folder-browser__error" role="alert">{error}</div>
         ) : folders.length === 0 && files.length === 0 ? (
           <div className="folder-browser__empty">
             {pickFileUriPrefix ? 'No subfolders or code files in this location' : 'No subfolders in this location'}
@@ -217,7 +246,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
                   type="button"
                   title="Open folder"
                 >
-                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                   </svg>
                   {f.name}
@@ -226,6 +255,8 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
                   className="folder-browser__select-btn"
                   onClick={() => onSelect(f.id, f.name)}
                   type="button"
+                  aria-pressed={f.id === selectedFolderId}
+                  aria-label={`${f.id === selectedFolderId ? 'Selected' : 'Select'} folder ${f.name}`}
                 >
                   {f.id === selectedFolderId ? 'Selected' : 'Select'}
                 </button>
@@ -242,7 +273,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
                   type="button"
                   title="Select code file"
                 >
-                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <svg className="folder-browser__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm0 2l4 4h-4V4z" />
                   </svg>
                   {f.name}
@@ -251,6 +282,8 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
                   className="folder-browser__select-btn"
                   onClick={() => onSelectFile?.(f.id, f.name)}
                   type="button"
+                  aria-pressed={f.id === selectedFileId}
+                  aria-label={`${f.id === selectedFileId ? 'Selected' : 'Select'} file ${f.name}`}
                 >
                   {f.id === selectedFileId ? 'Selected' : 'Select'}
                 </button>
@@ -281,9 +314,9 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
       {/* Pagination */}
       {(hasPrev || hasMore) && (
         <div className="folder-browser__pagination">
-          <button onClick={handlePrevPage} disabled={!hasPrev} type="button">Previous</button>
+          <button onClick={handlePrevPage} disabled={!hasPrev || loading} type="button">Previous</button>
           <span>{pagination.start + 1}–{Math.min(pagination.start + pagination.limit, pagination.count)} of {pagination.count}</span>
-          <button onClick={handleNextPage} disabled={!hasMore} type="button">Next</button>
+          <button onClick={handleNextPage} disabled={!hasMore || loading} type="button">Next</button>
         </div>
       )}
     </div>

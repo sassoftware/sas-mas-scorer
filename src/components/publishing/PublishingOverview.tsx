@@ -4,6 +4,7 @@
 import React from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
+import { Alert } from '../common/Alert';
 import { useSasAuth } from '../../auth';
 import { usePublishingOverview, PublishingProgress } from '../../hooks/usePublishingOverview';
 import { DestinationsPanel } from './DestinationsPanel';
@@ -105,12 +106,12 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
       </section>
 
       {error && (
-        <div className="publishing__error">
-          <span>{error}</span>
+        <Alert variant="error" title="Failed to load publishing overview">
+          {error}{' '}
           <Button variant="tertiary" size="small" onClick={refresh}>
             Retry
           </Button>
-        </div>
+        </Alert>
       )}
 
       {loading ? (

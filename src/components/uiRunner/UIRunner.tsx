@@ -4,15 +4,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UIDefinition } from '../../types/uiBuilder';
-import { Step } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { Loading } from '../common/Loading';
 import { Badge } from '../common/Badge';
 import { PageHeader } from '../layout/Layout';
 import { DynamicForm } from './DynamicForm';
-import { useStepExecution, useSteps } from '../../hooks';
+import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module } from '../../types';
 
@@ -55,29 +53,29 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
 
   const [outputValues, setOutputValues] = useState<Record<string, unknown>>({});
   const [module, setModule] = useState<Module | null>(null);
-  const [step, setStep] = useState<Step | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [moduleError, setModuleError] = useState<string | null>(null);
 
-  const { steps } = useSteps(definition.moduleId);
+  // The step signature gates execution; the definition itself (layout, fields,
+  // defaults) is already in hand, so the form renders before either fetch lands.
+  const { step, error: stepError } = useStep(definition.moduleId, definition.stepId);
 
-  // Load the module
+  // Load the module. It only feeds the module-name badge (which falls back to
+  // the id) and the "removed from MAS" error, so it does not gate rendering;
+  // a response for a module the user has navigated away from is dropped.
   useEffect(() => {
-    setLoading(true);
+    let cancelled = false;
+    setModule(null);
+    setModuleError(null);
     getModule(definition.moduleId)
-      .then(m => setModule(m))
-      .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load module'))
-      .finally(() => setLoading(false));
+      .then(m => { if (!cancelled) setModule(m); })
+      .catch(err => {
+        if (!cancelled) setModuleError(err instanceof Error ? err.message : 'Failed to load module');
+      });
+    return () => { cancelled = true; };
   }, [definition.moduleId]);
 
-  // Find the step once steps are loaded
-  useEffect(() => {
-    if (steps.length > 0) {
-      const found = steps.find(s => s.id === definition.stepId);
-      if (found) setStep(found);
-      else setLoadError(`Step "${definition.stepId}" not found in module`);
-    }
-  }, [steps, definition.stepId]);
+  const loadError = moduleError
+    ?? (stepError ? `Step "${definition.stepId}" could not be loaded: ${stepError}` : null);
 
   const { output, executing, error, executionTime, executeWithValues, reset } =
     useStepExecution(definition.moduleId, definition.stepId);
@@ -117,10 +115,6 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
     reset();
   }, [reset, definition.layout.sections]);
 
-  if (loading) {
-    return <Loading message="Loading UI App..." />;
-  }
-
   if (loadError) {
     return (
       <div className="ui-runner">
@@ -139,36 +133,36 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
   const submitLabel = definition.settings.submitLabel || 'Execute';
   const outputLayout = definition.settings.outputLayout || 'below';
 
-  // Separate input and output sections for side-by-side layout
-  const hasInputFields = definition.layout.sections.some(s =>
-    s.fields.some(f => f.direction === 'input' && f.visible)
-  );
-  const hasOutputFields = definition.layout.sections.some(s =>
-    s.fields.some(f => f.direction === 'output' && f.visible)
-  );
-
-  // For side-by-side: build separate input-only and output-only layouts
-  // Static fields go into the input side
-  const inputLayout = {
-    ...definition.layout,
-    sections: definition.layout.sections.map(s => ({
-      ...s,
-      fields: s.fields.filter(f => f.direction === 'input' || f.direction === 'static'),
-    })).filter(s => s.fields.length > 0),
-  };
-
-  const outputLayout_ = {
-    ...definition.layout,
-    sections: definition.layout.sections.map(s => ({
-      ...s,
-      fields: s.fields.filter(f => f.direction === 'output'),
-    })).filter(s => s.fields.length > 0),
-  };
-
   // Unified layout for inline/below modes
   const unifiedLayout = definition.layout;
 
   if (outputLayout === 'side-by-side') {
+    // Separate input and output sections for side-by-side layout
+    const hasInputFields = definition.layout.sections.some(s =>
+      s.fields.some(f => f.direction === 'input' && f.visible)
+    );
+    const hasOutputFields = definition.layout.sections.some(s =>
+      s.fields.some(f => f.direction === 'output' && f.visible)
+    );
+
+    // Build separate input-only and output-only layouts; static fields go
+    // into the input side.
+    const inputLayout = {
+      ...definition.layout,
+      sections: definition.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.filter(f => f.direction === 'input' || f.direction === 'static'),
+      })).filter(s => s.fields.length > 0),
+    };
+
+    const outputLayout_ = {
+      ...definition.layout,
+      sections: definition.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.filter(f => f.direction === 'output'),
+      })).filter(s => s.fields.length > 0),
+    };
+
     return (
       <div className="ui-runner">
         {standalone && (

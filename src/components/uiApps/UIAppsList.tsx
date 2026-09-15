@@ -7,6 +7,7 @@ import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Loading } from '../common/Loading';
+import { EmptyState } from '../common/EmptyState';
 import { UIAppCard } from './UIAppCard';
 import {
   listUIDefinitions,
@@ -152,6 +153,7 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
         <input
           type="text"
           className="sas-input"
+          aria-label="Search UI apps"
           placeholder="Search UI apps..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -161,16 +163,14 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
       {loading ? (
         <Loading message="Loading UI apps..." />
       ) : filtered.length === 0 ? (
-        <div className="ui-apps-list__empty">
-          {apps.length === 0 ? (
-            <>
-              <p>No UI apps yet.</p>
-              <p>Create your first custom scoring interface by clicking "Create New" or by navigating to a module and clicking "Build UI".</p>
-            </>
-          ) : (
-            <p>No apps match "{searchTerm}"</p>
-          )}
-        </div>
+        apps.length === 0 ? (
+          <EmptyState
+            title="No UI apps yet"
+            hint='Create your first custom scoring interface by clicking "Create New" or by navigating to a module and clicking "Build UI".'
+          />
+        ) : (
+          <EmptyState title={`No apps match "${searchTerm}"`} />
+        )
       ) : (
         <div className="ui-apps-list__grid">
           {filtered.map(app => (

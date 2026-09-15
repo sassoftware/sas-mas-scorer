@@ -6,6 +6,7 @@ import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { Loading } from '../common/Loading';
+import { Modal } from '../common/Modal';
 import {
   listDecisionScenarios,
   getScoreDefinition,
@@ -123,22 +124,28 @@ export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
       return;
     }
 
+    let cancelled = false;
     const load = async () => {
       try {
         const [scenarioList, sig] = await Promise.all([
           listDecisionScenarios(flowId),
           getDecisionSignature(sourceURI).catch(() => []),
         ]);
+        if (cancelled) return;
         setScenarios(scenarioList);
         setSignature(sig);
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load scenarios');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [flowId, sourceURI]);
 
   const handleSelectScenario = useCallback(async (scenario: ScoreDefinitionSummary) => {
@@ -177,73 +184,70 @@ export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
     }
   }, [signature, inputParameters, onLoad, onClose]);
 
+  const handleClose = useCallback(() => {
+    if (!loadingDetail) onClose();
+  }, [loadingDetail, onClose]);
+
   return (
-    <div className="save-scenario-overlay" onClick={onClose}>
-      <div className="save-scenario-dialog" onClick={e => e.stopPropagation()}>
-        <div className="save-scenario-dialog__header">
-          <h3>Load Scenario</h3>
-          <button className="save-scenario-dialog__close" onClick={onClose}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <Modal
+      title="Load Scenario"
+      onClose={handleClose}
+      closeOnBackdropClick={!loadingDetail}
+      footer={
+        <Button variant="tertiary" onClick={onClose} disabled={loadingDetail}>
+          Cancel
+        </Button>
+      }
+    >
+      <div className="save-scenario-dialog__fields">
+        {loading && <Loading message="Loading scenarios..." />}
 
-        <div className="save-scenario-dialog__body">
-          {loading && <Loading message="Loading scenarios..." />}
+        {error && <Alert variant="error">{error}</Alert>}
 
-          {error && <Alert variant="error">{error}</Alert>}
-
-          {!loading && scenarios.length === 0 && !error && (
-            <div className="load-scenario__empty">
-              <p>No scenarios found for this decision.</p>
-              <p className="load-scenario__empty-hint">
-                Scenarios can be created from the "Save as Scenario" button after executing a score,
-                or directly in SAS Intelligent Decisioning.
-              </p>
-            </div>
-          )}
-
-          {!loading && scenarios.length > 0 && (
-            <div className="load-scenario__list">
-              {scenarios.map(scenario => (
-                <button
-                  key={scenario.id}
-                  className="load-scenario__item"
-                  onClick={() => handleSelectScenario(scenario)}
-                  disabled={loadingDetail}
-                >
-                  <div className="load-scenario__item-main">
-                    <div className="load-scenario__item-name">{scenario.name}</div>
-                    {scenario.description && (
-                      <div className="load-scenario__item-desc">{scenario.description}</div>
-                    )}
-                  </div>
-                  <div className="load-scenario__item-meta">
-                    <Badge variant="info" size="small">Scenario</Badge>
-                    <span className="load-scenario__item-author">{scenario.createdBy}</span>
-                    <span className="load-scenario__item-date">
-                      {new Date(scenario.modifiedTimeStamp).toLocaleDateString()}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {loadingDetail && (
-            <div className="load-scenario__loading-overlay">
-              <Loading message="Loading scenario values..." />
-            </div>
-          )}
-
-          <div className="save-scenario-dialog__actions">
-            <Button variant="tertiary" onClick={onClose} disabled={loadingDetail}>
-              Cancel
-            </Button>
+        {!loading && scenarios.length === 0 && !error && (
+          <div className="load-scenario__empty">
+            <p>No scenarios found for this decision.</p>
+            <p className="load-scenario__empty-hint">
+              Scenarios can be created from the "Save as Scenario" button after executing a score,
+              or directly in SAS Intelligent Decisioning.
+            </p>
           </div>
-        </div>
+        )}
+
+        {!loading && scenarios.length > 0 && (
+          <div className="load-scenario__list">
+            {scenarios.map(scenario => (
+              <button
+                key={scenario.id}
+                type="button"
+                className="load-scenario__item"
+                onClick={() => handleSelectScenario(scenario)}
+                disabled={loadingDetail}
+              >
+                <div className="load-scenario__item-main">
+                  <div className="load-scenario__item-name">{scenario.name}</div>
+                  {scenario.description && (
+                    <div className="load-scenario__item-desc">{scenario.description}</div>
+                  )}
+                </div>
+                <div className="load-scenario__item-meta">
+                  <Badge variant="info" size="small">Scenario</Badge>
+                  <span className="load-scenario__item-author">{scenario.createdBy}</span>
+                  <span className="load-scenario__item-date">
+                    {new Date(scenario.modifiedTimeStamp).toLocaleDateString()}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loadingDetail && (
+          <div className="load-scenario__loading-overlay">
+            <Loading message="Loading scenario values..." />
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 };

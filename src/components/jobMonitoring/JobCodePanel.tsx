@@ -11,6 +11,7 @@ import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/plugins/line-numbers/prism-line-numbers';
 import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import { Button } from '../common/Button';
+import { EmptyState } from '../common/EmptyState';
 import { downloadText } from './utils';
 
 interface JobCodePanelProps {
@@ -41,11 +42,7 @@ export const JobCodePanel: React.FC<JobCodePanelProps> = ({
   }, [code, lang]);
 
   if (!code) {
-    return (
-      <p className="job-monitoring__empty">
-        No source code is attached to this job.
-      </p>
-    );
+    return <EmptyState title="No source code is attached to this job." />;
   }
 
   const handleCopy = async () => {
@@ -62,7 +59,7 @@ export const JobCodePanel: React.FC<JobCodePanelProps> = ({
     <div className="job-code">
       <div className="job-code__toolbar">
         <span>{type ? `${type} job` : 'Source'}</span>
-        <div style={{ display: 'inline-flex', gap: 'var(--space-2)' }}>
+        <div className="job-code__toolbar-actions">
           <Button variant="tertiary" size="small" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy code'}
           </Button>

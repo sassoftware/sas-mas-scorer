@@ -1,9 +1,10 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
+import { Modal } from '../common/Modal';
 import { FolderBrowser } from './FolderBrowser';
 import { getCasServers, getCaslibs, CasServer, CasLib } from '../../api/cas';
 import {
@@ -23,6 +24,11 @@ const loadPref = (key: string): string | null =>
 
 const savePref = (key: string, value: string): void =>
   localStorage.setItem(`${STORAGE_PREFIX}${key}`, value);
+
+// Score definitions are created through a small worker pool (the same
+// cursor-based shape as the batch scoring path) rather than one POST at a
+// time: a few hundred selected rows otherwise take minutes.
+const SAVE_CONCURRENCY = 4;
 
 // --- Types ---
 
@@ -133,6 +139,7 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
   // Form state
   const [baseName, setBaseName] = useState(`${module.name}_Scenario`);
   const [description, setDescription] = useState('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Folder state
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(
@@ -155,11 +162,15 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
 
   // Save state
   const [saving, setSaving] = useState(false);
-  const [saveProgress, setSaveProgress] = useState({ current: 0, total: 0 });
+  const [completedCount, setCompletedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successCount, setSuccessCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
   const [done, setDone] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
+  // Set by Stop while saving: no new creates are started, in-flight ones land
+  const abortRef = useRef(false);
 
   // Load decision signature on mount
   useEffect(() => {
@@ -229,25 +240,25 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
   const descriptionTooLong = description.length > 1000;
   const canSave = !nameError && !descriptionTooLong && selectedFolderId && selectedServer && selectedCaslib && !saving;
 
-  // Save handler — creates scenarios sequentially
+  // Save handler — creates scenarios through a bounded worker pool
   const handleSave = useCallback(async () => {
     if (!canSave || !selectedFolderId) return;
 
+    abortRef.current = false;
     setSaving(true);
+    setStopped(false);
+    setStopRequested(false);
     setError(null);
     setSuccessCount(0);
     setFailCount(0);
-    setSaveProgress({ current: 0, total: rows.length });
+    setCompletedCount(0);
 
     const resolveName = buildNameLookup(decisionSignature);
     const parentFolderUri = `/folders/folders/${selectedFolderId}`;
     const trimmedBase = baseName.trim();
     const trimmedDesc = description.trim() || undefined;
 
-    let succeeded = 0;
-    let failed = 0;
-
-    for (let i = 0; i < rows.length; i++) {
+    const saveRow = async (i: number) => {
       const row = rows[i];
       const scenarioName = `${trimmedBase}_${i + 1}`;
       const mappings = buildMappings(row.input, inputParameters, row.output.outputs, resolveName);
@@ -273,15 +284,23 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
 
       try {
         await createScoreDefinition(payload, parentFolderUri);
-        succeeded++;
+        setSuccessCount(c => c + 1);
       } catch {
-        failed++;
+        setFailCount(c => c + 1);
       }
+      setCompletedCount(c => c + 1);
+    };
 
-      setSaveProgress({ current: i + 1, total: rows.length });
-      setSuccessCount(succeeded);
-      setFailCount(failed);
-    }
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < rows.length && !abortRef.current) {
+        const index = nextIndex++;
+        await saveRow(index);
+      }
+    };
+    await Promise.all(
+      Array(Math.min(SAVE_CONCURRENCY, rows.length)).fill(null).map(() => worker())
+    );
 
     // Persist selections for next time
     savePref('lastFolderId', selectedFolderId);
@@ -289,195 +308,226 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
     savePref('lastServer', selectedServer);
     savePref('lastCaslib', selectedCaslib);
 
+    setStopped(abortRef.current);
     setSaving(false);
     setDone(true);
   }, [canSave, selectedFolderId, selectedFolderName, selectedServer, selectedCaslib, baseName, description, module.name, sourceURI, rows, inputParameters, decisionSignature]);
 
+  const handleStop = useCallback(() => {
+    abortRef.current = true;
+    setStopRequested(true);
+  }, []);
+
+  // While saving, closing means "stop after the in-flight creates"; the
+  // dialog stays open to show the outcome.
+  const handleClose = useCallback(() => {
+    if (saving) {
+      handleStop();
+      return;
+    }
+    onClose();
+  }, [saving, handleStop, onClose]);
+
+  const plural = rows.length !== 1 ? 's' : '';
+
   return (
-    <div className="save-scenario-overlay" onClick={onClose}>
-      <div className="save-scenario-dialog" onClick={e => e.stopPropagation()}>
-        <div className="save-scenario-dialog__header">
-          <h3>Save {rows.length} Scenario{rows.length !== 1 ? 's' : ''}</h3>
-          <button className="save-scenario-dialog__close" onClick={onClose}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="save-scenario-dialog__body">
-          {done ? (
-            <div className="save-scenario-dialog__success">
-              <Alert variant={failCount === 0 ? 'success' : 'warning'}>
-                {successCount} scenario{successCount !== 1 ? 's' : ''} saved successfully
-                {failCount > 0 && `, ${failCount} failed`}.
-              </Alert>
-              <div className="save-scenario-dialog__result-info">
-                <div className="save-scenario-dialog__result-row">
-                  <span className="save-scenario-dialog__result-label">Name Pattern</span>
-                  <span className="save-scenario-dialog__result-value">{baseName.trim()}_1 ... _{rows.length}</span>
-                </div>
-                <div className="save-scenario-dialog__result-row">
-                  <span className="save-scenario-dialog__result-label">Folder</span>
-                  <span className="save-scenario-dialog__result-value">{selectedFolderName}</span>
-                </div>
-                <div className="save-scenario-dialog__result-row">
-                  <span className="save-scenario-dialog__result-label">Output Library</span>
-                  <span className="save-scenario-dialog__result-value">{selectedServer} / {selectedCaslib}</span>
-                </div>
-                <div className="save-scenario-dialog__result-row">
-                  <span className="save-scenario-dialog__result-label">Succeeded</span>
-                  <span className="save-scenario-dialog__result-value">{successCount}</span>
-                </div>
-                {failCount > 0 && (
-                  <div className="save-scenario-dialog__result-row">
-                    <span className="save-scenario-dialog__result-label">Failed</span>
-                    <span className="save-scenario-dialog__result-value">{failCount}</span>
-                  </div>
-                )}
-              </div>
-              <div className="save-scenario-dialog__actions">
-                <Button variant="primary" onClick={onClose}>Done</Button>
-              </div>
+    <Modal
+      title={`Save ${rows.length} Scenario${plural}`}
+      onClose={handleClose}
+      closeOnBackdropClick={!saving}
+      initialFocusRef={nameInputRef}
+      footer={
+        done ? (
+          <Button variant="primary" onClick={onClose}>Done</Button>
+        ) : (
+          <>
+            {saving ? (
+              <Button variant="tertiary" onClick={handleStop} disabled={stopRequested}>
+                {stopRequested ? 'Stopping...' : 'Stop'}
+              </Button>
+            ) : (
+              <Button variant="tertiary" onClick={onClose}>
+                Cancel
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={!canSave}
+              loading={saving}
+            >
+              {saving ? 'Saving...' : `Save ${rows.length} Scenario${plural}`}
+            </Button>
+          </>
+        )
+      }
+    >
+      {done ? (
+        <div className="save-scenario-dialog__success">
+          <Alert variant={failCount === 0 && !stopped ? 'success' : 'warning'}>
+            {successCount} scenario{successCount !== 1 ? 's' : ''} saved successfully
+            {failCount > 0 && `, ${failCount} failed`}
+            {stopped && `, ${rows.length - completedCount} not started (stopped)`}.
+          </Alert>
+          <div className="save-scenario-dialog__result-info">
+            <div className="save-scenario-dialog__result-row">
+              <span className="save-scenario-dialog__result-label">Name Pattern</span>
+              <span className="save-scenario-dialog__result-value">{baseName.trim()}_1 ... _{rows.length}</span>
             </div>
-          ) : (
-            <>
-              <p className="save-scenario-dialog__description-text">
-                Each selected row will be saved as a separate scenario named <strong>{baseName.trim() || '...'}_1</strong> through <strong>{baseName.trim() || '...'}_{ rows.length}</strong>.
-              </p>
+            <div className="save-scenario-dialog__result-row">
+              <span className="save-scenario-dialog__result-label">Folder</span>
+              <span className="save-scenario-dialog__result-value">{selectedFolderName}</span>
+            </div>
+            <div className="save-scenario-dialog__result-row">
+              <span className="save-scenario-dialog__result-label">Output Library</span>
+              <span className="save-scenario-dialog__result-value">{selectedServer} / {selectedCaslib}</span>
+            </div>
+            <div className="save-scenario-dialog__result-row">
+              <span className="save-scenario-dialog__result-label">Succeeded</span>
+              <span className="save-scenario-dialog__result-value">{successCount}</span>
+            </div>
+            {failCount > 0 && (
+              <div className="save-scenario-dialog__result-row">
+                <span className="save-scenario-dialog__result-label">Failed</span>
+                <span className="save-scenario-dialog__result-value">{failCount}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="save-scenario-dialog__fields">
+          <p className="save-scenario-dialog__description-text">
+            Each selected row will be saved as a separate scenario named <strong>{baseName.trim() || '...'}_1</strong> through <strong>{baseName.trim() || '...'}_{ rows.length}</strong>.
+          </p>
 
-              {/* Base Name */}
-              <div className="save-scenario-dialog__field">
-                <label className="save-scenario-dialog__label">Base Name *</label>
-                <input
-                  className="save-scenario-dialog__input"
-                  type="text"
-                  value={baseName}
-                  onChange={e => setBaseName(e.target.value)}
-                  placeholder="Scenario base name"
-                  maxLength={100}
-                  disabled={saving}
+          {/* Base Name */}
+          <div className="save-scenario-dialog__field">
+            <label className="save-scenario-dialog__label" htmlFor="save-batch-base-name">Base Name *</label>
+            <input
+              id="save-batch-base-name"
+              ref={nameInputRef}
+              className="sas-input"
+              type="text"
+              value={baseName}
+              onChange={e => setBaseName(e.target.value)}
+              placeholder="Scenario base name"
+              maxLength={100}
+              disabled={saving}
+              aria-invalid={!!nameError && baseName.length > 0}
+              aria-describedby="save-batch-base-name-hint"
+            />
+            {nameError && baseName.length > 0 && (
+              <span className="save-scenario-dialog__field-error" role="alert">{nameError}</span>
+            )}
+            <span className="save-scenario-dialog__hint" id="save-batch-base-name-hint">
+              Each scenario will be named {baseName.trim() || '...'}_1, {baseName.trim() || '...'}_2, etc.
+            </span>
+          </div>
+
+          {/* Description */}
+          <div className="save-scenario-dialog__field">
+            <label className="save-scenario-dialog__label" htmlFor="save-batch-description">Description</label>
+            <textarea
+              id="save-batch-description"
+              className="sas-textarea"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Optional description (applies to all scenarios)"
+              maxLength={1000}
+              rows={3}
+              disabled={saving}
+            />
+            {descriptionTooLong && (
+              <span className="save-scenario-dialog__field-error" role="alert">Description must be 1000 characters or less</span>
+            )}
+          </div>
+
+          {/* Folder selection */}
+          <div className="save-scenario-dialog__field" role="group" aria-labelledby="save-batch-folder-label">
+            <span className="save-scenario-dialog__label" id="save-batch-folder-label">SAS Content Folder *</span>
+            {selectedFolderName && (
+              <div className="save-scenario-dialog__selected-folder">
+                Selected: {selectedFolderName}
+              </div>
+            )}
+            <div className="save-scenario-dialog__folder-section">
+              <FolderBrowser
+                selectedFolderId={selectedFolderId}
+                onSelect={handleFolderSelect}
+                initialFolderId={loadPref('lastFolderId')}
+              />
+            </div>
+          </div>
+
+          {/* CAS Output Library */}
+          <div className="save-scenario-dialog__field">
+            <label className="save-scenario-dialog__label" htmlFor="save-batch-server">CAS Output Library *</label>
+            {loadingServers ? (
+              <span className="save-scenario-dialog__loading-text">Loading servers...</span>
+            ) : (
+              <select
+                id="save-batch-server"
+                className="sas-input"
+                value={selectedServer}
+                onChange={e => setSelectedServer(e.target.value)}
+                disabled={saving}
+              >
+                {servers.length === 0 && <option value="">No servers available</option>}
+                {servers.map(s => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="save-scenario-dialog__field">
+            <label className="save-scenario-dialog__label" htmlFor="save-batch-caslib">Caslib *</label>
+            {loadingCaslibs ? (
+              <span className="save-scenario-dialog__loading-text">Loading caslibs...</span>
+            ) : (
+              <select
+                id="save-batch-caslib"
+                className="sas-input"
+                value={selectedCaslib}
+                onChange={e => setSelectedCaslib(e.target.value)}
+                disabled={saving || !selectedServer}
+              >
+                {caslibs.length === 0 && <option value="">No caslibs available</option>}
+                {caslibs.map(c => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <Alert variant="error">{error}</Alert>
+          )}
+
+          {/* Save progress */}
+          {saving && (
+            <div className="save-scenario-dialog__progress" role="status">
+              <div
+                className="save-scenario-dialog__progress-bar"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={rows.length}
+                aria-valuenow={completedCount}
+              >
+                <div
+                  className="save-scenario-dialog__progress-fill"
+                  style={{ width: `${rows.length > 0 ? (completedCount / rows.length) * 100 : 0}%` }}
                 />
-                {nameError && baseName.length > 0 && (
-                  <span className="save-scenario-dialog__field-error">{nameError}</span>
-                )}
-                <span className="save-scenario-dialog__hint">
-                  Each scenario will be named {baseName.trim() || '...'}_1, {baseName.trim() || '...'}_2, etc.
-                </span>
               </div>
-
-              {/* Description */}
-              <div className="save-scenario-dialog__field">
-                <label className="save-scenario-dialog__label">Description</label>
-                <textarea
-                  className="save-scenario-dialog__textarea"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Optional description (applies to all scenarios)"
-                  maxLength={1000}
-                  rows={3}
-                  disabled={saving}
-                />
-                {descriptionTooLong && (
-                  <span className="save-scenario-dialog__field-error">Description must be 1000 characters or less</span>
-                )}
-              </div>
-
-              {/* Folder selection */}
-              <div className="save-scenario-dialog__field">
-                <label className="save-scenario-dialog__label">SAS Content Folder *</label>
-                {selectedFolderName && (
-                  <div className="save-scenario-dialog__selected-folder">
-                    Selected: {selectedFolderName}
-                  </div>
-                )}
-                <div className="save-scenario-dialog__folder-section">
-                  <FolderBrowser
-                    selectedFolderId={selectedFolderId}
-                    onSelect={handleFolderSelect}
-                    initialFolderId={loadPref('lastFolderId')}
-                  />
-                </div>
-              </div>
-
-              {/* CAS Output Library */}
-              <div className="save-scenario-dialog__field">
-                <label className="save-scenario-dialog__label">CAS Output Library *</label>
-                {loadingServers ? (
-                  <span className="save-scenario-dialog__loading-text">Loading servers...</span>
-                ) : (
-                  <select
-                    className="save-scenario-dialog__select"
-                    value={selectedServer}
-                    onChange={e => setSelectedServer(e.target.value)}
-                    disabled={saving}
-                  >
-                    {servers.length === 0 && <option value="">No servers available</option>}
-                    {servers.map(s => (
-                      <option key={s.name} value={s.name}>{s.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="save-scenario-dialog__field">
-                <label className="save-scenario-dialog__label">Caslib *</label>
-                {loadingCaslibs ? (
-                  <span className="save-scenario-dialog__loading-text">Loading caslibs...</span>
-                ) : (
-                  <select
-                    className="save-scenario-dialog__select"
-                    value={selectedCaslib}
-                    onChange={e => setSelectedCaslib(e.target.value)}
-                    disabled={saving || !selectedServer}
-                  >
-                    {caslibs.length === 0 && <option value="">No caslibs available</option>}
-                    {caslibs.map(c => (
-                      <option key={c.name} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Error */}
-              {error && (
-                <Alert variant="error">{error}</Alert>
-              )}
-
-              {/* Save progress */}
-              {saving && (
-                <div className="save-scenario-dialog__progress">
-                  <div className="score-panel__progress-bar">
-                    <div
-                      className="score-panel__progress-fill"
-                      style={{ width: `${(saveProgress.current / saveProgress.total) * 100}%` }}
-                    />
-                  </div>
-                  <span className="save-scenario-dialog__progress-text">
-                    Saving scenario {saveProgress.current} of {saveProgress.total}...
-                  </span>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="save-scenario-dialog__actions">
-                <Button variant="tertiary" onClick={onClose} disabled={saving}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={handleSave}
-                  disabled={!canSave}
-                  loading={saving}
-                >
-                  {saving ? 'Saving...' : `Save ${rows.length} Scenario${rows.length !== 1 ? 's' : ''}`}
-                </Button>
-              </div>
-            </>
+              <span className="save-scenario-dialog__progress-text">
+                Saved {completedCount} of {rows.length} scenario{plural}...
+              </span>
+            </div>
           )}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 };
 

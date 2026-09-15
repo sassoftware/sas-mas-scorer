@@ -44,15 +44,15 @@ export default function RestApiNode({ data }: NodeProps<RestApiNodeType>) {
             justifyContent: 'center',
           }}
         >
-          <span style={{ ...pill, color: '#ffffff', backgroundColor: colors.border }}>
+          <span style={{ ...pill, color: 'var(--sas-white)', backgroundColor: colors.badge }}>
             REST API
           </span>
           {method && (
             <span
               style={{
                 ...pill,
-                color: colors.border,
-                backgroundColor: '#ffffff',
+                color: colors.badge,
+                backgroundColor: 'var(--sas-white)',
                 border: `1px solid ${colors.border}`,
               }}
             >
@@ -64,7 +64,7 @@ export default function RestApiNode({ data }: NodeProps<RestApiNodeType>) {
           {data.label}
         </div>
         {host && (
-          <div style={{ fontSize: '10px', fontFamily: 'monospace', color: '#6b7280', marginTop: '2px' }}>
+          <div style={{ fontSize: '10px', fontFamily: 'var(--font-family-mono)', color: 'var(--sas-gray-600)', marginTop: '2px' }}>
             {host}
           </div>
         )}

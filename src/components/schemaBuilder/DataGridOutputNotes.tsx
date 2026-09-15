@@ -13,6 +13,7 @@
 // undersized Character length silently truncates the JSON.
 
 import React, { useState } from 'react';
+import { Alert } from '../common/Alert';
 import type { VariableMapping } from '../../types/schemaBuilder';
 
 interface Props {
@@ -50,53 +51,46 @@ export const DataGridOutputNotes: React.FC<Props> = ({ mappings }) => {
   if (gridVars.length === 0) return null;
 
   return (
-    <div className="schema-builder__dg-notes">
-      <div className="schema-builder__dg-notes-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <span>
-          DataGrid output{gridVars.length > 1 ? 's' : ''} — extra step required in your decision
-        </span>
+    <Alert variant="warning" title={`DataGrid output${gridVars.length > 1 ? 's' : ''} — extra step required in your decision`}>
+      <div className="schema-builder__dg-notes">
+        <p className="schema-builder__dg-notes-intro">
+          A Python code node <strong>cannot output a DataGrid directly</strong> into SAS Intelligent
+          Decisioning. The generated code returns each grid as a <em>serialized JSON string</em> in a{' '}
+          <strong>Character</strong> variable. To use it as a real DataGrid in your decision flow, add a{' '}
+          <strong>Rule Set</strong> or <strong>Variable Assignment</strong> node <em>after</em> this code
+          file and convert the string with <code>dataGrid_create()</code>.
+        </p>
+
+        {gridVars.map((m, i) => {
+          const grid = gridVarName(m.variableName);
+          const snippet = `dataGrid_create(${grid}, ${m.variableName})`;
+          return (
+            <div key={i} className="schema-builder__dg-note">
+              <div className="schema-builder__dg-note-var">
+                <code>{m.variableName}</code>
+                <span className="schema-builder__dg-note-tag">Character (serialized DataGrid)</span>
+              </div>
+              <div className="schema-builder__dg-note-code">
+                <code>{snippet}</code>
+                <CopyButton text={snippet} />
+              </div>
+              <p className="schema-builder__dg-note-desc">
+                In a downstream Rule Set / Variable Assignment node, declare a DataGrid variable{' '}
+                <code>{grid}</code> as output and assign it from the Character output{' '}
+                <code>{m.variableName}</code> using the statement above.
+              </p>
+            </div>
+          );
+        })}
+
+        <p className="schema-builder__dg-notes-warning">
+          <strong>Length matters:</strong> the Character variable holding the serialized grid must be
+          long enough to hold the full JSON. If its length is left at the default (100), SAS Intelligent
+          Decisioning silently truncates the string and the conversion fails. Set a generous length (up
+          to 32672) on this variable in <em>both</em> the code file signature and the Rule Set.
+        </p>
       </div>
-
-      <p className="schema-builder__dg-notes-intro">
-        A Python code node <strong>cannot output a DataGrid directly</strong> into SAS Intelligent
-        Decisioning. The generated code returns each grid as a <em>serialized JSON string</em> in a{' '}
-        <strong>Character</strong> variable. To use it as a real DataGrid in your decision flow, add a{' '}
-        <strong>Rule Set</strong> or <strong>Variable Assignment</strong> node <em>after</em> this code
-        file and convert the string with <code>dataGrid_create()</code>.
-      </p>
-
-      {gridVars.map((m, i) => {
-        const grid = gridVarName(m.variableName);
-        const snippet = `dataGrid_create(${grid}, ${m.variableName})`;
-        return (
-          <div key={i} className="schema-builder__dg-note">
-            <div className="schema-builder__dg-note-var">
-              <code>{m.variableName}</code>
-              <span className="schema-builder__dg-note-tag">Character (serialized DataGrid)</span>
-            </div>
-            <div className="schema-builder__dg-note-code">
-              <code>{snippet}</code>
-              <CopyButton text={snippet} />
-            </div>
-            <p className="schema-builder__dg-note-desc">
-              In a downstream Rule Set / Variable Assignment node, declare a DataGrid variable{' '}
-              <code>{grid}</code> as output and assign it from the Character output{' '}
-              <code>{m.variableName}</code> using the statement above.
-            </p>
-          </div>
-        );
-      })}
-
-      <p className="schema-builder__dg-notes-warning">
-        <strong>Length matters:</strong> the Character variable holding the serialized grid must be
-        long enough to hold the full JSON. If its length is left at the default (100), SAS Intelligent
-        Decisioning silently truncates the string and the conversion fails. Set a generous length (up
-        to 32672) on this variable in <em>both</em> the code file signature and the Rule Set.
-      </p>
-    </div>
+    </Alert>
   );
 };
 

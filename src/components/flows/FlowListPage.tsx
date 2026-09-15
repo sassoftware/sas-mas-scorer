@@ -1,11 +1,12 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { listAllDecisions } from '../../api/decisions';
 import type { DecisionFlow } from '../../types/sid';
 import { formatTimestamp, truncate } from '../../utils/formatters';
+import { Alert, Button, Loading, SearchInput } from '../common';
 
 const PAGE_SIZE = 20;
 
@@ -20,25 +21,18 @@ export default function FlowListPage() {
   const [error, setError] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-
-  const fetchDecisions = useCallback(async (sort: SortDir) => {
+  // The whole collection is fetched once (server order: name ascending);
+  // search and sort are applied to that in-memory list below.
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError('');
-    try {
-      const sortBy = `name:${sort === 'asc' ? 'ascending' : 'descending'}`;
-      const items = await listAllDecisions(undefined, sortBy);
-      setAllDecisions(items);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+    listAllDecisions()
+      .then((items) => { if (active) setAllDecisions(items); })
+      .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
-
-  // Fetch all decisions when sort changes
-  useEffect(() => {
-    fetchDecisions(sortDir);
-  }, [sortDir, fetchDecisions]);
 
   // Reset page when search changes
   useEffect(() => {
@@ -55,17 +49,24 @@ export default function FlowListPage() {
     );
   }, [allDecisions, search]);
 
-  const total = filtered.length;
+  // Copy before sorting: `filtered` is `allDecisions` itself when the search box is empty.
+  const sorted = useMemo(() => {
+    const copy = [...filtered].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    return sortDir === 'asc' ? copy : copy.reverse();
+  }, [filtered, sortDir]);
+
+  const total = sorted.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const currentPage = page + 1;
 
   const displayDecisions = useMemo(() => {
     const start = page * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+    return sorted.slice(start, start + PAGE_SIZE);
+  }, [sorted, page]);
 
   const toggleSort = () => {
     setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    setPage(0);
   };
 
   return (
@@ -75,40 +76,43 @@ export default function FlowListPage() {
         <div className="flow-list__count">{total} decision{total !== 1 ? 's' : ''}</div>
       </div>
 
-      <input
-        type="text"
+      <SearchInput
+        aria-label="Search decisions"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={setSearch}
         placeholder="Search decisions (case insensitive)..."
         className="flow-list__search"
       />
 
-      {error && <div className="flow-list__error">{error}</div>}
+      {error && (
+        <div className="flow-list__alert">
+          <Alert variant="error">{error}</Alert>
+        </div>
+      )}
 
       <div className="flow-list__table-wrap">
         <table className="flow-list__table">
           <thead>
             <tr>
-              <th
-                onClick={toggleSort}
-                style={{ cursor: 'pointer', userSelect: 'none' }}
-              >
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <th aria-sort={sortDir === 'asc' ? 'ascending' : 'descending'}>
+                <button type="button" className="flow-list__sort-btn" onClick={toggleSort}>
                   Name
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
                   </svg>
-                </span>
+                </button>
               </th>
               <th>Description</th>
-              <th style={{ width: '144px' }}>Modified</th>
-              <th style={{ width: '112px' }}>Modified by</th>
+              <th className="flow-list__col--modified">Modified</th>
+              <th className="flow-list__col--modified-by">Modified by</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="flow-list__empty">Loading...</td>
+                <td colSpan={4} className="flow-list__empty">
+                  <Loading size="small" message="Loading decisions..." />
+                </td>
               </tr>
             )}
             {!loading && displayDecisions.length === 0 && (
@@ -119,15 +123,16 @@ export default function FlowListPage() {
               </tr>
             )}
             {!loading && displayDecisions.map((d) => (
-              <tr key={d.id} onClick={() => navigate(`/flows/${d.id}`)}>
-                <td style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--sas-gray-800)' }}>
-                  {d.name}
+              // The row is a mouse convenience; the name link is the keyboard path.
+              <tr key={d.id} className="flow-list__row" onClick={() => navigate(`/flows/${d.id}`)}>
+                <td className="flow-list__col--name">
+                  <Link to={`/flows/${d.id}`} className="flow-list__row-link" onClick={(e) => e.stopPropagation()}>
+                    {d.name}
+                  </Link>
                 </td>
-                <td style={{ color: 'var(--sas-gray-500)' }}>{truncate(d.description ?? '', 60)}</td>
-                <td style={{ color: 'var(--sas-gray-400)', fontSize: 'var(--font-size-xs)' }}>
-                  {formatTimestamp(d.modifiedTimeStamp)}
-                </td>
-                <td style={{ color: 'var(--sas-gray-400)' }}>{d.modifiedBy}</td>
+                <td className="flow-list__col--desc">{truncate(d.description ?? '', 60)}</td>
+                <td className="flow-list__col--modified">{formatTimestamp(d.modifiedTimeStamp)}</td>
+                <td className="flow-list__col--modified-by">{d.modifiedBy}</td>
               </tr>
             ))}
           </tbody>
@@ -136,23 +141,25 @@ export default function FlowListPage() {
 
       {totalPages > 1 && (
         <div className="flow-pagination">
-          <button
-            className="flow-pagination__btn"
+          <Button
+            variant="secondary"
+            size="small"
             onClick={() => setPage(Math.max(0, page - 1))}
             disabled={page === 0}
           >
             Previous
-          </button>
+          </Button>
           <span className="flow-pagination__info">
             Page {currentPage} of {totalPages}
           </span>
-          <button
-            className="flow-pagination__btn"
+          <Button
+            variant="secondary"
+            size="small"
             onClick={() => setPage(page + 1)}
             disabled={currentPage >= totalPages}
           >
             Next
-          </button>
+          </Button>
         </div>
       )}
     </div>

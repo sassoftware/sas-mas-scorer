@@ -3,6 +3,7 @@
 
 import React, { useMemo } from 'react';
 import { DataTable, Column } from '../common/DataTable';
+import { EmptyState } from '../common/EmptyState';
 import { ExecutionJobParameter } from '../../types/jobExecution';
 
 interface ParameterRow {
@@ -124,7 +125,7 @@ export const JobParametersPanel: React.FC<JobParametersPanelProps> = ({
   ];
 
   if (rows.length === 0) {
-    return <p className="job-monitoring__empty">This job has no parameters.</p>;
+    return <EmptyState title="This job has no parameters." />;
   }
 
   return (

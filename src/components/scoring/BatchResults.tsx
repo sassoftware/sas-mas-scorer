@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { StepOutput, StepParameter } from '../../types';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
@@ -39,6 +39,13 @@ interface BatchResultsProps {
   onSaveAsScenarios?: (selectedIndices: number[]) => void;
 }
 
+// Rows rendered per page. `results` stays whole (CSV export, upload and
+// "Save as Scenarios" read the full array by absolute index); only the
+// rendered slice is paged so a large batch does not commit thousands of rows.
+const PAGE_SIZES = [100, 500] as const;
+const DEFAULT_PAGE_SIZE = 100;
+const SHOW_ALL = 0;
+
 // Format milliseconds to human-readable string
 const formatTime = (ms: number): string => {
   if (ms < 1000) {
@@ -52,6 +59,8 @@ const formatTime = (ms: number): string => {
   }
 };
 
+const isSelectable = (result: BatchResult): boolean => !!result.output && !result.error;
+
 export const BatchResults: React.FC<BatchResultsProps> = ({
   results,
   parameters: _parameters,
@@ -64,16 +73,38 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [gridModal, setGridModal] = useState<{ title: string; value: unknown[] } | null>(null);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(0);
   const lastClickedRef = useRef<number | null>(null);
 
-  const successCount = results.filter(r => r.output && !r.error).length;
-  const errorCount = results.filter(r => r.error).length;
+  const { successCount, errorCount, successIndices, successSet, outputParams } = useMemo(() => {
+    const indices: number[] = [];
+    let errors = 0;
+    results.forEach((r, i) => {
+      if (isSelectable(r)) indices.push(i);
+      if (r.error) errors++;
+    });
+    return {
+      successCount: indices.length,
+      errorCount: errors,
+      successIndices: indices,
+      successSet: new Set(indices),
+      // Output parameter names from the first successful result
+      outputParams: results.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [],
+    };
+  }, [results]);
 
-  // Only successful rows can be saved as scenarios
-  const successIndices = results
-    .map((r, i) => (r.output && !r.error ? i : -1))
-    .filter(i => i !== -1);
-  const successSet = new Set(successIndices);
+  // A fresh result set starts on its first page
+  useEffect(() => {
+    setPage(0);
+  }, [results]);
+
+  const effectivePageSize = pageSize === SHOW_ALL ? results.length : pageSize;
+  const pageCount = effectivePageSize > 0 ? Math.max(1, Math.ceil(results.length / effectivePageSize)) : 1;
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageStart = currentPage * effectivePageSize;
+  const pageEnd = Math.min(results.length, pageStart + effectivePageSize);
+  const visibleResults = pageSize === SHOW_ALL ? results : results.slice(pageStart, pageEnd);
 
   const allSuccessSelected = successIndices.length > 0 && successIndices.every(i => selectedRows.has(i));
 
@@ -115,9 +146,6 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
     });
   };
 
-  // Get output parameter names from first successful result
-  const outputParams = results.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [];
-
   const toggleRow = (index: number) => {
     setExpandedRow(expandedRow === index ? null : index);
   };
@@ -129,7 +157,8 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
       const shape = datagridShape(value);
       return (
         <button
-          className="batch-results__datagrid-link"
+          type="button"
+          className="datagrid__link"
           onClick={() => setGridModal({ title: `${name} — row ${rowNumber}`, value })}
           title="View DataGrid"
         >
@@ -243,6 +272,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                       checked={allSuccessSelected}
                       onChange={toggleSelectAll}
                       title="Select all successful rows"
+                      aria-label="Select all successful rows"
                     />
                   </th>
                 )}
@@ -256,86 +286,132 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
               </tr>
             </thead>
             <tbody>
-              {results.map((result, index) => (
-                <React.Fragment key={index}>
-                  <tr className={result.error ? 'batch-results__row--error' : ''}>
-                    {onSaveAsScenarios && (
-                      <td
-                        className="batch-results__checkbox-cell"
-                        style={{ cursor: result.output && !result.error ? 'pointer' : 'default' }}
-                        onClick={(e) => {
-                          if (result.output && !result.error) {
-                            handleRowSelect(index, e.shiftKey);
-                          }
-                        }}
-                      >
-                        {result.output && !result.error && (
-                          <input
-                            type="checkbox"
-                            checked={selectedRows.has(index)}
-                            onChange={() => {}}
-                            style={{ pointerEvents: 'none' }}
-                          />
+              {visibleResults.map((result, i) => {
+                // Absolute index into `results`: selection, expansion and the
+                // parent's "Save as Scenarios" all key on it, not the page slot.
+                const index = pageStart + i;
+                const selectable = isSelectable(result);
+                const outputByName = new Map(result.output?.outputs?.map(o => [o.name, o.value]) ?? []);
+                return (
+                  <React.Fragment key={index}>
+                    <tr className={result.error ? 'batch-results__row--error' : ''}>
+                      {onSaveAsScenarios && (
+                        <td className="batch-results__checkbox-cell">
+                          {selectable && (
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.has(index)}
+                              aria-label={`Select row ${result.rowIndex + 1}`}
+                              // onClick carries the Shift state for range select;
+                              // onChange keeps React's controlled-input contract.
+                              onClick={(e) => handleRowSelect(index, e.shiftKey)}
+                              onChange={() => {}}
+                            />
+                          )}
+                        </td>
+                      )}
+                      <td>{result.rowIndex + 1}</td>
+                      <td>
+                        {result.error ? (
+                          <StatusBadge status="failed" />
+                        ) : result.output ? (
+                          <StatusBadge status={result.output.executionState} />
+                        ) : (
+                          <Badge variant="default">Pending</Badge>
                         )}
                       </td>
-                    )}
-                    <td>{result.rowIndex + 1}</td>
-                    <td>
-                      {result.error ? (
-                        <StatusBadge status="failed" />
-                      ) : result.output ? (
-                        <StatusBadge status={result.output.executionState} />
-                      ) : (
-                        <Badge variant="default">Pending</Badge>
-                      )}
-                    </td>
-                    {outputParams.map(name => {
-                      const outputVar = result.output?.outputs?.find(o => o.name === name);
-                      return (
+                      {outputParams.map(name => (
                         <td key={name} className="batch-results__value">
-                          {outputVar ? formatValue(outputVar.value, name, result.rowIndex + 1) : '-'}
+                          {outputByName.has(name) ? formatValue(outputByName.get(name), name, result.rowIndex + 1) : '-'}
                         </td>
-                      );
-                    })}
-                    <td className="batch-results__value">{formatTime(result.executionTime)}</td>
-                    <td>
-                      <Button
-                        variant="tertiary"
-                        size="small"
-                        onClick={() => toggleRow(index)}
-                      >
-                        {expandedRow === index ? 'Hide' : 'Show'}
-                      </Button>
-                    </td>
-                  </tr>
-                  {expandedRow === index && (
-                    <tr className="batch-results__expanded-row">
-                      <td colSpan={outputParams.length + 4 + (onSaveAsScenarios ? 1 : 0)}>
-                        <div className="batch-results__details">
-                          <div className="batch-results__detail-section">
-                            <h5>Input Values</h5>
-                            <pre>{JSON.stringify(result.input, null, 2)}</pre>
-                          </div>
-                          {result.error ? (
-                            <div className="batch-results__detail-section batch-results__detail-section--error">
-                              <h5>Error</h5>
-                              <pre>{result.error}</pre>
-                            </div>
-                          ) : result.output ? (
-                            <div className="batch-results__detail-section">
-                              <h5>Full Output</h5>
-                              <pre>{JSON.stringify(result.output, null, 2)}</pre>
-                            </div>
-                          ) : null}
-                        </div>
+                      ))}
+                      <td className="batch-results__value">{formatTime(result.executionTime)}</td>
+                      <td>
+                        <Button
+                          variant="tertiary"
+                          size="small"
+                          onClick={() => toggleRow(index)}
+                          aria-expanded={expandedRow === index}
+                        >
+                          {expandedRow === index ? 'Hide' : 'Show'}
+                        </Button>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {expandedRow === index && (
+                      <tr className="batch-results__expanded-row">
+                        <td colSpan={outputParams.length + 4 + (onSaveAsScenarios ? 1 : 0)}>
+                          <div className="batch-results__details">
+                            <div className="batch-results__detail-section">
+                              <h5>Input Values</h5>
+                              <pre>{JSON.stringify(result.input, null, 2)}</pre>
+                            </div>
+                            {result.error ? (
+                              <div className="batch-results__detail-section batch-results__detail-section--error">
+                                <h5>Error</h5>
+                                <pre>{result.error}</pre>
+                              </div>
+                            ) : result.output ? (
+                              <div className="batch-results__detail-section">
+                                <h5>Full Output</h5>
+                                <pre>{JSON.stringify(result.output, null, 2)}</pre>
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
+
+        {results.length > PAGE_SIZES[0] && (
+          <div className="batch-results__pagination">
+            <span>
+              Showing {pageStart + 1}–{pageEnd} of {results.length.toLocaleString()} rows
+            </span>
+            <div className="batch-results__page-size">
+              <label htmlFor="batch-results-page-size">Rows per page</label>
+              <select
+                id="batch-results-page-size"
+                className="sas-input"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+              >
+                {PAGE_SIZES.map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+                <option value={SHOW_ALL}>All</option>
+              </select>
+            </div>
+            {pageSize !== SHOW_ALL && (
+              <div className="batch-results__page-controls">
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={currentPage === 0}
+                >
+                  Previous
+                </Button>
+                <span>Page {currentPage + 1} of {pageCount}</span>
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                  disabled={currentPage >= pageCount - 1}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </CardBody>
       {gridModal && (
         <DataGridModal
