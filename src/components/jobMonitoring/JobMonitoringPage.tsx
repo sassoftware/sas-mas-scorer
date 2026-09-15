@@ -58,7 +58,7 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
           role="status"
           aria-live="polite"
         >
-          <span className="job-monitoring__scanning-spinner" />
+          <span className="sas-spinner sas-spinner--small" aria-hidden="true" />
           <span>
             Loading jobs…
             {monitor.stats && monitor.stats.scanned > 0
@@ -72,18 +72,18 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
 
 
       {monitor.pollingPaused && (
-        <Alert variant="error">
-          <div className="job-monitoring__alert-row">
-            <span>
-              Auto-refresh paused due to errors from SAS Viya.
-              {monitor.statsError || monitor.runningError || monitor.completedError
-                ? ` Last error: ${monitor.statsError ?? monitor.runningError ?? monitor.completedError}`
-                : ''}
-            </span>
+        <Alert
+          variant="error"
+          actions={
             <Button variant="tertiary" size="small" onClick={monitor.refresh}>
               Retry
             </Button>
-          </div>
+          }
+        >
+          Auto-refresh paused due to errors from SAS Viya.
+          {monitor.statsError || monitor.runningError || monitor.completedError
+            ? ` Last error: ${monitor.statsError ?? monitor.runningError ?? monitor.completedError}`
+            : ''}
         </Alert>
       )}
 
@@ -118,13 +118,15 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
           </span>
         </div>
         {monitor.completedError && (
-          <Alert variant="error">
-            <div className="job-monitoring__alert-row">
-              <span>{monitor.completedError}</span>
+          <Alert
+            variant="error"
+            actions={
               <Button variant="tertiary" size="small" onClick={monitor.refresh}>
                 Retry
               </Button>
-            </div>
+            }
+          >
+            {monitor.completedError}
           </Alert>
         )}
         <CompletedJobsTable

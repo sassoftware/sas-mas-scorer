@@ -56,6 +56,23 @@ a:hover {
   outline-offset: var(--focus-outline-offset);
 }
 
+/* Reduced motion: one app-wide brake. Every looping animation (spinners,
+   skeleton shimmer, progress sweeps, pulses) runs once, near-instantly, and
+   transitions stop animating — so no feature has to remember its own
+   @media (prefers-reduced-motion) guard. !important is required because this
+   sheet is imported before the component and feature sheets.
+   A component may still add a rule here to make the frozen frame legible
+   (see .sas-spinner in components.css). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-iteration-count: 1 !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 button {
   font-family: inherit;
   font-size: inherit;

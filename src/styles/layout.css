@@ -48,9 +48,8 @@
   /* --env-header-* properties are set per connection in the Electron app */
   background-color: var(--env-header-bg, var(--sas-blue-brand));
   color: var(--env-header-fg, var(--sas-white));
-  /* Default muted header text: 4.9:1 on the brand blue (12px labels need 4.5:1).
-     Overridden per environment colour by --env-header-fg-muted. */
-  --sas-header-fg-muted: rgba(255, 255, 255, 0.92);
+  /* The muted header foreground default lives on :root in variables.css; the
+     per-connection --env-header-fg-muted (envColor.ts) still overrides it. */
   z-index: var(--z-sticky);
   box-shadow: var(--shadow-md);
 }
@@ -363,7 +362,7 @@
 .sas-sidebar__recent-item {
   display: block;
   width: 100%;
-  min-height: 32px; /* minimum pointer target */
+  min-height: var(--target-min);
   padding: var(--space-2);
   text-align: left;
   color: var(--sas-gray-600);
@@ -415,7 +414,7 @@
 .sas-breadcrumbs__link {
   display: inline-flex;
   align-items: center;
-  min-height: 32px; /* minimum pointer target in a 12px row */
+  min-height: var(--target-min); /* pointer target in a 12px row */
   color: var(--sas-blue-primary);
   background: none;
   border: none;
@@ -557,8 +556,8 @@
 .connection-settings__swatch {
   position: relative;
   display: inline-flex;
-  width: 32px; /* minimum pointer target */
-  height: 32px;
+  width: var(--target-min);
+  height: var(--target-min);
   cursor: pointer;
 }
 
@@ -617,7 +616,7 @@
 
 .connection-settings__custom-color-input {
   width: 36px;
-  height: 32px;
+  height: var(--target-min);
   padding: 0;
   border: 1px solid var(--sas-gray-300);
   border-radius: var(--radius-md);
@@ -811,7 +810,7 @@
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: 32px; /* minimum pointer target */
+  min-height: var(--target-min);
   padding: var(--space-2);
   margin-bottom: var(--space-2);
   border-radius: var(--radius-md);

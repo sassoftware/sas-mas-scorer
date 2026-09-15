@@ -1,13 +1,14 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 // Prism line-numbers plugin: injects per-line markers next to each highlighted
-// line. We pull in both the JS (which patches Prism.highlightAll) and the CSS
-// so the gutter renders. Line numbers are display-only — the Copy button
-// reads from the raw `code` string, so they never end up on the clipboard.
+// line. We pull in both the JS (it hangs off Prism's `complete` hook, so it
+// fires for highlightElement too) and the CSS so the gutter renders. Line
+// numbers are display-only — the Copy button reads from the raw `code`
+// string, so they never end up on the clipboard.
 import 'prismjs/plugins/line-numbers/prism-line-numbers';
 import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import { Button } from '../common/Button';
@@ -35,10 +36,14 @@ export const JobCodePanel: React.FC<JobCodePanelProps> = ({
   downloadFilename,
 }) => {
   const [copied, setCopied] = useState(false);
+  const codeRef = useRef<HTMLElement>(null);
   const lang = (type && TYPE_TO_PRISM_LANG[type]) || 'clike';
 
+  // Highlight only this block. highlightAll() would re-scan the whole
+  // document and re-highlight any other code panel that happens to be
+  // mounted (and fight React over their DOM).
   useEffect(() => {
-    if (code) Prism.highlightAll();
+    if (code && codeRef.current) Prism.highlightElement(codeRef.current);
   }, [code, lang]);
 
   if (!code) {
@@ -73,7 +78,7 @@ export const JobCodePanel: React.FC<JobCodePanelProps> = ({
         </div>
       </div>
       <pre className={`job-code__pre line-numbers language-${lang}`}>
-        <code className={`language-${lang}`}>{code}</code>
+        <code ref={codeRef} className={`language-${lang}`}>{code}</code>
       </pre>
     </div>
   );

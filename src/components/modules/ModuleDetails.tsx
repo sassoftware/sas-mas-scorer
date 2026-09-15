@@ -422,18 +422,18 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
                 <p className="module-details__empty-message">No entries found.</p>
               ) : (
                 <div className="module-details__entries-table-wrapper">
-                  <table className="module-details__entries-table">
-                    <thead>
+                  <table className="module-details__entries-table sas-table sas-table--compact sas-table--hoverable">
+                    <thead className="sas-table__head">
                       <tr>
-                        <th>Key</th>
-                        <th>Value</th>
+                        <th className="sas-table__th">Key</th>
+                        <th className="sas-table__th">Value</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="sas-table__body">
                       {entries.map((entry, index) => (
-                        <tr key={index}>
-                          <td>{entry.key}</td>
-                          <td>{entry.value}</td>
+                        <tr key={index} className="sas-table__row">
+                          <td className="sas-table__td">{entry.key}</td>
+                          <td className="sas-table__td">{entry.value}</td>
                         </tr>
                       ))}
                     </tbody>

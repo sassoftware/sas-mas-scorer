@@ -31,7 +31,7 @@ const STRING_LIKE: SasDataType[] = ['Character', 'Date', 'Datetime'];
 export const VariableTable: React.FC<Props> = ({ mappings, onChange, onDelete }) => {
   return (
     <div className="schema-builder__table-wrapper">
-      <table className="sas-table schema-builder__table">
+      <table className="sas-table sas-table--compact schema-builder__table">
         <thead className="sas-table__head">
           <tr>
             <th scope="col" className="sas-table__th schema-builder__col-num">#</th>

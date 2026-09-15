@@ -17,6 +17,7 @@ import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
+import { StepNav } from '../common/StepNav';
 import { useSasAuth } from '../../auth';
 import { RulesGrid } from './RulesGrid';
 import { ImportConfirmDialog, ConfirmEntry } from './ImportConfirmDialog';
@@ -68,7 +69,6 @@ export const RulesImportPage: React.FC = () => {
   // when the same target is hit again.
   const [focusTarget, setFocusTarget] = useState<{ row: number; col: number | null; nonce: number } | null>(null);
   const lastErrorJumpRef = useRef<number>(-1);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- Derived validation state ----
   // groups first: validateRows reuses it instead of grouping the file a second time.
@@ -498,39 +498,21 @@ export const RulesImportPage: React.FC = () => {
         }
       />
 
-      <nav className="rules-import__steps">
-        <button
-          className={`rules-import__step${activeStep === 'upload' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('upload')}
-          type="button"
-        >
-          1. Upload
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'review' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('review')}
-          disabled={!hasRows}
-          type="button"
-        >
-          2. Review &amp; Fix{hasRows ? ` (${rows.length})` : ''}
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'checks' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('checks')}
-          disabled={!hasRows}
-          type="button"
-        >
-          3. Server Checks
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'import' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('import')}
-          disabled={!hasRows}
-          type="button"
-        >
-          4. Import
-        </button>
-      </nav>
+      <StepNav
+        label="Import steps"
+        active={activeStep}
+        onSelect={(id) => setActiveStep(id as WizardStep)}
+        steps={[
+          { id: 'upload', label: '1. Upload' },
+          {
+            id: 'review',
+            label: `2. Review & Fix${hasRows ? ` (${rows.length})` : ''}`,
+            disabled: !hasRows,
+          },
+          { id: 'checks', label: '3. Server Checks', disabled: !hasRows },
+          { id: 'import', label: '4. Import', disabled: !hasRows },
+        ]}
+      />
 
       {globalError && (
         <Alert variant="error" dismissible onClose={() => setGlobalError(null)}>
@@ -550,10 +532,22 @@ export const RulesImportPage: React.FC = () => {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
           >
-            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileSelect} hidden />
-            <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+            {/* Visually hidden but still focusable: [hidden]/display:none would
+                drop the control out of the tab order and out of the a11y tree,
+                so the ring is carried by the label instead (#94). */}
+            <input
+              id="rules-import-file"
+              type="file"
+              accept=".csv"
+              onChange={handleFileSelect}
+              className="sr-only rules-import__file-input"
+            />
+            <label
+              htmlFor="rules-import-file"
+              className="sas-button sas-button--primary sas-button--medium rules-import__file-label"
+            >
               Choose a CSV file
-            </Button>
+            </label>
             <span className="rules-import__dropzone-hint">or drag &amp; drop it here</span>
           </div>
           {fileName && (
@@ -738,40 +732,42 @@ export const RulesImportPage: React.FC = () => {
             </Alert>
           )}
           {preflight && !preflightStale && (
-            <table className="sas-table rules-import__preflight-table">
-              <thead className="sas-table__head">
-                <tr>
-                  <th scope="col" className="sas-table__th">Rule set</th>
-                  <th scope="col" className="sas-table__th">Folder</th>
-                  <th scope="col" className="sas-table__th">Folder exists</th>
-                  <th scope="col" className="sas-table__th">Action</th>
-                  <th scope="col" className="sas-table__th">Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preflight.results.map((result) => (
-                  <tr key={result.key} className="sas-table__row">
-                    <td className="sas-table__td">{result.name}</td>
-                    <td className="sas-table__td rules-import__preflight-folder">{result.folderPath}</td>
-                    <td className="sas-table__td">
-                      {result.folderExists === null ? '?' : result.folderExists ? 'yes' : 'no (will be created)'}
-                    </td>
-                    <td className="sas-table__td">
-                      <Badge
-                        variant={result.action === 'create' ? 'success' : result.action === 'update' ? 'warning' : 'default'}
-                        size="small"
-                      >
-                        {result.action.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="sas-table__td rules-import__preflight-details">
-                      {result.action === 'update' && result.existingRevision && `current revision ${result.existingRevision}`}
-                      {result.checkError && ` ${result.checkError}`}
-                    </td>
+            <div className="sas-table__wrapper">
+              <table className="sas-table sas-table--compact">
+                <thead className="sas-table__head">
+                  <tr>
+                    <th scope="col" className="sas-table__th">Rule set</th>
+                    <th scope="col" className="sas-table__th">Folder</th>
+                    <th scope="col" className="sas-table__th">Folder exists</th>
+                    <th scope="col" className="sas-table__th">Action</th>
+                    <th scope="col" className="sas-table__th">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preflight.results.map((result) => (
+                    <tr key={result.key} className="sas-table__row">
+                      <td className="sas-table__td">{result.name}</td>
+                      <td className="sas-table__td rules-import__preflight-folder">{result.folderPath}</td>
+                      <td className="sas-table__td">
+                        {result.folderExists === null ? '?' : result.folderExists ? 'yes' : 'no (will be created)'}
+                      </td>
+                      <td className="sas-table__td">
+                        <Badge
+                          variant={result.action === 'create' ? 'success' : result.action === 'update' ? 'warning' : 'default'}
+                          size="small"
+                        >
+                          {result.action.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="sas-table__td rules-import__preflight-details">
+                        {result.action === 'update' && result.existingRevision && `current revision ${result.existingRevision}`}
+                        {result.checkError && ` ${result.checkError}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

@@ -26,45 +26,13 @@
   align-self: flex-start;
 }
 
-.job-monitoring__scanning-spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  animation: job-monitoring-spin 0.9s linear infinite;
-}
-
-@keyframes job-monitoring-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Error banners are <Alert variant="error">; this row lays out the message
- * and its Retry button inside the alert's content slot. */
-.job-monitoring__alert-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-}
-
-/* Stats */
+/* Stats — the tiles are `.sas-card .sas-stat-card` with `.sas-stat-value` /
+ * `.sas-stat-label` inside; only the grid minimum and the accent colours are
+ * this feature's. */
 .job-monitoring__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-4);
-}
-
-.job-monitoring__stat-card {
-  padding: var(--space-5);
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--sas-gray-200);
-  border-left: 4px solid var(--sas-gray-400);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
 }
 
 .job-monitoring__stat-card--total      { border-left-color: var(--sas-blue-primary); }
@@ -72,20 +40,6 @@
 .job-monitoring__stat-card--completed  { border-left-color: var(--sas-success); }
 .job-monitoring__stat-card--failed     { border-left-color: var(--sas-error); }
 .job-monitoring__stat-card--runtime    { border-left-color: var(--sas-blue-primary); }
-
-.job-monitoring__stat-value {
-  font-size: var(--font-size-3xl);
-  line-height: 1.1; /* deliberately tighter than --line-height-tight for a KPI figure */
-  font-weight: var(--font-weight-bold);
-  color: var(--sas-gray-900);
-}
-
-.job-monitoring__stat-label {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-}
 
 .job-monitoring__stat-sub {
   font-size: var(--font-size-xs);
@@ -302,34 +256,11 @@
   color: var(--sas-gray-700);
 }
 
-/* Pagination */
+/* Pagination is the shared <Pagination> (.sas-pagination); the completed-jobs
+ * list only asks it to centre its controls, since there is no reliable total
+ * to print a range summary against. */
 .job-monitoring__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--sas-gray-200);
-  flex-wrap: wrap;
-}
-
-.job-monitoring__pagination-info {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
-
-.job-monitoring__pagination-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.job-monitoring__pagination-page {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-  padding: 0 var(--space-2);
+  justify-content: center;
 }
 
 /* Confirm dialog (Cancel Job / Delete Job) — the chrome is the shared <Modal>;
@@ -367,19 +298,9 @@
   animation: job-monitoring-pulse 1.4s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .job-monitoring__pulse {
-    animation: none;
-  }
-
-  /* A frozen ring with a transparent quarter reads as broken; show a dim
-   * complete ring instead. */
-  .job-monitoring__scanning-spinner {
-    animation: none;
-    border-top-color: currentColor;
-    opacity: 0.5;
-  }
-}
+/* The global brake in base.css stops the pulse; the frozen frame is still
+ * legible (full opacity), so nothing else is needed here. The scanning chip's
+ * ring is the shared .sas-spinner, which closes itself under reduced motion. */
 
 /* ---------- Job Detail Page ---------- */
 .job-detail {

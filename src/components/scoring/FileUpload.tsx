@@ -337,27 +337,27 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             <div className="column-mapping__preview">
               <h4>Data Preview ({table.rows.length} rows)</h4>
               <div className="column-mapping__preview-table-wrapper">
-                <table className="column-mapping__preview-table">
-                  <thead>
+                <table className="sas-table sas-table--compact column-mapping__preview-table">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>#</th>
+                      <th className="sas-table__th">#</th>
                       {table.headers.map(header => (
-                        <th key={header}>{header}</th>
+                        <th className="sas-table__th" key={header}>{header}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {table.rows.slice(0, 5).map((row, index) => (
-                      <tr key={index}>
-                        <td>{index + 1}</td>
+                      <tr className="sas-table__row" key={index}>
+                        <td className="sas-table__td">{index + 1}</td>
                         {row.map((cell, cellIndex) => (
-                          <td key={cellIndex}>{formatCell(cell)}</td>
+                          <td className="sas-table__td" key={cellIndex}>{formatCell(cell)}</td>
                         ))}
                       </tr>
                     ))}
                     {table.rows.length > 5 && (
                       <tr className="column-mapping__preview-more">
-                        <td colSpan={table.headers.length + 1}>
+                        <td className="sas-table__td" colSpan={table.headers.length + 1}>
                           ... and {table.rows.length - 5} more rows
                         </td>
                       </tr>

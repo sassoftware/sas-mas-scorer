@@ -120,6 +120,10 @@ function addEdge(
     type: 'smoothstep',
     style: dotted ? { strokeDasharray: '6 3', opacity: 0.7 } : undefined,
     animated: dotted,
+    // labelStyle is applied as an inline CSS declaration on React Flow's
+    // <text className="react-flow__edge-text" style={labelStyle}> element
+    // (@xyflow/react EdgeText), not as an SVG presentation attribute, so a
+    // custom property inherited from :root resolves here like anywhere else.
     labelStyle: label === 'Yes'
       ? { fill: 'var(--sas-success-dark)', fontWeight: 600, fontSize: 11 }
       : label === 'No'

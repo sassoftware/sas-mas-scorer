@@ -1,11 +1,12 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
+import { StepNav } from '../common/StepNav';
 import { VariableTable } from './VariableTable';
 import { CodeOutput } from './CodeOutput';
 import { DataGridOutputNotes } from './DataGridOutputNotes';
@@ -30,7 +31,6 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
   // When true, unset output variables default to missing values (None) instead
   // of 0/''. Off by default to preserve the original behavior.
   const [missingDefaults, setMissingDefaults] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const doParse = useCallback((text: string) => {
     try {
@@ -119,31 +119,20 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
         subtitle="Paste an XML or JSON sample to generate a Python execute() function that destructures a string input into SAS Intelligent Decisioning variables — then save it to SAS Viya."
       />
 
-      <nav className="schema-builder__steps">
-        <button
-          className={`schema-builder__step${activeStep === 'input' ? ' schema-builder__step--active' : ''}`}
-          onClick={() => setActiveStep('input')}
-          type="button"
-        >
-          1. Input Schema
-        </button>
-        <button
-          className={`schema-builder__step${activeStep === 'variables' ? ' schema-builder__step--active' : ''}`}
-          onClick={() => setActiveStep('variables')}
-          disabled={mappings.length === 0}
-          type="button"
-        >
-          2. Variable Mapping ({mappings.length})
-        </button>
-        <button
-          className={`schema-builder__step${activeStep === 'output' ? ' schema-builder__step--active' : ''}`}
-          onClick={() => setActiveStep('output')}
-          disabled={!pythonCode}
-          type="button"
-        >
-          3. Python Output
-        </button>
-      </nav>
+      <StepNav
+        label="Schema to code steps"
+        active={activeStep}
+        onSelect={(id) => setActiveStep(id as Step)}
+        steps={[
+          { id: 'input', label: '1. Input Schema' },
+          {
+            id: 'variables',
+            label: `2. Variable Mapping (${mappings.length})`,
+            disabled: mappings.length === 0,
+          },
+          { id: 'output', label: '3. Python Output', disabled: !pythonCode },
+        ]}
+      />
 
       {error && (
         <Alert variant="error" dismissible onClose={() => setError(null)}>
@@ -167,16 +156,22 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
               <span className="schema-builder__hint">The SAS ID Character variable holding the raw string</span>
             </div>
             <div className="schema-builder__sample-buttons">
+              {/* Visually hidden but still focusable: [hidden]/display:none would
+                  drop the control out of the tab order and out of the a11y tree,
+                  so the ring is carried by the label instead (#94). */}
               <input
-                ref={fileInputRef}
+                id="sb-file-upload"
                 type="file"
                 accept=".json,.xml,.txt"
                 onChange={handleFileUpload}
-                hidden
+                className="sr-only schema-builder__file-input"
               />
-              <Button variant="secondary" size="small" onClick={() => fileInputRef.current?.click()}>
+              <label
+                htmlFor="sb-file-upload"
+                className="sas-button sas-button--secondary sas-button--small schema-builder__file-label"
+              >
                 Upload file
-              </Button>
+              </label>
             </div>
           </div>
           <textarea

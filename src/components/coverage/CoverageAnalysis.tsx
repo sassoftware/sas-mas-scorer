@@ -7,8 +7,11 @@ import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { SearchInput } from '../common/SearchInput';
+import { ProgressBar } from '../common/ProgressBar';
+import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { getSasViyaUrl } from '../../config';
+import { registerViewCache } from '../../utils/viewCaches';
 import {
   collectCoverage,
   generateCoverageCSV,
@@ -33,6 +36,10 @@ let cachedResult: CoverageResult | null = null;
 export const clearCoverageAnalysisCache = (): void => {
   cachedResult = null;
 };
+
+// The shell clears this through the registry, so Header/App never import the
+// coverage view (which would pull it into the entry chunk).
+registerViewCache('coverage', clearCoverageAnalysisCache);
 
 export const CoverageAnalysis: React.FC = () => {
   const [result, setResult] = useState<CoverageResult | null>(() => cachedResult);
@@ -187,28 +194,17 @@ export const CoverageAnalysis: React.FC = () => {
 
       {/* Progress indicator */}
       {loading && progress && (
-        <Card className="coverage-progress-card">
+        <Card>
           <CardBody>
-            <div className="coverage-progress">
-              <div className="coverage-progress__header">
-                <span className="coverage-progress__phase">
-                  {progress.phase === 'collecting' ? 'Collecting data' : 'Analyzing coverage'}
-                </span>
-                <span className="coverage-progress__count">
-                  {progress.itemsCollected} items collected
-                </span>
-              </div>
-              <div className="coverage-progress__bar-track">
-                <div
-                  className="coverage-progress__bar-fill"
-                  style={{ width: `${(progress.currentStep / progress.totalSteps) * 100}%` }}
-                />
-              </div>
-              <div className="coverage-progress__message">{progress.message}</div>
-              <div className="coverage-progress__step">
-                Step {progress.currentStep} of {progress.totalSteps}
-              </div>
-            </div>
+            <ProgressBar
+              label="Coverage collection progress"
+              value={progress.currentStep}
+              max={progress.totalSteps}
+              phase={progress.phase === 'collecting' ? 'Collecting data' : 'Analyzing coverage'}
+              count={`${progress.itemsCollected} items collected`}
+              message={progress.message}
+              steps={<span>Step {progress.currentStep} of {progress.totalSteps}</span>}
+            />
           </CardBody>
         </Card>
       )}
@@ -266,31 +262,27 @@ export const CoverageAnalysis: React.FC = () => {
               </CardBody>
             </Card>
 
-            {/* Stats cards */}
-            <Card className="coverage-stats-card">
-              <CardBody>
-                <div className="coverage-stats-grid">
-                  <div className="coverage-stat">
-                    <div className="coverage-stat__value">{result.stats.overall.totalItems}</div>
-                    <div className="coverage-stat__label">Total Assets</div>
-                  </div>
-                  <div className="coverage-stat coverage-stat--success">
-                    <div className="coverage-stat__value">{result.stats.overall.itemsWithTests}</div>
-                    <div className="coverage-stat__label">With Tests</div>
-                  </div>
-                  <div className="coverage-stat coverage-stat--error">
-                    <div className="coverage-stat__value">{result.stats.overall.itemsWithoutTests}</div>
-                    <div className="coverage-stat__label">Without Tests</div>
-                  </div>
-                  <div className="coverage-stat">
-                    <div className="coverage-stat__value">
-                      {new Date(result.collectionDate).toLocaleDateString()}
-                    </div>
-                    <div className="coverage-stat__label">Collected</div>
-                  </div>
+            {/* Stats cards — the shared .sas-stat-card tile */}
+            <div className="coverage-stats-grid">
+              <div className="sas-card sas-stat-card">
+                <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
+                <div className="sas-stat-label">Total Assets</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--success">
+                <div className="sas-stat-value">{result.stats.overall.itemsWithTests}</div>
+                <div className="sas-stat-label">With Tests</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--error">
+                <div className="sas-stat-value">{result.stats.overall.itemsWithoutTests}</div>
+                <div className="sas-stat-label">Without Tests</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--date">
+                <div className="sas-stat-value">
+                  {new Date(result.collectionDate).toLocaleDateString()}
                 </div>
-              </CardBody>
-            </Card>
+                <div className="sas-stat-label">Collected</div>
+              </div>
+            </div>
           </div>
 
           {/* Coverage by Type Bars */}
@@ -376,8 +368,8 @@ export const CoverageAnalysis: React.FC = () => {
                     <tr>
                       <SortHeader field="name" label="Name" current={sortField} dir={sortDir} onSort={handleSort} />
                       <SortHeader field="contentType" label="Type" current={sortField} dir={sortDir} onSort={handleSort} width="140px" />
-                      <th className="sas-table__th" style={{ width: '110px', textAlign: 'center' }}>Coverage</th>
-                      <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="center" />
+                      <th className="sas-table__th" style={{ width: '90px', textAlign: 'center' }}>Coverage</th>
+                      <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="right" />
                       <th className="sas-table__th" style={{ width: '120px' }}>Created By</th>
                       <SortHeader field="modifiedTimestamp" label="Modified" current={sortField} dir={sortDir} onSort={handleSort} width="110px" />
                       <th className="sas-table__th" style={{ width: '100px', textAlign: 'center' }}>Link</th>
@@ -440,7 +432,7 @@ export const CoverageAnalysis: React.FC = () => {
                                   <Badge variant="error" size="small">No tests</Badge>
                                 )}
                               </td>
-                              <td className="sas-table__td" style={{ textAlign: 'center' }}>
+                              <td className="sas-table__td" style={{ textAlign: 'right' }}>
                                 {item.testScenarioCount > 0 && (
                                   <Badge variant="info" size="small">{item.testScenarioCount}</Badge>
                                 )}
@@ -454,12 +446,12 @@ export const CoverageAnalysis: React.FC = () => {
                                   {item.contentType === 'decision' && (
                                     <a
                                       href={`#/flows/${item.id}`}
-                                      className="coverage-deep-link"
+                                      className="sas-deep-link"
                                       title="View Flow Diagram"
                                       aria-label={`View flow diagram for ${item.name}`}
                                       onClick={e => e.stopPropagation()}
                                     >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" aria-hidden="true">
+                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <circle cx="12" cy="5" r="2" />
                                         <circle cx="6" cy="19" r="2" />
                                         <circle cx="18" cy="19" r="2" />
@@ -472,12 +464,12 @@ export const CoverageAnalysis: React.FC = () => {
                                       href={deepLink.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="coverage-deep-link"
+                                      className="sas-deep-link"
                                       title={deepLink.label}
                                       aria-label={`${deepLink.label}: ${item.name}`}
                                       onClick={e => e.stopPropagation()}
                                     >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16" aria-hidden="true">
+                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                         <polyline points="15 3 21 3 21 9" />
                                         <line x1="10" y1="14" x2="21" y2="3" />
@@ -492,24 +484,24 @@ export const CoverageAnalysis: React.FC = () => {
                                 <td colSpan={7} className="coverage-expand-cell">
                                   <div className="coverage-scenarios">
                                     <div className="coverage-scenarios__header">Test Scenarios</div>
-                                    <table className="coverage-scenarios__table">
-                                      <thead>
+                                    <table className="coverage-scenarios__table sas-table sas-table--compact">
+                                      <thead className="sas-table__head">
                                         <tr>
-                                          <th>Name</th>
-                                          <th style={{ width: '140px' }}>Type</th>
-                                          <th>Description</th>
+                                          <th className="sas-table__th">Name</th>
+                                          <th className="sas-table__th" style={{ width: '140px' }}>Type</th>
+                                          <th className="sas-table__th">Description</th>
                                         </tr>
                                       </thead>
-                                      <tbody>
+                                      <tbody className="sas-table__body">
                                         {item.testScenarios.map(ts => (
-                                          <tr key={ts.scoreDefinitionId}>
-                                            <td>{ts.name}</td>
-                                            <td>
+                                          <tr key={ts.scoreDefinitionId} className="sas-table__row">
+                                            <td className="sas-table__td">{ts.name}</td>
+                                            <td className="sas-table__td">
                                               <Badge variant={getScenarioTypeBadgeVariant(ts.scenarioType)} size="small">
                                                 {ts.scenarioType}
                                               </Badge>
                                             </td>
-                                            <td className="coverage-scenarios__desc">
+                                            <td className="sas-table__td coverage-scenarios__desc">
                                               {ts.description || <span className="coverage-scenarios__none">No description</span>}
                                             </td>
                                           </tr>
@@ -529,27 +521,14 @@ export const CoverageAnalysis: React.FC = () => {
               </div>
 
               {pageCount > 1 && (
-                <nav className="coverage-detail__pagination" aria-label="Asset pages">
-                  <Button
-                    variant="tertiary"
-                    size="small"
-                    disabled={currentPage === 0}
-                    onClick={() => setPage(currentPage - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <span className="coverage-detail__pagination-info">
-                    Page {currentPage + 1} of {pageCount}
-                  </span>
-                  <Button
-                    variant="tertiary"
-                    size="small"
-                    disabled={currentPage >= pageCount - 1}
-                    onClick={() => setPage(currentPage + 1)}
-                  >
-                    Next
-                  </Button>
-                </nav>
+                <Pagination
+                  label="Asset pages"
+                  page={currentPage + 1}
+                  totalPages={pageCount}
+                  pageSize={PAGE_SIZE}
+                  totalItems={sortedItems.length}
+                  onPageChange={(p) => setPage(p - 1)}
+                />
               )}
             </CardBody>
           </Card>
@@ -571,20 +550,28 @@ interface SortHeaderProps {
   align?: 'left' | 'center' | 'right';
 }
 
-// Same shape as ModuleList's sortable headers: a real <button> inside the
-// <th> so the sort is reachable by keyboard, with aria-sort on the cell.
+// The shared .sas-table__sort-header: a real <button> filling the whole
+// header cell, with aria-sort on the cell. The button must stay a DIRECT
+// child of the <th>, and the <th> must not add padding of its own.
 const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onSort, width, align = 'left' }) => {
   const isActive = current === field;
   const ariaSort = isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const classes = [
+    'sas-table__sort-header',
+    isActive ? 'sas-table__sort-header--active' : '',
+    // An inline text-align on the <th> no longer positions the button's flex
+    // content, so a trailing column asks for the modifier.
+    align === 'right' ? 'sas-table__sort-header--end' : '',
+  ].filter(Boolean).join(' ');
   return (
     <th className="sas-table__th" style={{ width, textAlign: align }} aria-sort={ariaSort}>
       <button
         type="button"
-        className={`coverage-detail__sort-header ${isActive ? 'coverage-detail__sort-header--active' : ''}`}
+        className={classes}
         onClick={() => onSort(field)}
       >
         {label}
-        <span className="coverage-detail__sort-icon">
+        <span className="sas-table__sort-icon">
           <svg
             viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth={2}

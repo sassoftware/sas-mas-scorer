@@ -8,17 +8,14 @@ import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge, TypeBadge } from '../common/Badge';
 import {
-  getCasServers,
-  getCaslibs,
   getCasTables,
   getTableColumns,
   getTableRows,
   getAllTableRows,
-  CasServer,
-  CasLib,
   CasTableInfo,
   CasColumnInfo,
 } from '../../api/cas';
+import { useCasCatalog } from '../../hooks/useCasCatalog';
 
 export interface CasTableTestInfo {
   serverName: string;
@@ -154,18 +151,22 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   executing,
   onSaveAsTest,
 }) => {
-  // Browse state
-  const [servers, setServers] = useState<CasServer[]>([]);
-  const [caslibs, setCaslibs] = useState<CasLib[]>([]);
+  // Browse state. The server/caslib catalogue comes from the shared session
+  // cache; tables are still fetched per caslib (cas.ts is unchanged).
   const [tables, setTables] = useState<CasTableInfo[]>([]);
   const [selectedServer, setSelectedServer] = useState('');
   const [selectedCaslib, setSelectedCaslib] = useState('');
   const [selectedTable, setSelectedTable] = useState('');
   const [tableFilter, setTableFilter] = useState('');
+  const {
+    servers,
+    caslibs,
+    loadingServers,
+    loadingCaslibs,
+    error: casError,
+  } = useCasCatalog(selectedServer);
 
   // Loading states
-  const [loadingServers, setLoadingServers] = useState(true);
-  const [loadingCaslibs, setLoadingCaslibs] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingRows, setLoadingRows] = useState(false);
 
@@ -190,70 +191,37 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   const selectionRef = useRef(0);
   const invalidateSelection = () => ++selectionRef.current;
 
-  // Load CAS servers on mount
+  // Auto-select the first server offered. Nothing downstream is selected yet,
+  // so this path needs none of the resets handleServerChange does.
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const serverList = await getCasServers();
-        if (cancelled) return;
-        setServers(serverList);
-        if (serverList.length > 0) {
-          setSelectedServer(serverList[0].name);
-        }
-      } catch (err: unknown) {
-        if (cancelled) return;
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load CAS servers');
-      } finally {
-        if (!cancelled) setLoadingServers(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (selectedServer || servers.length === 0) return;
+    setSelectedServer(servers[0].name);
+  }, [servers, selectedServer]);
 
-  // Load caslibs when server changes
+  // Prefer the "Public" caslib of whatever server is selected, else the first.
   useEffect(() => {
-    if (!selectedServer) {
-      setCaslibs([]);
+    if (caslibs.length === 0) {
+      setSelectedCaslib('');
       return;
     }
+    const publicLib = caslibs.find(c => c.name.toLowerCase() === 'public');
+    setSelectedCaslib(publicLib?.name ?? caslibs[0].name);
+  }, [caslibs]);
 
-    let cancelled = false;
-    const load = async () => {
-      invalidateSelection();
-      setLoadingCaslibs(true);
-      setSelectedCaslib('');
-      setSelectedTable('');
-      setTables([]);
-      setColumns([]);
-      setPreviewRows([]);
-      setLoadingRows(false);
-      setError(null);
-      try {
-        const caslibList = await getCaslibs(selectedServer);
-        if (cancelled) return;
-        setCaslibs(caslibList);
-        if (caslibList.length > 0) {
-          const publicLib = caslibList.find(c => c.name.toLowerCase() === 'public');
-          setSelectedCaslib(publicLib?.name ?? caslibList[0].name);
-        }
-      } catch (err: unknown) {
-        if (cancelled) return;
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load caslibs');
-      } finally {
-        if (!cancelled) setLoadingCaslibs(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedServer]);
+  // Picking a different server drops everything chosen underneath it. This
+  // used to live in the caslib-loading effect; the catalogue now loads in the
+  // hook, so the resets belong to the event that causes them.
+  const handleServerChange = useCallback((serverName: string) => {
+    invalidateSelection();
+    setSelectedServer(serverName);
+    setSelectedCaslib('');
+    setSelectedTable('');
+    setTables([]);
+    setColumns([]);
+    setPreviewRows([]);
+    setLoadingRows(false);
+    setError(null);
+  }, []);
 
   // Load tables when caslib changes (getCasTables walks every page)
   useEffect(() => {
@@ -458,7 +426,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                   id="cas-server-select"
                   className="sas-input"
                   value={selectedServer}
-                  onChange={e => setSelectedServer(e.target.value)}
+                  onChange={e => handleServerChange(e.target.value)}
                   disabled={executing}
                 >
                   {servers.length === 0 && <option value="">No servers available</option>}
@@ -544,6 +512,11 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           </Alert>
         )}
 
+        {/* Catalogue failure — owned by the hook, so there is nothing to dismiss */}
+        {!error && casError && (
+          <Alert variant="error" title="Error">{casError}</Alert>
+        )}
+
         {notice && (
           <Alert variant="warning" dismissible onClose={() => setNotice(null)}>
             {notice}
@@ -605,30 +578,30 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
               <h4>Data Preview ({totalRowCount.toLocaleString()} rows in table)</h4>
               {previewRows.length > 0 ? (
                 <div className="column-mapping__preview-table-wrapper">
-                  <table className="column-mapping__preview-table">
-                    <thead>
+                  <table className="sas-table sas-table--compact column-mapping__preview-table">
+                    <thead className="sas-table__head">
                       <tr>
-                        <th>#</th>
+                        <th className="sas-table__th">#</th>
                         {columns.map(col => (
-                          <th key={col.name}>{col.name}</th>
+                          <th className="sas-table__th" key={col.name}>{col.name}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.slice(0, 5).map((row, index) => (
-                        <tr key={index}>
-                          <td>{index + 1}</td>
+                        <tr className="sas-table__row" key={index}>
+                          <td className="sas-table__td">{index + 1}</td>
                           {columns.map((col, colIndex) => {
                             const cell = getCellValue(row, col.name, colIndex);
                             return (
-                              <td key={col.name}>{cell != null ? String(cell) : ''}</td>
+                              <td className="sas-table__td" key={col.name}>{cell != null ? String(cell) : ''}</td>
                             );
                           })}
                         </tr>
                       ))}
                       {totalRowCount > 5 && (
                         <tr className="column-mapping__preview-more">
-                          <td colSpan={columns.length + 1}>
+                          <td className="sas-table__td" colSpan={columns.length + 1}>
                             ... and {(totalRowCount - 5).toLocaleString()} more rows
                           </td>
                         </tr>

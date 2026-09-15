@@ -5,7 +5,7 @@ import type { DecisionFlow, SignatureVar } from '../../types/sid';
 import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
 import type { RuleSetBundle } from '../../api/rulesets';
 import { formatTimestamp } from '../../utils/formatters';
-import { directionLabel, directionBadgeVariant } from '../../utils/direction';
+import { directionLabel } from '../../utils/direction';
 import { buildDecisionDeepLink } from '../../utils/deepLinks';
 import { Button } from '../common';
 import FlowDeepLink from './FlowDeepLink';
@@ -46,14 +46,18 @@ function defaultLength(dataType?: string): number {
   return 100;
 }
 
-/** Map direction → BEM modifier class */
+/**
+ * The app-wide direction mapping (components.css): input = blue,
+ * output = green, in/out = neutral. A temporary variable has no direction,
+ * so it takes the plain default chip; its label ("temp") is what tells it
+ * apart from in/out, never the colour alone.
+ */
 function directionBadgeClass(direction?: string): string {
-  const variant = directionBadgeVariant(direction);
-  switch (variant) {
-    case 'success': return 'flow-dir-badge flow-dir-badge--input';
-    case 'info':    return 'flow-dir-badge flow-dir-badge--output';
-    case 'warning': return 'flow-dir-badge flow-dir-badge--inout';
-    default:        return 'flow-dir-badge flow-dir-badge--temp';
+  switch (direction) {
+    case 'input':  return 'sas-badge sas-badge--direction-input';
+    case 'output': return 'sas-badge sas-badge--direction-output';
+    case 'inOut':  return 'sas-badge sas-badge--direction-both';
+    default:       return 'sas-badge sas-badge--default';
   }
 }
 
@@ -74,30 +78,30 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
         <span className={directionBadgeClass(badgeDirection)}>{directionLabel(badgeDirection)}</span>
         {title} ({vars.length})
       </h5>
-      <table className="flow-sp-table flow-sp-table--fixed">
-        <thead>
+      <table className="sas-table sas-table--compact flow-table--fixed">
+        <thead className="sas-table__head">
           <tr>
-            <th className="flow-var-table__col-name">Name</th>
-            <th className="flow-var-table__col-desc">Description</th>
-            <th>Direction</th>
-            <th>Type</th>
-            <th>Length</th>
-            <th>Default</th>
+            <th className="sas-table__th flow-var-table__col-name">Name</th>
+            <th className="sas-table__th flow-var-table__col-desc">Description</th>
+            <th className="sas-table__th">Direction</th>
+            <th className="sas-table__th">Type</th>
+            <th className="sas-table__th">Length</th>
+            <th className="sas-table__th">Default</th>
           </tr>
         </thead>
         <tbody>
           {vars.map((v) => (
-            <tr key={v.id}>
-              <td className="flow-var-table__col-name" title={v.name}>{v.name}</td>
-              <td className="flow-var-table__col-desc" title={v.description ?? ''}>{v.description ?? ''}</td>
-              <td>
+            <tr key={v.id} className="sas-table__row">
+              <td className="sas-table__td flow-var-table__col-name" title={v.name}>{v.name}</td>
+              <td className="sas-table__td flow-var-table__col-desc" title={v.description ?? ''}>{v.description ?? ''}</td>
+              <td className="sas-table__td">
                 <span className={directionBadgeClass(v.direction)}>
                   {directionLabel(v.direction)}
                 </span>
               </td>
-              <td>{v.dataType}</td>
-              <td>{v.length ?? defaultLength(v.dataType)}</td>
-              <td>{v.defaultValue != null ? String(v.defaultValue) : ''}</td>
+              <td className="sas-table__td">{v.dataType}</td>
+              <td className="sas-table__td">{v.length ?? defaultLength(v.dataType)}</td>
+              <td className="sas-table__td">{v.defaultValue != null ? String(v.defaultValue) : ''}</td>
             </tr>
           ))}
         </tbody>
@@ -125,7 +129,7 @@ export default function FlowHeader({
     <div className="flow-header__card">
       <div className="flow-header__top">
         <div>
-          {decisionLink && <FlowDeepLink url={decisionLink.url} label={decisionLink.label} />}
+          {decisionLink && <FlowDeepLink url={decisionLink.url} label={decisionLink.label} showLabel />}
           <h1 className="flow-header__title">{flow.name}</h1>
           {flow.description && <p className="flow-header__desc">{flow.description}</p>}
         </div>

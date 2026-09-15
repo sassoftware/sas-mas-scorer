@@ -62,56 +62,8 @@
   white-space: nowrap;
 }
 
-/* Sortable column headers */
-.module-list__sort-header {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: transparent;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: inherit;
-  color: var(--sas-gray-700);
-  cursor: pointer;
-  user-select: none;
-  transition: color var(--transition-fast);
-}
-
-.module-list__sort-header:hover {
-  color: var(--sas-blue-primary);
-}
-
-.module-list__sort-header--active {
-  color: var(--sas-blue-primary);
-}
-
-.module-list__sort-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-
-.module-list__sort-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.module-list__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-4);
-}
-
-.module-list__pagination-info {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
+/* Sortable column headers are the shared .sas-table__sort-header and paging
+   is the shared <Pagination>; both live in components.css. */
 
 /* Login Prompt */
 .module-list__login-prompt {
@@ -213,36 +165,16 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-/* Entries Table */
+/* Entries Table — the shared .sas-table--compact; only the framed, scrollable
+   wrapper is this feature's. */
 .module-details__entries-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--sas-gray-200);
   border-radius: var(--radius-md);
 }
 
-.module-details__entries-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.module-details__entries-table th,
-.module-details__entries-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
-  white-space: nowrap;
-}
-
-.module-details__entries-table th {
-  background-color: var(--sas-gray-50);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  font-size: var(--font-size-xs);
-}
-
-.module-details__entries-table tbody tr:hover {
-  background-color: var(--sas-gray-50);
+.module-details__entries-table .sas-table__row:last-child {
+  border-bottom: none;
 }
 
 .module-details__empty-message {
@@ -307,4 +239,79 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   color: var(--sas-gray-600);
+}
+
+/* Module Details - Danger Zone */
+.module-details__danger-card {
+  border: 1px solid var(--sas-error-light);
+  background-color: rgba(244, 67, 54, 0.02);
+}
+
+.module-details__danger-card .sas-card__header {
+  background-color: var(--sas-error-light);
+}
+
+.module-details__danger-card .sas-card__header h3 {
+  color: var(--sas-error-dark);
+}
+
+.module-details__danger-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.module-details__danger-info {
+  flex: 1;
+}
+
+.module-details__danger-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.module-details__danger-description {
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.module-details__delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.module-details__delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Module Details - Source Link */
+.module-details__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--sas-blue-primary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-blue-light);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.module-details__source-link:hover,
+.module-details__source-link:focus-visible {
+  background-color: var(--sas-blue-primary);
+  color: var(--sas-white);
+}
+
+.module-details__source-link svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex-shrink: 0;
 }

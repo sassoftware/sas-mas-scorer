@@ -12,6 +12,12 @@ interface AlertProps {
   title?: string;
   onClose?: () => void;
   dismissible?: boolean;
+  /**
+   * Controls shown on the alert's own row, after the message — a Retry
+   * button, a link. Use this instead of wrapping the children in a
+   * feature-specific flex row.
+   */
+  actions?: React.ReactNode;
 }
 
 export const Alert: React.FC<AlertProps> = ({
@@ -20,6 +26,7 @@ export const Alert: React.FC<AlertProps> = ({
   title,
   onClose,
   dismissible = false,
+  actions,
 }) => {
   const icons: Record<AlertVariant, React.ReactNode> = {
     success: (
@@ -51,6 +58,7 @@ export const Alert: React.FC<AlertProps> = ({
         {title && <h4 className="sas-alert__title">{title}</h4>}
         <div className="sas-alert__message">{children}</div>
       </div>
+      {actions && <div className="sas-alert__actions">{actions}</div>}
       {dismissible && onClose && (
         <IconButton size="small" className="sas-alert__close" onClick={onClose} aria-label="Close alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

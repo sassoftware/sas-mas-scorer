@@ -34,6 +34,19 @@ const FOCUSABLE =
 const openModals: symbol[] = [];
 
 /**
+ * True while a modal dialog is open. Other Escape handlers (the layout
+ * drawer, the flow side panel) call this to stay out of the way of an open
+ * dialog.
+ *
+ * It answers for <Modal> from the mount stack, and falls back to the DOM for
+ * dialogs that are still hand-rolled overlays (ShareDialog) and therefore
+ * never register here. Drop the DOM half once every dialog is a <Modal>.
+ */
+export const isAnyModalOpen = (): boolean =>
+  openModals.length > 0 ||
+  (typeof document !== 'undefined' && document.querySelector('[aria-modal="true"]') !== null);
+
+/**
  * Accessible dialog: owns the scrim, the z-index layer, Escape-to-close,
  * focus on open / restore on close, and a Tab trap. Mount it conditionally
  * (`{open && <Modal …/>}`); there is no `open` prop.

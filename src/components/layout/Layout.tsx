@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Header } from './Header';
+import { isAnyModalOpen } from '../common/Modal';
 import { Sidebar, ViewType } from './Sidebar';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
@@ -84,7 +85,9 @@ export const Layout: React.FC<LayoutProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // An open Modal owns Escape; leave the drawer alone until it is gone.
-      if (document.querySelector('[aria-modal="true"]')) return;
+      // isAnyModalOpen also covers the dialogs that are still hand-rolled
+      // overlays (ShareDialog) and never register with the Modal stack.
+      if (isAnyModalOpen()) return;
       closeNav();
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -170,6 +173,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
               <li key={index} className="sas-breadcrumbs__item">
                 {crumb.onClick ? (
                   <button
+                    type="button"
                     className="sas-breadcrumbs__link"
                     onClick={crumb.onClick}
                   >

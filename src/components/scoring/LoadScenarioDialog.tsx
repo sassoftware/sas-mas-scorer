@@ -12,13 +12,15 @@ import {
   getScoreDefinition,
   ScoreDefinitionSummary,
 } from '../../api/scoreDefinitions';
-import { getDecisionSignature, DecisionSignatureVariable } from '../../api/modules';
+import { DecisionSignatureVariable } from '../../api/modules';
 import { StepParameter } from '../../types';
 import { coerceDatagridValue } from '../../utils/datagrid';
 
 interface LoadScenarioDialogProps {
   sourceURI: string;
   inputParameters: StepParameter[];
+  /** Decision signature, resolved once by ScorePanel and passed down. */
+  signature: DecisionSignatureVariable[];
   onLoad: (values: Record<string, unknown>) => void;
   onClose: () => void;
 }
@@ -104,6 +106,7 @@ function unwrapMappingValue(value: unknown, paramType: string): unknown {
 export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
   sourceURI,
   inputParameters,
+  signature,
   onLoad,
   onClose,
 }) => {
@@ -111,12 +114,12 @@ export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [signature, setSignature] = useState<DecisionSignatureVariable[]>([]);
 
   // Extract decision flow ID from sourceURI
   const flowId = sourceURI.match(/\/decisions\/flows\/([a-f0-9-]+)/)?.[1] ?? '';
 
-  // Load scenarios and decision signature on mount
+  // Load the scenario list on mount; the signature arrives as a prop (ScorePanel
+  // already holds it) instead of being refetched here.
   useEffect(() => {
     if (!flowId) {
       setError('Could not determine decision flow ID');
@@ -127,13 +130,9 @@ export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
     let cancelled = false;
     const load = async () => {
       try {
-        const [scenarioList, sig] = await Promise.all([
-          listDecisionScenarios(flowId),
-          getDecisionSignature(sourceURI).catch(() => []),
-        ]);
+        const scenarioList = await listDecisionScenarios(flowId);
         if (cancelled) return;
         setScenarios(scenarioList);
-        setSignature(sig);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load scenarios');
@@ -146,7 +145,7 @@ export const LoadScenarioDialog: React.FC<LoadScenarioDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [flowId, sourceURI]);
+  }, [flowId]);
 
   const handleSelectScenario = useCallback(async (scenario: ScoreDefinitionSummary) => {
     setLoadingDetail(true);

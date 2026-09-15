@@ -4,8 +4,8 @@
 import React from 'react';
 import { useSasAuth } from '../../auth';
 import { Button } from '../common/Button';
-import { clearPublishingOverviewCache } from '../../hooks/usePublishingOverview';
-import { clearCoverageAnalysisCache } from '../coverage/CoverageAnalysis';
+import { clearAllViewCaches } from '../../utils/viewCaches';
+import { clearCasCatalog } from '../../hooks/useCasCatalog';
 
 // Check build mode at runtime
 const isJobDefBuild = typeof __BUILD_MODE__ !== 'undefined' && __BUILD_MODE__ === 'jobdef';
@@ -41,8 +41,13 @@ export const Header: React.FC<HeaderProps> = ({
     try {
       if (isAuthenticated) {
         await logout();
-        clearPublishingOverviewCache();
-        clearCoverageAnalysisCache();
+        // The registry clears every loaded view cache without the header
+        // importing a view module (that pulled the whole coverage view into
+        // the entry chunk). The CAS catalogue is cleared by name too: its key
+        // is the Viya URL, which does not change when another user logs in,
+        // and clearAllViewCaches only reaches modules that have been loaded.
+        clearAllViewCaches();
+        clearCasCatalog();
       } else {
         await login();
       }

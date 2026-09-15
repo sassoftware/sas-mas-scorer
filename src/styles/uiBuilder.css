@@ -367,10 +367,19 @@
   gap: var(--space-4);
 }
 
+/* Label + control stack. `.replace-module__current` keeps the same geometry
+   so the "Current Module" block lines up with the search field below it. */
+.replace-module__field,
 .replace-module__current {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.replace-module__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
 }
 
 .replace-module__current-info {
@@ -497,24 +506,24 @@
   letter-spacing: var(--letter-spacing-wide);
 }
 
-/* Mapping table: .sas-table (inside .sas-table__wrapper) supplies the head
-   band, cell padding and type; these rules add only what is specific here.
+/* Mapping table: .sas-table .sas-table--compact (inside .sas-table__wrapper)
+   supplies the head band, dense cell padding and type; these rules add only
+   what is specific here.
    The min-width makes the wrapper scroll in a narrow embed instead of
    crushing the parameter names and selects. */
 .replace-module__mapping-table {
   min-width: 560px;
 }
 
-/* DataTable aligns its headers inline; this hand-written table needs it here */
-.replace-module__mapping-table .sas-table__th {
-  text-align: left;
-}
-
+/* Match the compact cell type; .sas-input is --font-size-base by default. */
 .replace-module__mapping-table select {
   width: 100%;
+  font-size: var(--font-size-sm);
 }
 
-.replace-module__arrow {
+/* Scoped to the table so it outranks `.sas-table--compact .sas-table__td`,
+   which would otherwise widen this 30px spacer column back out. */
+.replace-module__mapping-table .replace-module__arrow {
   width: 30px;
   padding-left: var(--space-1);
   padding-right: var(--space-1);
@@ -542,6 +551,33 @@
 
 /* === Share Dialog === */
 
+/* Body stack inside <Modal> (the modal body supplies the padding). */
+.share-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.share-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.share-dialog__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+}
+
+/* --sas-text-muted (gray-600, 5.7:1), not --sas-text-disabled: this class is
+   also on the dialog's intro paragraph, which is real body copy. */
+.share-dialog__hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
 .share-dialog__modes {
   display: flex;
   flex-direction: column;
@@ -567,7 +603,7 @@
   gap: var(--space-2);
 }
 
-.share-dialog__link-row .save-scenario-dialog__input {
+.share-dialog__link-row .sas-input {
   flex: 1;
   min-width: 0;
   font-family: var(--font-family-mono);

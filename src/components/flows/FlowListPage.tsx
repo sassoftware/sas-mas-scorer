@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { listAllDecisions } from '../../api/decisions';
 import type { DecisionFlow } from '../../types/sid';
 import { formatTimestamp, truncate } from '../../utils/formatters';
-import { Alert, Button, Loading, SearchInput } from '../common';
+import { Alert, Button, Loading, Pagination, SearchInput } from '../common';
 
 const PAGE_SIZE = 20;
 
@@ -16,10 +16,13 @@ export default function FlowListPage() {
   const navigate = useNavigate();
   const [allDecisions, setAllDecisions] = useState<DecisionFlow[]>([]);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  // 1-based, the page number <Pagination> speaks.
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  // Bumped by the alert's Retry button to re-run the load below.
+  const [reloadToken, setReloadToken] = useState(0);
 
   // The whole collection is fetched once (server order: name ascending);
   // search and sort are applied to that in-memory list below.
@@ -32,11 +35,11 @@ export default function FlowListPage() {
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [reloadToken]);
 
   // Reset page when search changes
   useEffect(() => {
-    setPage(0);
+    setPage(1);
   }, [search]);
 
   // Client-side case-insensitive filter on name and description
@@ -57,16 +60,17 @@ export default function FlowListPage() {
 
   const total = sorted.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const currentPage = page + 1;
 
+  // Clamped the way <Pagination> clamps its own page number, so a shorter
+  // list after a reload cannot leave the table showing an empty page.
   const displayDecisions = useMemo(() => {
-    const start = page * PAGE_SIZE;
+    const start = (Math.min(page, Math.max(1, totalPages)) - 1) * PAGE_SIZE;
     return sorted.slice(start, start + PAGE_SIZE);
-  }, [sorted, page]);
+  }, [sorted, page, totalPages]);
 
   const toggleSort = () => {
     setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    setPage(0);
+    setPage(1);
   };
 
   return (
@@ -86,53 +90,75 @@ export default function FlowListPage() {
 
       {error && (
         <div className="flow-list__alert">
-          <Alert variant="error">{error}</Alert>
+          <Alert
+            variant="error"
+            actions={
+              <Button variant="secondary" size="small" onClick={() => setReloadToken((t) => t + 1)}>
+                Retry
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
         </div>
       )}
 
       <div className="flow-list__table-wrap">
-        <table className="flow-list__table">
-          <thead>
+        <table className="sas-table">
+          <thead className="sas-table__head">
             <tr>
-              <th aria-sort={sortDir === 'asc' ? 'ascending' : 'descending'}>
-                <button type="button" className="flow-list__sort-btn" onClick={toggleSort}>
+              {/* Name is the only sortable column, so its header button is
+                  always the active one. */}
+              <th className="sas-table__th" aria-sort={sortDir === 'asc' ? 'ascending' : 'descending'}>
+                <button
+                  type="button"
+                  className="sas-table__sort-header sas-table__sort-header--active"
+                  onClick={toggleSort}
+                >
                   Name
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-                  </svg>
+                  <span className="sas-table__sort-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
+                    </svg>
+                  </span>
                 </button>
               </th>
-              <th>Description</th>
-              <th className="flow-list__col--modified">Modified</th>
-              <th className="flow-list__col--modified-by">Modified by</th>
+              <th className="sas-table__th">Description</th>
+              <th className="sas-table__th flow-list__col--modified">Modified</th>
+              <th className="sas-table__th flow-list__col--modified-by">Modified by</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr>
-                <td colSpan={4} className="flow-list__empty">
+              <tr className="sas-table__row">
+                <td colSpan={4} className="sas-table__td flow-list__empty">
                   <Loading size="small" message="Loading decisions..." />
                 </td>
               </tr>
             )}
             {!loading && displayDecisions.length === 0 && (
-              <tr>
-                <td colSpan={4} className="flow-list__empty">
+              <tr className="sas-table__row">
+                <td colSpan={4} className="sas-table__td flow-list__empty">
                   {search ? 'No decisions match your search' : 'No decisions found'}
                 </td>
               </tr>
             )}
             {!loading && displayDecisions.map((d) => (
-              // The row is a mouse convenience; the name link is the keyboard path.
-              <tr key={d.id} className="flow-list__row" onClick={() => navigate(`/flows/${d.id}`)}>
-                <td className="flow-list__col--name">
+              // The row is a mouse convenience; the name link is the keyboard
+              // path, and --clickable carries the shared hover/focus tint.
+              <tr
+                key={d.id}
+                className="sas-table__row sas-table__row--clickable"
+                onClick={() => navigate(`/flows/${d.id}`)}
+              >
+                <td className="sas-table__td flow-list__col--name">
                   <Link to={`/flows/${d.id}`} className="flow-list__row-link" onClick={(e) => e.stopPropagation()}>
                     {d.name}
                   </Link>
                 </td>
-                <td className="flow-list__col--desc">{truncate(d.description ?? '', 60)}</td>
-                <td className="flow-list__col--modified">{formatTimestamp(d.modifiedTimeStamp)}</td>
-                <td className="flow-list__col--modified-by">{d.modifiedBy}</td>
+                <td className="sas-table__td flow-list__col--desc">{truncate(d.description ?? '', 60)}</td>
+                <td className="sas-table__td flow-list__col--modified">{formatTimestamp(d.modifiedTimeStamp)}</td>
+                <td className="sas-table__td flow-list__col--modified-by">{d.modifiedBy}</td>
               </tr>
             ))}
           </tbody>
@@ -140,27 +166,14 @@ export default function FlowListPage() {
       </div>
 
       {totalPages > 1 && (
-        <div className="flow-pagination">
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={() => setPage(Math.max(0, page - 1))}
-            disabled={page === 0}
-          >
-            Previous
-          </Button>
-          <span className="flow-pagination__info">
-            Page {currentPage} of {totalPages}
-          </span>
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={() => setPage(page + 1)}
-            disabled={currentPage >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          pageSize={PAGE_SIZE}
+          totalItems={total}
+          label="Decision list pages"
+        />
       )}
     </div>
   );

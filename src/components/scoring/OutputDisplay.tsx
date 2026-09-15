@@ -138,29 +138,29 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
             </div>
           ) : viewMode === 'table' ? (
             <div className="sas-table__wrapper">
-              <table className="output-display__table">
-                <thead>
+              <table className="sas-table">
+                <thead className="sas-table__head">
                   <tr>
-                    <th>Output Name</th>
-                    <th>Type</th>
-                    <th>Value</th>
+                    <th className="sas-table__th">Output Name</th>
+                    <th className="sas-table__th">Type</th>
+                    <th className="sas-table__th">Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(output.outputs ?? []).map((variable) => (
-                    <tr key={variable.name}>
-                      <td className="output-display__name">{variable.name}</td>
-                      <td>
+                    <tr className="sas-table__row" key={variable.name}>
+                      <td className="sas-table__td output-display__name">{variable.name}</td>
+                      <td className="sas-table__td">
                         <TypeBadge type={getParameterType(variable.name)} />
                       </td>
-                      <td className="output-display__value">
+                      <td className="sas-table__td output-display__value">
                         {formatValue(variable.value)}
                       </td>
                     </tr>
                   ))}
                   {(output.outputs?.length ?? 0) === 0 && (
                     <tr>
-                      <td colSpan={3} className="output-display__empty">
+                      <td colSpan={3} className="sas-table__td output-display__empty">
                         No output values returned
                       </td>
                     </tr>

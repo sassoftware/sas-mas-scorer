@@ -150,11 +150,13 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
           title="Job Detail"
           breadcrumbs={[{ label: BREADCRUMB_ROOT, onClick: onBack }, { label: 'Job Detail' }]}
         />
-        <Alert variant="error">
-          <div className="job-monitoring__alert-row">
-            <span>{detail.jobError}</span>
+        <Alert
+          variant="error"
+          actions={
             <Button variant="tertiary" size="small" onClick={detail.refresh}>Retry</Button>
-          </div>
+          }
+        >
+          {detail.jobError}
         </Alert>
       </div>
     );

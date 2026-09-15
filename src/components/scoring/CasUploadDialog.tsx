@@ -5,15 +5,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Modal } from '../common/Modal';
-import {
-  getCasServers,
-  getCaslibs,
-  uploadToCas,
-  saveTable,
-  CasServer,
-  CasLib,
-  UploadResult,
-} from '../../api/cas';
+import { uploadToCas, saveTable, UploadResult } from '../../api/cas';
+import { useCasCatalog } from '../../hooks/useCasCatalog';
 
 interface CasUploadDialogProps {
   csvContent: string;
@@ -29,16 +22,20 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
   defaultTableName,
   onClose,
 }) => {
-  // Selection state
-  const [servers, setServers] = useState<CasServer[]>([]);
-  const [caslibs, setCaslibs] = useState<CasLib[]>([]);
+  // Selection state — the catalogue itself comes from the shared session
+  // cache; only the two selections live here.
   const [selectedServer, setSelectedServer] = useState('');
   const [selectedCaslib, setSelectedCaslib] = useState('');
   const [tableName, setTableName] = useState(defaultTableName);
+  const {
+    servers,
+    caslibs,
+    loadingServers,
+    loadingCaslibs,
+    error: casError,
+  } = useCasCatalog(selectedServer);
 
   // Loading/progress state
-  const [loadingServers, setLoadingServers] = useState(true);
-  const [loadingCaslibs, setLoadingCaslibs] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -49,67 +46,33 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<UploadResult | null>(null);
 
-  // Load CAS servers on mount
+  // Auto-select the first server offered. This is the initial fill, not a
+  // user switch, so it must not clear an error the way handleServerChange does.
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const serverList = await getCasServers();
-        if (cancelled) return;
-        setServers(serverList);
-        if (serverList.length > 0) {
-          setSelectedServer(serverList[0].name);
-        }
-      } catch (err: unknown) {
-        if (cancelled) return;
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load CAS servers');
-      } finally {
-        if (!cancelled) setLoadingServers(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
+    if (selectedServer || servers.length === 0) return;
+    setSelectedServer(servers[0].name);
+  }, [servers, selectedServer]);
+
+  // A user server switch drops the caslib under it and clears any stale
+  // failure — an upload error from the previous server must not sit under the
+  // new selection. (The old caslib-load effect did this reset; the shared
+  // catalogue hook owns that load now, so the handler has to.)
+  const handleServerChange = useCallback((serverName: string) => {
+    setSelectedServer(serverName);
+    setSelectedCaslib('');
+    setError(null);
   }, []);
 
-  // Load caslibs when server changes
+  // Prefer the "Public" caslib, else the first one.
   useEffect(() => {
-    if (!selectedServer) {
-      setCaslibs([]);
+    if (caslibs.length === 0) {
+      setSelectedCaslib('');
       return;
     }
-
-    let cancelled = false;
-    const load = async () => {
-      setLoadingCaslibs(true);
-      setSelectedCaslib('');
-      setError(null);
-      try {
-        const caslibList = await getCaslibs(selectedServer);
-        if (cancelled) return;
-        setCaslibs(caslibList);
-        if (caslibList.length > 0) {
-          // Prefer "Public" caslib if available
-          const publicLib = caslibList.find(c =>
-            c.name.toLowerCase() === 'public'
-          );
-          setSelectedCaslib(publicLib?.name ?? caslibList[0].name);
-        }
-      } catch (err: unknown) {
-        if (cancelled) return;
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load caslibs');
-      } finally {
-        if (!cancelled) setLoadingCaslibs(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedServer]);
+    setSelectedCaslib(
+      caslibs.find(c => c.name.toLowerCase() === 'public')?.name ?? caslibs[0].name
+    );
+  }, [caslibs]);
 
   // Sanitize table name
   const handleTableNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,13 +211,13 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
           <div className="cas-upload-dialog__field">
             <label className="cas-upload-dialog__label" htmlFor="cas-upload-server">CAS Server</label>
             {loadingServers ? (
-              <span className="cas-upload-dialog__loading">Loading servers...</span>
+              <span className="cas-upload-dialog__loading" role="status">Loading servers...</span>
             ) : (
               <select
                 id="cas-upload-server"
                 className="sas-input"
                 value={selectedServer}
-                onChange={e => setSelectedServer(e.target.value)}
+                onChange={e => handleServerChange(e.target.value)}
                 disabled={uploading}
               >
                 {servers.length === 0 && <option value="">No servers available</option>}
@@ -269,7 +232,7 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
           <div className="cas-upload-dialog__field">
             <label className="cas-upload-dialog__label" htmlFor="cas-upload-caslib">Caslib</label>
             {loadingCaslibs ? (
-              <span className="cas-upload-dialog__loading">Loading caslibs...</span>
+              <span className="cas-upload-dialog__loading" role="status">Loading caslibs...</span>
             ) : (
               <select
                 id="cas-upload-caslib"
@@ -315,17 +278,17 @@ export const CasUploadDialog: React.FC<CasUploadDialogProps> = ({
             <span>Save table to disk after upload</span>
           </label>
 
-          {/* Error */}
-          {error && (
+          {/* Error — the upload failure wins over a catalogue failure */}
+          {(error ?? casError) && (
             <Alert variant="error">
-              {error}
+              {error ?? casError}
             </Alert>
           )}
 
           {/* Upload status */}
           {uploading && uploadStatus && (
             <div className="cas-upload-dialog__status" role="status">
-              <div className="cas-upload-dialog__spinner" aria-hidden="true" />
+              <span className="sas-spinner" aria-hidden="true" />
               <span>{uploadStatus}</span>
             </div>
           )}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Alert } from '../common/Alert';
 import { getRootFolders, getFolder, getFolderMembers } from '../../api/folders';
 
 interface BreadcrumbEntry {
@@ -22,6 +23,15 @@ interface FolderBrowserProps {
   selectedFileId?: string | null;
   /** Called when a file member is selected. */
   onSelectFile?: (fileId: string, fileName: string) => void;
+  /**
+   * Id of the element that labels this browser (a dialog's "Target folder" /
+   * "Scenario folder" caption). The browser is a group of controls, not a
+   * single form field, so a caller's <label htmlFor> cannot name it — give the
+   * caption an id and pass it here instead.
+   */
+  ariaLabelledBy?: string;
+  /** Accessible name when there is no visible caption to point at. */
+  ariaLabel?: string;
 }
 
 const PAGE_SIZE = 50;
@@ -33,6 +43,8 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   pickFileUriPrefix,
   selectedFileId,
   onSelectFile,
+  ariaLabelledBy,
+  ariaLabel,
 }) => {
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
@@ -195,8 +207,14 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Only becomes a named group when the caller supplies a name; an unnamed
+  // role="group" tells a screen-reader user nothing.
+  const groupProps = ariaLabelledBy || ariaLabel
+    ? { role: 'group', 'aria-labelledby': ariaLabelledBy, 'aria-label': ariaLabel }
+    : {};
+
   return (
-    <div className="folder-browser">
+    <div className="folder-browser" {...groupProps}>
       {/* Breadcrumbs */}
       <nav className="folder-browser__breadcrumbs" aria-label="Folder path">
         <button
@@ -228,7 +246,7 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
         {loading ? (
           <div className="folder-browser__loading" role="status">Loading folders...</div>
         ) : error ? (
-          <div className="folder-browser__error" role="alert">{error}</div>
+          <Alert variant="error">{error}</Alert>
         ) : folders.length === 0 && files.length === 0 ? (
           <div className="folder-browser__empty">
             {pickFileUriPrefix ? 'No subfolders or code files in this location' : 'No subfolders in this location'}

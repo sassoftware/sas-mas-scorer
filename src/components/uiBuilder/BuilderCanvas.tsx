@@ -8,7 +8,7 @@ import { FieldConfigPanel } from './FieldConfigPanel';
 import { widgetLabels } from './widgetMap';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
-import { Badge, BadgeVariant } from '../common/Badge';
+import { Badge } from '../common/Badge';
 
 interface Props {
   definition: UIDefinition;
@@ -34,10 +34,23 @@ const CloseIcon: React.FC = () => (
   </svg>
 );
 
-const directionBadgeVariant: Record<UIField['direction'], BadgeVariant> = {
-  input: 'info',
-  output: 'success',
-  static: 'warning',
+/**
+ * The ONE app-wide input/output mapping lives in components.css as
+ * `.sas-badge--direction-*` (input = blue, output = green). A static text
+ * block is not a direction, so it keeps the amber "warning" tint it has
+ * always had. Rendered as a bare span because <Badge> takes a semantic
+ * variant, not a class.
+ */
+const directionBadgeClass: Record<UIField['direction'], string> = {
+  input: 'sas-badge--direction-input',
+  output: 'sas-badge--direction-output',
+  static: 'sas-badge--warning',
+};
+
+const directionBadgeText: Record<UIField['direction'], string> = {
+  input: 'IN',
+  output: 'OUT',
+  static: 'TXT',
 };
 
 export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) => {
@@ -269,9 +282,11 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                     >
                       <span className="ui-builder__field-label">{field.label}</span>
                       <span className="ui-builder__field-meta">
-                        <Badge size="small" variant={directionBadgeVariant[field.direction]}>
-                          {field.direction === 'input' ? 'IN' : field.direction === 'output' ? 'OUT' : 'TXT'}
-                        </Badge>
+                        <span
+                          className={`sas-badge sas-badge--small ${directionBadgeClass[field.direction]}`}
+                        >
+                          {directionBadgeText[field.direction]}
+                        </span>
                         {' '}
                         {field.direction !== 'static' ? field.parameterId : 'Static content'}
                         {' / '}

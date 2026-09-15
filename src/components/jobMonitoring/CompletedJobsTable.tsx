@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { DataTable, Column } from '../common/DataTable';
-import { Button } from '../common/Button';
+import { Pagination } from '../common/Pagination';
 import { SearchInput } from '../common/SearchInput';
 import { ExecutionJob } from '../../types/jobExecution';
 import { CompletedStateFilter } from '../../hooks/useJobMonitoring';
@@ -49,12 +49,17 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
   onOpenJob,
 }) => {
   // No total to anchor against — Viya's envelope `count` is unreliable on
-  // this tenant. We base navigation purely on what the page returned.
+  // this tenant. We base navigation purely on what the page returned, so the
+  // furthest page we can claim exists is the current one, plus one more while
+  // the server says there is another. That keeps <Pagination>'s Next enabled
+  // exactly while `hasMore`; the honest, open-ended "Showing 1–20+" count
+  // lives in the toolbar above the table.
   const rangeStart = jobs.length === 0 ? 0 : page * pageSize + 1;
   const rangeEnd = page * pageSize + jobs.length;
   const showPagination = page > 0 || hasMore;
-  const canPrev = page > 0;
-  const canNext = hasMore;
+  // The hook's `page` is 0-based; <Pagination> is 1-based.
+  const currentPage = page + 1;
+  const knownPages = hasMore ? currentPage + 1 : currentPage;
 
   const columns: Column<ExecutionJob>[] = [
     {
@@ -165,31 +170,13 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
       />
 
       {showPagination && (
-        <div className="job-monitoring__pagination">
-          <span className="job-monitoring__pagination-info">
-            Showing {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()}
-            {hasMore ? ' (more available)' : ''}
-          </span>
-          <div className="job-monitoring__pagination-controls">
-            <Button
-              variant="tertiary"
-              size="small"
-              onClick={() => onPageChange(Math.max(0, page - 1))}
-              disabled={!canPrev}
-            >
-              Previous
-            </Button>
-            <span className="job-monitoring__pagination-page">Page {page + 1}</span>
-            <Button
-              variant="tertiary"
-              size="small"
-              onClick={() => onPageChange(page + 1)}
-              disabled={!canNext}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          className="job-monitoring__pagination"
+          label="Completed jobs"
+          page={currentPage}
+          totalPages={knownPages}
+          onPageChange={(next) => onPageChange(next - 1)}
+        />
       )}
     </div>
   );

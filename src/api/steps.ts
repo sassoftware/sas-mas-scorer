@@ -56,8 +56,20 @@ export const getStep = async (moduleId: string, stepId: string): Promise<Step> =
 export interface ExecuteStepOptions {
   waitTime?: number;
   timeout?: number;
+  /**
+   * Aborts the request when the caller's controller fires (e.g. a batch run
+   * unmounting). The call then rejects with an axios `CanceledError`, which is
+   * NOT a scoring failure: callers must test `axios.isCancel(err)` first and
+   * drop the row instead of recording an error for it.
+   */
+  signal?: AbortSignal;
 }
 
+/**
+ * Execute one step. Rejects with an axios `CanceledError` when
+ * `options.signal` aborts — guard with `axios.isCancel(err)` before treating a
+ * rejection as a scoring error.
+ */
 export const executeStep = async (
   moduleId: string,
   stepId: string,
@@ -74,6 +86,7 @@ export const executeStep = async (
     {
       params: options.waitTime !== undefined ? { waitTime: options.waitTime } : {},
       timeout,
+      signal: options.signal,
       headers: {
         'Content-Type': SAS_CONTENT_TYPES.STEP_INPUT,
         Accept: SAS_CONTENT_TYPES.STEP_OUTPUT,

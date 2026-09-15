@@ -55,6 +55,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
           <ul className="sas-sidebar__menu">
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'modules' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -68,6 +69,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   isUIView || activeView === 'ui-apps' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -84,6 +86,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'flows' || activeView === 'flow-detail' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -100,6 +103,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'coverage' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -113,6 +117,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'publishing-overview' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -128,6 +133,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'schema-builder' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -141,6 +147,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'rules-import' ? 'sas-sidebar__menu-item--active' : ''
                 }`}
@@ -156,6 +163,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
             </li>
             <li>
               <button
+                type="button"
                 className={`sas-sidebar__menu-item ${
                   activeView === 'job-monitoring' || activeView === 'job-detail'
                     ? 'sas-sidebar__menu-item--active'
@@ -182,6 +190,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
               <ul className="sas-sidebar__menu">
                 <li>
                   <button
+                    type="button"
                     className={`sas-sidebar__menu-item ${
                       activeView === 'module-details' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
@@ -195,6 +204,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                 </li>
                 <li>
                   <button
+                    type="button"
                     className={`sas-sidebar__menu-item ${
                       activeView === 'score' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
@@ -219,6 +229,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
               {recentUIApps.slice(0, 5).map((app) => (
                 <li key={app.id}>
                   <button
+                    type="button"
                     className="sas-sidebar__recent-item"
                     onClick={() => onSelectUIApp?.(app.id)}
                   >
@@ -237,6 +248,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
               {recentModules.slice(0, 5).map((module) => (
                 <li key={module.id}>
                   <button
+                    type="button"
                     className="sas-sidebar__recent-item"
                     onClick={() => onSelectModule?.(module)}
                   >

@@ -12,3 +12,7 @@ export * from './IconButton';
 export * from './Modal';
 export * from './EmptyState';
 export * from './SearchInput';
+export * from './StepNav';
+export * from './ProgressBar';
+export * from './Pagination';
+export * from './ChunkErrorBoundary';

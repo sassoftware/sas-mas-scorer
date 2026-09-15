@@ -247,7 +247,7 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
     <div className="replace-module__mapping-section">
       <h4 className="replace-module__mapping-title">{title}</h4>
       <div className="sas-table__wrapper">
-        <table className="sas-table replace-module__mapping-table">
+        <table className="sas-table sas-table--compact replace-module__mapping-table">
           <thead className="sas-table__head">
             <tr>
               <th className="sas-table__th">Current Field</th>
@@ -275,7 +275,7 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
                   <td className="sas-table__td replace-module__arrow" aria-hidden="true">→</td>
                   <td className="sas-table__td">
                     <select
-                      className="save-scenario-dialog__select"
+                      className="sas-input"
                       aria-label={`New parameter for ${mapping.label}`}
                       value={mapping.newParameterId}
                       onChange={(e) => handleMappingChange(index, e.target.value)}
@@ -340,7 +340,7 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
           <>
             {currentModule && (
               <div className="replace-module__current">
-                <span className="save-scenario-dialog__label">Current Module</span>
+                <span className="replace-module__label">Current Module</span>
                 <div className="replace-module__current-info">
                   <strong>{currentModule.name}</strong>
                   <Badge variant={getModuleType(currentModule) === 'Decision' ? 'warning' : 'info'}>
@@ -354,8 +354,8 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
               </div>
             )}
 
-            <div className="save-scenario-dialog__field">
-              <label className="save-scenario-dialog__label" htmlFor="replace-module-search">
+            <div className="replace-module__field">
+              <label className="replace-module__label" htmlFor="replace-module-search">
                 Select New Module
               </label>
               <div className="replace-module__search-row">
@@ -363,13 +363,13 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
                   id="replace-module-search"
                   ref={searchInputRef}
                   type="text"
-                  className="save-scenario-dialog__input replace-module__search-input"
+                  className="sas-input replace-module__search-input"
                   placeholder="Search modules..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
                 <select
-                  className="save-scenario-dialog__select"
+                  className="sas-input"
                   aria-label="Module type"
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value as ModuleTypeFilter)}
@@ -421,7 +421,7 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
 
             {newStep && !loadingStep && (
               <div className="replace-module__step-info">
-                <span className="save-scenario-dialog__label">Scoreable Step</span>
+                <span className="replace-module__label">Scoreable Step</span>
                 <div className="replace-module__step-params">
                   <Badge variant="info">{newStep.id}</Badge>
                   <span>{newStep.inputs.length} inputs, {newStep.outputs.length} outputs</span>

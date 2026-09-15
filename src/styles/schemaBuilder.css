@@ -9,38 +9,7 @@
   gap: var(--space-5);
 }
 
-/* Step navigation */
-.schema-builder__steps {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.schema-builder__step {
-  padding: var(--space-3) var(--space-4);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-600);
-  cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.schema-builder__step:hover:not(:disabled) {
-  color: var(--sas-blue-primary);
-}
-
-.schema-builder__step--active {
-  color: var(--sas-blue-primary);
-  border-bottom-color: var(--sas-blue-primary);
-}
-
-.schema-builder__step:disabled {
-  color: var(--sas-gray-400);
-  cursor: not-allowed;
-}
+/* Step navigation is <StepNav> / .sas-steps (components.css) */
 
 /* Panels */
 .schema-builder__panel {
@@ -75,10 +44,27 @@
   font-size: var(--font-size-sm);
 }
 
+/* Positioned so the .sr-only file input is clipped against this toolbar and
+   not against whatever positioned ancestor happens to be above it. */
 .schema-builder__sample-buttons {
+  position: relative;
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+/* The visible half of the file picker: a <label> wearing the .sas-button
+   classes, so it only needs the pointer cursor the element rule gives a
+   real <button>, plus the ring its .sr-only input cannot show itself. */
+.schema-builder__file-label {
+  cursor: pointer;
+  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
+  line-height: normal;
+}
+
+.schema-builder__file-input:focus-visible + .schema-builder__file-label {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .schema-builder__panel-actions {
@@ -99,7 +85,11 @@
   min-width: 0;
 }
 
-.schema-builder__field label {
+/* .schema-builder__field-caption is the same face for a caption that names a
+   GROUP of controls (the folder browsers) rather than one form field, so it
+   cannot be a <label>; it is wired up with aria-labelledby instead. */
+.schema-builder__field label,
+.schema-builder__field-caption {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-700);
@@ -144,19 +134,9 @@
   border-radius: var(--radius-md);
 }
 
-/* Built on .sas-table; only the density differs from the shared table
-   (see components.css — a shared compact modifier would replace these). */
-.schema-builder__table {
-  font-size: var(--font-size-sm);
-}
-
-.schema-builder__table .sas-table__th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-}
-
+/* Density and header treatment come from .sas-table--compact; the per-row
+   validation messages under each cell are the only delta left. */
 .schema-builder__table .sas-table__td {
-  padding: var(--space-2) var(--space-3);
   vertical-align: top;
 }
 
@@ -501,16 +481,15 @@
   background: var(--sas-blue-lighter);
 }
 
+/* Deep link out to SAS Intelligent Decisioning. The 32px target, the colours
+   and the focus ring come from the shared .sas-deep-link; that rule is sized
+   for an icon on its own, so the labelled form adds only the gap and the side
+   padding the text needs. */
 .schema-builder__deep-link {
-  display: inline-block;
+  gap: var(--space-2);
   margin-top: var(--space-2);
+  padding: 0 var(--space-2);
   font-weight: var(--font-weight-semibold);
-  color: var(--sas-blue-primary);
-  text-decoration: none;
-}
-
-.schema-builder__deep-link:hover {
-  text-decoration: underline;
 }
 
 /* File rows in the reused FolderBrowser (update mode) */

@@ -5,6 +5,8 @@ import React from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
+import { Card, CardBody } from '../common/Card';
+import { ProgressBar } from '../common/ProgressBar';
 import { useSasAuth } from '../../auth';
 import { usePublishingOverview, PublishingProgress } from '../../hooks/usePublishingOverview';
 import { DestinationsPanel } from './DestinationsPanel';
@@ -22,30 +24,33 @@ const LoadingProgress: React.FC<{ progress: PublishingProgress }> = ({ progress 
       : `Reading deployed models and decisions… (request ${Math.max(progress.itemPages, 1)})`;
 
   return (
-    <div className="publishing__progress" role="status" aria-live="polite">
-      <div className="publishing__progress-header">
-        <span className="publishing__progress-phase">Loading publishing data</span>
-        <span className="publishing__progress-count">
-          {progress.itemsLoaded > 0 ? `${progress.itemsLoaded} loaded` : ''}
-        </span>
-      </div>
-      <div className="publishing__progress-track">
-        <div className="publishing__progress-fill" />
-      </div>
-      <div className="publishing__progress-message">{message}</div>
-      <div className="publishing__progress-steps">
-        <span className={progress.destinationsComplete ? 'publishing__progress-step--done' : undefined}>
-          {progress.destinationsComplete
-            ? `✓ Destinations (${progress.destinationsLoaded})`
-            : 'Destinations…'}
-        </span>
-        <span className={progress.itemsComplete ? 'publishing__progress-step--done' : undefined}>
-          {progress.itemsComplete
-            ? `✓ Deployed models & decisions (${progress.itemsLoaded})`
-            : `Deployed models & decisions${progress.itemsLoaded > 0 ? ` (${progress.itemsLoaded})` : ''}…`}
-        </span>
-      </div>
-    </div>
+    <Card>
+      <CardBody>
+        <div role="status" aria-live="polite">
+          <ProgressBar
+            indeterminate
+            label="Loading publishing data"
+            phase="Loading publishing data"
+            count={progress.itemsLoaded > 0 ? `${progress.itemsLoaded} loaded` : undefined}
+            message={message}
+            steps={
+              <>
+                <span className={progress.destinationsComplete ? 'sas-progress__step--done' : undefined}>
+                  {progress.destinationsComplete
+                    ? `✓ Destinations (${progress.destinationsLoaded})`
+                    : 'Destinations…'}
+                </span>
+                <span className={progress.itemsComplete ? 'sas-progress__step--done' : undefined}>
+                  {progress.itemsComplete
+                    ? `✓ Deployed models & decisions (${progress.itemsLoaded})`
+                    : `Deployed models & decisions${progress.itemsLoaded > 0 ? ` (${progress.itemsLoaded})` : ''}…`}
+                </span>
+              </>
+            }
+          />
+        </div>
+      </CardBody>
+    </Card>
   );
 };
 
@@ -91,26 +96,31 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
       />
 
       <section className="publishing__stats" aria-label="Summary statistics">
-        <div className="publishing__stat-card publishing__stat-card--destinations">
-          <div className="publishing__stat-value">{loading ? '—' : stats.destinationCount}</div>
-          <div className="publishing__stat-label">Publishing Destinations</div>
+        <div className="sas-card sas-stat-card publishing__stat-card--destinations">
+          <div className="sas-stat-value">{loading ? '—' : stats.destinationCount}</div>
+          <div className="sas-stat-label">Publishing Destinations</div>
         </div>
-        <div className="publishing__stat-card publishing__stat-card--models">
-          <div className="publishing__stat-value">{loading ? '—' : stats.modelCount}</div>
-          <div className="publishing__stat-label">Models Deployed</div>
+        <div className="sas-card sas-stat-card publishing__stat-card--models">
+          <div className="sas-stat-value">{loading ? '—' : stats.modelCount}</div>
+          <div className="sas-stat-label">Models Deployed</div>
         </div>
-        <div className="publishing__stat-card publishing__stat-card--decisions">
-          <div className="publishing__stat-value">{loading ? '—' : stats.decisionCount}</div>
-          <div className="publishing__stat-label">Decisions Deployed</div>
+        <div className="sas-card sas-stat-card publishing__stat-card--decisions">
+          <div className="sas-stat-value">{loading ? '—' : stats.decisionCount}</div>
+          <div className="sas-stat-label">Decisions Deployed</div>
         </div>
       </section>
 
       {error && (
-        <Alert variant="error" title="Failed to load publishing overview">
-          {error}{' '}
-          <Button variant="tertiary" size="small" onClick={refresh}>
-            Retry
-          </Button>
+        <Alert
+          variant="error"
+          title="Failed to load publishing overview"
+          actions={
+            <Button variant="tertiary" size="small" onClick={refresh}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
         </Alert>
       )}
 

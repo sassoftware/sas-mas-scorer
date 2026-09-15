@@ -273,26 +273,8 @@
   color: var(--sas-success);
 }
 
-.output-display__table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.output-display__table th,
-.output-display__table td {
-  padding: var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.output-display__table th {
-  background-color: var(--sas-gray-50);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  font-size: var(--font-size-sm);
-  text-transform: uppercase;
-}
-
+/* The results table is a plain .sas-table (components.css); only the cell
+   treatments below are local. */
 .output-display__name {
   font-weight: var(--font-weight-medium);
   color: var(--sas-gray-900);
@@ -302,6 +284,16 @@
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   overflow-wrap: anywhere;
+}
+
+/* A datagrid value renders <DatagridTable> inside this cell, and that now
+   carries a <Pagination> strip. The cell's monospace and `anywhere` wrapping
+   are for data, not for chrome, so the strip opts back out; `space-between`
+   would also splay it across a wide cell, so it packs to the left instead. */
+.output-display__value .sas-pagination {
+  font-family: var(--font-family-primary);
+  justify-content: flex-start;
+  overflow-wrap: normal;
 }
 
 .output-display__null {
@@ -375,48 +367,28 @@
   max-height: none;
 }
 
-.datagrid__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.datagrid__table th,
-.datagrid__table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
+/* .sas-table--compact carries the density and the header treatment; a grid
+   adds three things on top: cells that never wrap (a grid is read down its
+   columns), a header that stays put while the wrapper scrolls, and no rule
+   under the last row because the wrapper already has a border. */
+.datagrid__table .sas-table__th,
+.datagrid__table .sas-table__td {
   white-space: nowrap;
 }
 
-.datagrid__table th {
-  background-color: var(--sas-gray-100);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
+.datagrid__table .sas-table__th {
   position: sticky;
   top: 0;
   z-index: 1;
+  /* Opaque, and a shade darker than the page-level header, so rows scrolling
+     under it stay hidden. The rule has to sit on the sticky cell itself: the
+     one on .sas-table__head belongs to the <thead>, which scrolls away. */
+  background-color: var(--sas-gray-100);
+  border-bottom: 1px solid var(--sas-gray-200);
 }
 
-.datagrid__table tbody tr:last-child td {
+.datagrid__table tbody .sas-table__row:last-child {
   border-bottom: none;
-}
-
-.datagrid__table tbody tr:hover {
-  background-color: var(--sas-gray-50);
-}
-
-.datagrid__more {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  background-color: var(--sas-gray-50);
-  border-top: 1px solid var(--sas-gray-200);
 }
 
 /* Link in a batch result cell that opens the viewer modal */
@@ -479,12 +451,10 @@
   gap: var(--space-3);
 }
 
-.datagrid__editor-table th,
-.datagrid__editor-table td {
-  white-space: nowrap;
-}
-
-.datagrid__editor-table td {
+/* Cells hold inputs, so they need less padding than .sas-table--compact
+   gives; the selector matches its 0,2,0 and wins on source order. (nowrap
+   comes from the .datagrid__table rules above — this table has both classes.) */
+.datagrid__editor-table .sas-table__td {
   padding: var(--space-1) var(--space-2);
 }
 
@@ -561,7 +531,8 @@
   width: fit-content;
 }
 
-/* Progress Bar */
+/* Batch progress: the bar itself is the shared <ProgressBar> (.sas-progress),
+   stretched across this centred column, with the Stop button under it. */
 .score-panel__progress {
   display: flex;
   flex-direction: column;
@@ -569,18 +540,8 @@
   align-items: center;
 }
 
-.score-panel__progress-bar {
-  width: 100%;
-  height: 8px;
-  background-color: var(--sas-gray-200);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.score-panel__progress-fill {
-  height: 100%;
-  background-color: var(--sas-blue-primary);
-  transition: width 0.3s ease;
+.score-panel__progress-track {
+  align-self: stretch;
 }
 
 /* CSV Upload */
@@ -783,24 +744,11 @@
   border-radius: var(--radius-md);
 }
 
-.column-mapping__preview-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.column-mapping__preview-table th,
-.column-mapping__preview-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
+/* .sas-table--compact supplies the rest; a preview reads down its columns,
+   so no cell wraps. */
+.column-mapping__preview-table .sas-table__th,
+.column-mapping__preview-table .sas-table__td {
   white-space: nowrap;
-}
-
-.column-mapping__preview-table th {
-  background-color: var(--sas-gray-50);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
 }
 
 .column-mapping__preview-more {
@@ -1093,29 +1041,8 @@
   gap: var(--space-2);
 }
 
-.batch-results__table-wrapper {
-  overflow-x: auto;
-}
-
-.batch-results__table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.batch-results__table th,
-.batch-results__table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.batch-results__table th {
-  background-color: var(--sas-gray-50);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-}
-
+/* The results grid is .sas-table--compact in a .sas-table__wrapper; only the
+   row/cell treatments below are local. */
 .batch-results__row--error {
   background-color: var(--sas-error-light);
 }
@@ -1158,35 +1085,7 @@
   background-color: var(--sas-error-dark);
 }
 
-/* Pagination under the results table */
-.batch-results__pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-top: var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
-
-.batch-results__page-size {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.batch-results__page-size select {
-  width: auto;
-  font-size: var(--font-size-sm);
-  padding: var(--space-1) var(--space-2);
-}
-
-.batch-results__page-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
+/* Paging under the results table is the shared <Pagination>. */
 
 /* Batch Results Overview */
 .batch-results__overview {
@@ -1304,19 +1203,6 @@
   border-radius: var(--radius-md);
 }
 
-.cas-upload-dialog__spinner {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  border: 2px solid var(--sas-blue-light);
-  border-top-color: var(--sas-blue-primary);
-  border-radius: 50%;
-  animation: cas-spin 0.6s linear infinite;
-}
-
-@keyframes cas-spin {
-  to { transform: rotate(360deg); }
-}
-
 .cas-upload-dialog__success {
   display: flex;
   flex-direction: column;
@@ -1350,71 +1236,9 @@
   font-family: var(--font-family-mono);
 }
 
-/* Save Scenario Dialog.
-   The scoring dialogs render their chrome through <Modal>; the overlay,
-   dialog box, header, close button, body and the __select/__input/__textarea
-   controls below are kept only for src/components/uiBuilder/ReplaceModuleDialog
-   and ShareDialog, which still use them. Delete them once those migrate. */
-.save-scenario-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: var(--sas-overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal-backdrop);
-}
-
-.save-scenario-dialog {
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  width: 560px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.save-scenario-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.save-scenario-dialog__header h3 {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.save-scenario-dialog__close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--space-1);
-  color: var(--sas-gray-500);
-  border-radius: var(--radius-sm);
-  transition: color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.save-scenario-dialog__close:hover {
-  color: var(--sas-gray-900);
-  background-color: var(--sas-gray-100);
-}
-
-.save-scenario-dialog__close svg {
-  width: var(--icon-md);
-  height: var(--icon-md);
-}
-
-.save-scenario-dialog__body {
-  padding: var(--space-4) var(--space-5);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
+/* Save Scenario Dialog — body content only. Every dialog that used to build
+   its own overlay/box/header/close/body here now renders through <Modal>, and
+   its inputs through .sas-input / .sas-textarea, so that chrome is gone. */
 
 /* Field stack inside a <Modal> body (no padding of its own) */
 .save-scenario-dialog__fields {
@@ -1435,55 +1259,11 @@
   color: var(--sas-gray-700);
 }
 
-.save-scenario-dialog__select,
-.save-scenario-dialog__input {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-900);
-  background-color: var(--sas-white);
-}
-
-.save-scenario-dialog__select:focus,
-.save-scenario-dialog__input:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: var(--focus-ring);
-}
-
-.save-scenario-dialog__select:disabled,
-.save-scenario-dialog__input:disabled {
-  background-color: var(--sas-gray-100);
-  cursor: not-allowed;
-}
-
-.save-scenario-dialog__textarea {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-900);
-  background-color: var(--sas-white);
-  resize: vertical;
-  font-family: inherit;
-  min-height: 60px;
-}
-
-.save-scenario-dialog__textarea:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: var(--focus-ring);
-}
-
-.save-scenario-dialog__textarea:disabled {
-  background-color: var(--sas-gray-100);
-  cursor: not-allowed;
-}
-
+/* Hints are live secondary copy, so they take the muted text role.
+   --sas-gray-500 is reserved by variables.css as --sas-text-disabled. */
 .save-scenario-dialog__hint {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
 }
 
 .save-scenario-dialog__field-error {
@@ -1511,40 +1291,6 @@
   font-size: var(--font-size-sm);
   color: var(--sas-gray-500);
   font-style: italic;
-}
-
-.save-scenario-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--sas-gray-200);
-}
-
-.save-scenario-dialog__progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.save-scenario-dialog__progress-bar {
-  width: 100%;
-  height: 8px;
-  background-color: var(--sas-gray-200);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.save-scenario-dialog__progress-fill {
-  height: 100%;
-  background-color: var(--sas-blue-primary);
-  transition: width var(--transition-normal);
-}
-
-.save-scenario-dialog__progress-text {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  text-align: center;
 }
 
 .save-scenario-dialog__description-text {
@@ -1906,17 +1652,13 @@
   color: var(--sas-gray-500);
 }
 
+/* The error state is an <Alert variant="error">; these two are plain text. */
 .folder-browser__loading,
-.folder-browser__error,
 .folder-browser__empty {
   padding: var(--space-4) var(--space-3);
   text-align: center;
   font-size: var(--font-size-sm);
   color: var(--sas-gray-500);
-}
-
-.folder-browser__error {
-  color: var(--sas-error-dark);
 }
 
 /* Narrow embeds (Job Execution / VA panel): stack the two-column pickers */
@@ -1937,81 +1679,4 @@
   .column-mapping__arrow {
     display: none;
   }
-}
-
-/* Module Details - Danger Zone
-   (belongs in modules.css next to the other .module-details__* rules; kept
-   here until that file's owner moves it) */
-.module-details__danger-card {
-  border: 1px solid var(--sas-error-light);
-  background-color: rgba(244, 67, 54, 0.02);
-}
-
-.module-details__danger-card .sas-card__header {
-  background-color: var(--sas-error-light);
-}
-
-.module-details__danger-card .sas-card__header h3 {
-  color: var(--sas-error-dark);
-}
-
-.module-details__danger-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.module-details__danger-info {
-  flex: 1;
-}
-
-.module-details__danger-title {
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-900);
-  margin: 0 0 var(--space-1) 0;
-}
-
-.module-details__danger-description {
-  color: var(--sas-gray-600);
-  font-size: var(--font-size-sm);
-  margin: 0;
-}
-
-.module-details__delete-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.module-details__delete-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-}
-
-/* Module Details - Source Link */
-.module-details__source-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--sas-blue-primary);
-  text-decoration: none;
-  font-weight: var(--font-weight-medium);
-  padding: var(--space-2) var(--space-3);
-  background-color: var(--sas-blue-light);
-  border-radius: var(--radius-md);
-  transition: all var(--transition-fast);
-}
-
-.module-details__source-link:hover,
-.module-details__source-link:focus-visible {
-  background-color: var(--sas-blue-primary);
-  color: var(--sas-white);
-}
-
-.module-details__source-link svg {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex-shrink: 0;
 }

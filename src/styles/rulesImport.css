@@ -9,39 +9,7 @@
   gap: var(--space-4);
 }
 
-/* --- Step navigation --- */
-
-.rules-import__steps {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.rules-import__step {
-  padding: var(--space-3) var(--space-4);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-600);
-  cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.rules-import__step:hover:not(:disabled) {
-  color: var(--sas-blue-primary);
-}
-
-.rules-import__step--active {
-  color: var(--sas-blue-primary);
-  border-bottom-color: var(--sas-blue-primary);
-}
-
-.rules-import__step:disabled {
-  color: var(--sas-gray-400);
-  cursor: not-allowed;
-}
+/* Step navigation is <StepNav> / .sas-steps (components.css) */
 
 /* --- Panels --- */
 
@@ -86,7 +54,10 @@
 
 /* --- Upload / drop zone --- */
 
+/* Positioned so the .sr-only file input is clipped against the drop zone and
+   not against whatever positioned ancestor happens to be above it. */
 .rules-import__dropzone {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -105,6 +76,20 @@
 .rules-import__dropzone-hint {
   color: var(--sas-gray-500);
   font-size: var(--font-size-sm);
+}
+
+/* The visible half of the file picker: a <label> wearing the .sas-button
+   classes, so it only needs the pointer cursor the element rule gives a
+   real <button>, plus the ring its .sr-only input cannot show itself. */
+.rules-import__file-label {
+  cursor: pointer;
+  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
+  line-height: normal;
+}
+
+.rules-import__file-input:focus-visible + .rules-import__file-label {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .rules-import__file-summary {
@@ -326,23 +311,11 @@ td.rules-import__col-wide .rules-import__cell-input {
 
 /* --- Server checks --- */
 
-/* Layout comes from .sas-table; only the density differs */
-.rules-import__preflight-table {
-  font-size: var(--font-size-sm);
-}
-
-/* Built on .sas-table; only the density differs from the shared table
-   (see components.css — a shared compact modifier would replace these). */
-.rules-import__preflight-table .sas-table__th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-}
-
-.rules-import__preflight-table .sas-table__td {
-  padding: var(--space-2) var(--space-3);
-}
-
-.rules-import__preflight-folder {
+/* The pre-flight table is .sas-table .sas-table--compact; only the two cell
+   treatments below are specific to it. */
+/* Doubled up with .sas-table__td so the font-size beats the (0,2,0)
+   `.sas-table--compact .sas-table__td` rule in components.css. */
+.sas-table__td.rules-import__preflight-folder {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   word-break: break-all;

@@ -8,6 +8,7 @@ import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { SearchInput } from '../common/SearchInput';
+import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
 
@@ -106,24 +107,24 @@ export const ModuleList: React.FC<ModuleListProps> = ({
 
     return (
       <button
-        className={`module-list__sort-header ${isActive ? 'module-list__sort-header--active' : ''}`}
+        className={`sas-table__sort-header ${isActive ? 'sas-table__sort-header--active' : ''}`}
         onClick={() => handleSortClick(field)}
         type="button"
       >
         {label}
-        <span className="module-list__sort-icon">
+        <span className="sas-table__sort-icon">
           {direction === 'asc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
           )}
           {direction === 'desc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
           )}
           {!direction && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" aria-hidden="true">
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
           )}
@@ -280,11 +281,16 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       </div>
 
       {error && (
-        <Alert variant="error" title="Failed to load modules">
-          {error}{' '}
-          <Button variant="tertiary" size="small" onClick={onRefresh}>
-            Retry
-          </Button>
+        <Alert
+          variant="error"
+          title="Failed to load modules"
+          actions={
+            <Button variant="tertiary" size="small" onClick={onRefresh}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
         </Alert>
       )}
 
@@ -298,27 +304,14 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       />
 
       {totalPages > 1 && (
-        <div className="module-list__pagination">
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage === 0}
-            onClick={() => onPageChange(currentPage - 1)}
-          >
-            Previous
-          </Button>
-          <span className="module-list__pagination-info">
-            Page {currentPage + 1} of {totalPages}
-          </span>
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage >= totalPages - 1}
-            onClick={() => onPageChange(currentPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
+        <Pagination
+          label="Module pages"
+          page={currentPage + 1}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={displayCount}
+          onPageChange={(p) => onPageChange(p - 1)}
+        />
       )}
     </div>
   );

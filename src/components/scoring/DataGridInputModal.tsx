@@ -243,12 +243,12 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
           </p>
         ) : (
           <div className="datagrid__wrapper datagrid__wrapper--modal">
-            <table className="datagrid__table datagrid__editor-table">
-              <thead>
+            <table className="sas-table sas-table--compact datagrid__table datagrid__editor-table">
+              <thead className="sas-table__head">
                 <tr>
-                  <th className="datagrid__row-number">#</th>
+                  <th className="sas-table__th datagrid__row-number">#</th>
                   {columns.map((col, colIdx) => (
-                    <th key={colIdx}>
+                    <th className="sas-table__th" key={colIdx}>
                       {locked ? (
                         <div className="datagrid__column-header">
                           <span>{col.name}</span>
@@ -286,19 +286,19 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
                       )}
                     </th>
                   ))}
-                  <th className="datagrid__row-actions" />
+                  <th className="sas-table__th datagrid__row-actions" />
                 </tr>
               </thead>
               <tbody>
                 {cells.map((row, rowIdx) => (
-                  <tr key={rowIdx}>
-                    <td className="datagrid__row-number">{rowIdx + 1}</td>
+                  <tr className="sas-table__row" key={rowIdx}>
+                    <td className="sas-table__td datagrid__row-number">{rowIdx + 1}</td>
                     {columns.map((col, colIdx) => (
-                      <td key={colIdx}>
+                      <td className="sas-table__td" key={colIdx}>
                         {renderCellInput(rowIdx, colIdx, row[colIdx] ?? '', col.dataType)}
                       </td>
                     ))}
-                    <td className="datagrid__row-actions">
+                    <td className="sas-table__td datagrid__row-actions">
                       <IconButton
                         size="small"
                         variant="danger"
@@ -312,7 +312,7 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
                 ))}
                 {cells.length === 0 && (
                   <tr>
-                    <td colSpan={columns.length + 2} className="output-display__empty">
+                    <td colSpan={columns.length + 2} className="sas-table__td output-display__empty">
                       No rows yet — use “Add row” below.
                     </td>
                   </tr>

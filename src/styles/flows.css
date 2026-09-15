@@ -2,9 +2,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /* Decision Flow Visualization Styles.
-   Buttons, inputs, alerts, spinners and dialogs come from the shared
-   components (components.css); this file only styles what is specific to the
-   flows feature. The `spin` keyframes live in components.css. */
+   Buttons, inputs, alerts, spinners, tables, badges, pagination, deep links
+   and dialogs come from the shared components (components.css); this file
+   only styles what is specific to the flows feature. */
 
 /* ─── Flow List ─── */
 
@@ -37,55 +37,14 @@
   margin-bottom: var(--space-4);
 }
 
-/* A scroll container still clips to its own radius, so the corners survive. */
+/* A scroll container still clips to its own radius, so the corners survive.
+   The table inside is the shared .sas-table (header treatment, sort header,
+   row hover and the --clickable focus tint all come from components.css). */
 .flow-list__table-wrap {
   border: 1px solid var(--sas-gray-200);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow-x: auto;
-}
-
-.flow-list__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-base);
-}
-
-.flow-list__table th {
-  text-align: left;
-  padding: var(--space-3) var(--space-4);
-  background: var(--sas-gray-50);
-  color: var(--sas-gray-700);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  letter-spacing: var(--letter-spacing-wide);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.flow-list__table td {
-  padding: var(--space-3) var(--space-4);
-  color: var(--sas-gray-800);
-  border-bottom: 1px solid var(--sas-gray-100);
-}
-
-/* The sort control is a real button inside the header cell */
-.flow-list__sort-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  letter-spacing: inherit;
-  background: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  user-select: none;
-}
-
-.flow-list__sort-btn:hover {
-  color: var(--sas-blue-primary);
 }
 
 .flow-list__col--modified {
@@ -96,30 +55,14 @@
   width: 112px;
 }
 
-.flow-list__table td.flow-list__col--desc,
-.flow-list__table td.flow-list__col--modified-by {
+.sas-table__td.flow-list__col--desc,
+.sas-table__td.flow-list__col--modified-by {
   color: var(--sas-text-muted);
 }
 
-.flow-list__table td.flow-list__col--modified {
+.sas-table__td.flow-list__col--modified {
   color: var(--sas-text-muted);
   font-size: var(--font-size-xs);
-}
-
-/* Rows open the flow on click; the name link is the keyboard path, so the
-   row highlights for :focus-within exactly as it does for :hover. */
-.flow-list__row {
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-}
-
-.flow-list__row:hover,
-.flow-list__row:focus-within {
-  background: var(--sas-blue-lighter);
-}
-
-.flow-list__table tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .flow-list__row-link {
@@ -496,8 +439,8 @@
 
 /* ─── Flow Side Panel ─── */
 
-/* Sits above the fixed sidebar (both --z-sticky; the panel is later in the
-   DOM) and below every modal. Below 720px it becomes a full-width sheet. */
+/* Sits above the fixed sidebar (--z-sticky) and below every modal, on the
+   shared slide-over layer. Below 720px it becomes a full-width sheet. */
 .flow-side-panel {
   position: fixed;
   top: var(--header-height);
@@ -507,7 +450,7 @@
   background: var(--sas-white);
   border-left: 1px solid var(--sas-gray-200);
   box-shadow: var(--shadow-lg);
-  z-index: var(--z-sticky);
+  z-index: var(--z-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -612,37 +555,19 @@
 
 /* ─── Side Panel Data Display ─── */
 
-/* The one dense table of the feature: side-panel lists, parameter tables
-   and the header's signature tables. --fixed for tables whose columns
-   truncate (see .flow-var-table__col-*). */
-.flow-sp-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.flow-sp-table--fixed {
+/* Side-panel lists, parameter tables and the header's signature tables are
+   all `.sas-table .sas-table--compact`; only these two refinements are
+   local. --fixed is for tables whose columns truncate (see
+   .flow-var-table__col-*). */
+.flow-table--fixed {
   table-layout: fixed;
 }
 
-.flow-sp-table th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  background: var(--sas-gray-50);
-  color: var(--sas-gray-600);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-xs);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.flow-sp-table td {
-  padding: var(--space-2) var(--space-3);
-  color: var(--sas-gray-800);
-  border-bottom: 1px solid var(--sas-gray-100);
-  vertical-align: top;
-}
-
-.flow-sp-table tbody tr:last-child td {
+/* The shared row rule draws a line under EVERY row; at the end of a table
+   that doubles the list wrapper's border or floats under the last section. */
+.flow-list__table-wrap .sas-table__row:last-child,
+.flow-header__vars .sas-table__row:last-child,
+.flow-side-panel .sas-table__row:last-child {
   border-bottom: none;
 }
 
@@ -761,6 +686,14 @@
   border-bottom: 1px solid var(--sas-gray-100);
 }
 
+/* The icon-only .sas-deep-link has no width of its own and centres its icon,
+   so as a stretched column flex item it would park the icon in the middle of
+   the panel. Align just the link left; the URI below it still stretches, which
+   is what lets its word-break wrap a long path instead of overflowing. */
+.flow-sp-link-item > .sas-deep-link {
+  align-self: flex-start;
+}
+
 .flow-sp-link-item:last-child {
   border-bottom: none;
   padding-bottom: 0;
@@ -805,75 +738,25 @@ pre.flow-code-modal__code {
   line-height: var(--line-height-relaxed);
 }
 
-/* ─── Deep Link ─── */
+/* Deep links out to SAS are the shared icon-only .sas-deep-link, the IN/OUT
+   chips the shared .sas-badge--direction-*, and the list pager
+   <Pagination> — all three live in components.css.
 
-.flow-deep-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--sas-blue-primary);
+   The one exception: on the decision detail header the deep link is the only
+   "open this in SAS Intelligent Decisioning" affordance on the page, so it
+   keeps its visible text. Everything but the text (colour, hover, focus ring,
+   32px minimum target) still comes from .sas-deep-link; this only adds the
+   gap and the side padding the text needs. If a second feature wants a
+   labelled deep link, promote this to .sas-deep-link--labelled in
+   components.css and delete it here. */
+.flow-deep-link--labelled {
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  /* Cancel the left padding so the icon lines up with the title underneath;
+     the hover tint still gets its full inset. */
+  margin-left: calc(var(--space-2) * -1);
   font-size: var(--font-size-sm);
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.flow-deep-link:hover {
-  color: var(--sas-blue-dark);
-  text-decoration: underline;
-}
-
-.flow-deep-link__icon {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-}
-
-/* ─── Direction Badges ─── */
-
-.flow-dir-badge {
-  display: inline-block;
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  border-radius: var(--radius-full);
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: var(--letter-spacing-wide);
-}
-
-.flow-dir-badge--input {
-  background: var(--sas-success-light);
-  color: var(--sas-success-dark);
-}
-
-.flow-dir-badge--output {
-  background: var(--sas-info-light);
-  color: var(--sas-info-dark);
-}
-
-.flow-dir-badge--inout {
-  background: var(--sas-warning-light);
-  color: var(--sas-warning-dark);
-}
-
-.flow-dir-badge--temp {
-  background: var(--sas-gray-100);
-  color: var(--sas-gray-600);
-}
-
-/* ─── Pagination (buttons are <Button variant="secondary" size="small">) ─── */
-
-.flow-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-}
-
-.flow-pagination__info {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
 }
 
 /* ------------------------------------------------------------------ */

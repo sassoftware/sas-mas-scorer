@@ -20,7 +20,7 @@ import {
   authTypeLabel, boundDecisionVariable, getRestApiDefinitionByUri,
   REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail, type RestApiParam,
 } from '../../api/restApiDefinitions';
-import { Alert, Button, Loading } from '../common';
+import { Alert, Button, Loading, isAnyModalOpen } from '../common';
 import FlowDeepLink from './FlowDeepLink';
 import CollapsibleSection from './CollapsibleSection';
 
@@ -66,12 +66,18 @@ function displayLength(length?: number, dataType?: string): string {
   return '100';
 }
 
+/**
+ * The app-wide direction mapping (components.css): input = blue,
+ * output = green, in/out = neutral. A temporary variable has no direction,
+ * so it takes the plain default chip; its label ("temp") is what tells it
+ * apart from in/out, never the colour alone.
+ */
 function directionBadgeClass(direction?: string): string {
   switch (direction) {
-    case 'input': return 'flow-dir-badge flow-dir-badge--input';
-    case 'output': return 'flow-dir-badge flow-dir-badge--output';
-    case 'inOut': return 'flow-dir-badge flow-dir-badge--inout';
-    default: return 'flow-dir-badge flow-dir-badge--temp';
+    case 'input': return 'sas-badge sas-badge--direction-input';
+    case 'output': return 'sas-badge sas-badge--direction-output';
+    case 'inOut': return 'sas-badge sas-badge--direction-both';
+    default: return 'sas-badge sas-badge--default';
   }
 }
 
@@ -90,26 +96,26 @@ function RawStepJson({ step }: { step: Step }) {
 function VariableTable({ variables }: { variables: { name: string; direction?: string; dataType?: string; length?: number; description?: string }[] }) {
   if (!variables.length) return null;
   return (
-    <table className="flow-sp-table flow-sp-table--fixed">
-      <thead>
+    <table className="sas-table sas-table--compact flow-table--fixed">
+      <thead className="sas-table__head">
         <tr>
-          <th>Name</th>
-          <th>Direction</th>
-          <th>Type</th>
-          <th>Length</th>
+          <th className="sas-table__th">Name</th>
+          <th className="sas-table__th">Direction</th>
+          <th className="sas-table__th">Type</th>
+          <th className="sas-table__th">Length</th>
         </tr>
       </thead>
       <tbody>
         {variables.map((v, i) => (
-          <tr key={i} title={v.description || undefined}>
-            <td>{v.name}</td>
-            <td>
+          <tr className="sas-table__row" key={i} title={v.description || undefined}>
+            <td className="sas-table__td">{v.name}</td>
+            <td className="sas-table__td">
               <span className={directionBadgeClass(v.direction)}>
                 {directionLabel(v.direction)}
               </span>
             </td>
-            <td>{v.dataType ?? ''}</td>
-            <td>{displayLength(v.length, v.dataType)}</td>
+            <td className="sas-table__td">{v.dataType ?? ''}</td>
+            <td className="sas-table__td">{displayLength(v.length, v.dataType)}</td>
           </tr>
         ))}
       </tbody>
@@ -136,22 +142,22 @@ function TemplateText({ text }: { text: string }) {
 function ParamTable({ params, mappings }: { params: RestApiParam[]; mappings?: StepMapping[] }) {
   if (!params.length) return null;
   return (
-    <table className="flow-sp-table flow-sp-table--fixed">
-      <thead>
+    <table className="sas-table sas-table--compact flow-table--fixed">
+      <thead className="sas-table__head">
         <tr>
-          <th>Key</th>
-          <th>Value</th>
-          <th>Decision variable</th>
+          <th className="sas-table__th">Key</th>
+          <th className="sas-table__th">Value</th>
+          <th className="sas-table__th">Decision variable</th>
         </tr>
       </thead>
       <tbody>
         {params.map((p, i) => {
           const bound = boundDecisionVariable(p.value, mappings);
           return (
-            <tr key={i} title={p.description || undefined}>
-              <td>{p.key}</td>
-              <td><TemplateText text={p.value ?? ''} /></td>
-              <td>{bound ?? '\u2014'}</td>
+            <tr className="sas-table__row" key={i} title={p.description || undefined}>
+              <td className="sas-table__td">{p.key}</td>
+              <td className="sas-table__td"><TemplateText text={p.value ?? ''} /></td>
+              <td className="sas-table__td">{bound ?? '\u2014'}</td>
             </tr>
           );
         })}
@@ -341,7 +347,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (isAnyModalOpen()) return;
       onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -533,8 +539,8 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
   /* ---- JSX ---- */
   return (
     <div className="flow-side-panel">
-      <button className="flow-side-panel__close" onClick={onClose} title="Close panel">
-        &#x2715; Close
+      <button type="button" className="flow-side-panel__close" onClick={onClose} title="Close panel">
+        <span aria-hidden="true">&#x2715;</span> Close
       </button>
       {/* Header */}
       <div
@@ -980,22 +986,22 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
             {modelDetail.inputVariables && modelDetail.inputVariables.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Input Variables ({modelDetail.inputVariables.length})</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Type</th>
-                      <th>Length</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Role</th>
+                      <th className="sas-table__th">Type</th>
+                      <th className="sas-table__th">Length</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.inputVariables.map((v, i) => (
-                      <tr key={i} title={v.description || undefined}>
-                        <td>{v.name}</td>
-                        <td>{v.role ?? ''}</td>
-                        <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length, v.type)}</td>
+                      <tr className="sas-table__row" key={i} title={v.description || undefined}>
+                        <td className="sas-table__td">{v.name}</td>
+                        <td className="sas-table__td">{v.role ?? ''}</td>
+                        <td className="sas-table__td">{v.type ?? ''}</td>
+                        <td className="sas-table__td">{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1005,22 +1011,22 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
             {modelDetail.outputVariables && modelDetail.outputVariables.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Output Variables ({modelDetail.outputVariables.length})</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Type</th>
-                      <th>Length</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Role</th>
+                      <th className="sas-table__th">Type</th>
+                      <th className="sas-table__th">Length</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.outputVariables.map((v, i) => (
-                      <tr key={i} title={v.description || undefined}>
-                        <td>{v.name}</td>
-                        <td>{v.role ?? ''}</td>
-                        <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length, v.type)}</td>
+                      <tr className="sas-table__row" key={i} title={v.description || undefined}>
+                        <td className="sas-table__td">{v.name}</td>
+                        <td className="sas-table__td">{v.role ?? ''}</td>
+                        <td className="sas-table__td">{v.type ?? ''}</td>
+                        <td className="sas-table__td">{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1030,18 +1036,18 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
             {modelDetail.properties && modelDetail.properties.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Properties</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Value</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.properties.map((p, i) => (
-                      <tr key={i}>
-                        <td>{p.name}</td>
-                        <td>{p.value}</td>
+                      <tr className="sas-table__row" key={i}>
+                        <td className="sas-table__td">{p.name}</td>
+                        <td className="sas-table__td">{p.value}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1105,20 +1111,20 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
                     {def.attributes && def.attributes.length > 0 && (
                       <>
                         <h6 className="flow-side-panel__section-title">Attributes</h6>
-                        <table className="flow-sp-table">
-                          <thead>
+                        <table className="sas-table sas-table--compact">
+                          <thead className="sas-table__head">
                             <tr>
-                              <th>Name</th>
-                              <th>Default</th>
-                              <th>Type</th>
+                              <th className="sas-table__th">Name</th>
+                              <th className="sas-table__th">Default</th>
+                              <th className="sas-table__th">Type</th>
                             </tr>
                           </thead>
                           <tbody>
                             {def.attributes.map((attr, ai) => (
-                              <tr key={ai}>
-                                <td>{attr.name}</td>
-                                <td>{attr.defaultValue !== undefined ? String(attr.defaultValue) : '—'}</td>
-                                <td>{attr.valueConstraints?.dataType ?? ''}</td>
+                              <tr className="sas-table__row" key={ai}>
+                                <td className="sas-table__td">{attr.name}</td>
+                                <td className="sas-table__td">{attr.defaultValue !== undefined ? String(attr.defaultValue) : '—'}</td>
+                                <td className="sas-table__td">{attr.valueConstraints?.dataType ?? ''}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1226,24 +1232,24 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
                 <span className="flow-sp-detail__value">{step.mappingDataGridName}</span>
               </div>
             )}
-            <table className="flow-sp-table">
-              <thead>
+            <table className="sas-table sas-table--compact">
+              <thead className="sas-table__head">
                 <tr>
-                  <th>Decision Term</th>
-                  <th>Direction</th>
-                  <th>Step Term</th>
+                  <th className="sas-table__th">Decision Term</th>
+                  <th className="sas-table__th">Direction</th>
+                  <th className="sas-table__th">Step Term</th>
                 </tr>
               </thead>
               <tbody>
                 {step.mappings.map((m: StepMapping, i: number) => (
-                  <tr key={m.id ?? i}>
-                    <td>{m.targetDecisionTermName}</td>
-                    <td>
+                  <tr className="sas-table__row" key={m.id ?? i}>
+                    <td className="sas-table__td">{m.targetDecisionTermName}</td>
+                    <td className="sas-table__td">
                       <span className={directionBadgeClass(m.direction)}>
                         {directionLabel(m.direction)}
                       </span>
                     </td>
-                    <td>{m.stepTermName}</td>
+                    <td className="sas-table__td">{m.stepTermName}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1254,20 +1260,20 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
         {/* ---- Variable Assignments ---- */}
         {step?.assignments && step.assignments.length > 0 && (
           <CollapsibleSection title="Variable Assignments">
-            <table className="flow-sp-table">
-              <thead>
+            <table className="sas-table sas-table--compact">
+              <thead className="sas-table__head">
                 <tr>
-                  <th>Variable</th>
-                  <th>Value</th>
-                  <th>Type</th>
+                  <th className="sas-table__th">Variable</th>
+                  <th className="sas-table__th">Value</th>
+                  <th className="sas-table__th">Type</th>
                 </tr>
               </thead>
               <tbody>
                 {step.assignments.map((a: VariableAssignment) => (
-                  <tr key={a.id}>
-                    <td>{a.variableName}</td>
-                    <td className="flow-sp-code">{a.value ?? ''}</td>
-                    <td>{a.dataType ?? ''}</td>
+                  <tr className="sas-table__row" key={a.id}>
+                    <td className="sas-table__td">{a.variableName}</td>
+                    <td className="sas-table__td flow-sp-code">{a.value ?? ''}</td>
+                    <td className="sas-table__td">{a.dataType ?? ''}</td>
                   </tr>
                 ))}
               </tbody>

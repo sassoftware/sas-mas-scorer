@@ -192,13 +192,15 @@ export const JobLogViewer: React.FC<JobLogViewerProps> = ({
         </div>
       </div>
       {error && (
-        <Alert variant="error">
-          <div className="job-monitoring__alert-row">
-            <span>{error}</span>
+        <Alert
+          variant="error"
+          actions={
             <Button variant="tertiary" size="small" onClick={onRefresh}>
               Retry
             </Button>
-          </div>
+          }
+        >
+          {error}
         </Alert>
       )}
       <div className="job-log__lines" ref={scrollRef} onScroll={handleScroll}>

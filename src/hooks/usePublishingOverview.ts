@@ -8,6 +8,7 @@ import {
 } from '../api/modelPublish';
 import { PublishDestination, PublishedItem } from '../types/modelPublish';
 import { dedupPublishedItems, getPublishedKind } from '../utils/publishHelpers';
+import { registerViewCache } from '../utils/viewCaches';
 
 export interface PublishingStats {
   destinationCount: number;
@@ -63,6 +64,10 @@ let cachedData: PublishingCache | null = null;
 export const clearPublishingOverviewCache = (): void => {
   cachedData = null;
 };
+
+// The shell clears this through the registry, so Header/App never import the
+// publishing hook (which would pull it into the entry chunk).
+registerViewCache('publishing', clearPublishingOverviewCache);
 
 export const usePublishingOverview = (
   options: UsePublishingOverviewOptions = {}

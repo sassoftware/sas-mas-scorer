@@ -51,6 +51,11 @@
   /* Overlay scrim behind modals */
   --sas-overlay-bg: rgba(0, 0, 0, 0.5);
 
+  /* Header foreground for secondary text/icons on the app header colour.
+     Feature CSS reads it as `var(--env-header-fg-muted, var(--sas-header-fg-muted))`
+     so a custom environment colour (envColor.ts) can override it per server. */
+  --sas-header-fg-muted: rgba(255, 255, 255, 0.92);
+
   /* Focus indication — one ring for the whole app.
      --focus-outline is the keyboard-focus outline drawn by the global
      :focus-visible rule (base.css); --focus-ring is the box-shadow halo used
@@ -95,6 +100,10 @@
   --space-10: 40px;
   --space-12: 48px;
 
+  /* Smallest allowed pointer target for an icon-only control
+     (WCAG 2.5.8 asks for 24px; 32px is the app's comfortable size). */
+  --target-min: 32px;
+
   /* Icon sizes */
   --icon-sm: 16px;
   --icon-md: 20px;
@@ -128,6 +137,7 @@
      Modal layers sit above every hard-coded z-index in the app (feature CSS
      and the shell currently use up to 1100), so a Modal always wins. */
   --z-sticky: 200;
+  --z-panel: 250; /* slide-over side panels: above sticky chrome, below any modal */
   --z-modal-backdrop: 1200;
   --z-modal: 1200;
   --z-modal-elevated: 1300; /* a modal that must cover another modal (auth error over settings) */

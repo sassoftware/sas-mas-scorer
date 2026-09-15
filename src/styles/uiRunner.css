@@ -440,80 +440,6 @@
   font-size: 0.85em;
 }
 
-/* === UI Apps List Styles (src/components/uiApps) === */
-
-.ui-apps-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.ui-apps-list__actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.ui-apps-list__search {
-  max-width: 400px;
-}
-
-.ui-apps-list__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--space-4);
-}
-
-/* UI App Card */
-.ui-app-card {
-  transition: box-shadow var(--transition-fast);
-}
-
-.ui-app-card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.ui-app-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.ui-app-card__name {
-  margin: 0;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-}
-
-.ui-app-card__description {
-  color: var(--sas-text-muted);
-  font-size: var(--font-size-sm);
-  margin: 0 0 var(--space-2);
-}
-
-.ui-app-card__meta {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
-  font-size: var(--font-size-xs);
-  color: var(--sas-text-muted);
-  margin-bottom: var(--space-3);
-}
-
-.ui-app-card__module {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 60%;
-}
-
-.ui-app-card__actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 /* Responsive */
 @media (max-width: 768px) {
   .ui-runner__fields--cols-2,
@@ -530,9 +456,5 @@
 
   .ui-runner__content--side-by-side {
     flex-direction: column;
-  }
-
-  .ui-apps-list__grid {
-    grid-template-columns: 1fr;
   }
 }

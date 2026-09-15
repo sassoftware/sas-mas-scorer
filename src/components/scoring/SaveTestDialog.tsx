@@ -6,13 +6,13 @@ import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Modal } from '../common/Modal';
 import { FolderBrowser } from './FolderBrowser';
-import { getCasServers, getCaslibs, CasServer, CasLib } from '../../api/cas';
+import { useCasCatalog } from '../../hooks/useCasCatalog';
 import {
   createScoreDefinition,
   ScoreDefinitionMapping,
   TestScoreDefinitionPayload,
 } from '../../api/scoreDefinitions';
-import { getDecisionSignature, DecisionSignatureVariable } from '../../api/modules';
+import { DecisionSignatureVariable } from '../../api/modules';
 import { Module, StepParameter } from '../../types';
 import { CasTableTestInfo } from './CasTableScore';
 
@@ -33,6 +33,8 @@ interface SaveTestDialogProps {
   sourceURI: string;
   casTableInfo: CasTableTestInfo;
   inputParameters: StepParameter[];
+  /** Decision signature, resolved once by ScorePanel and passed down. */
+  decisionSignature: DecisionSignatureVariable[];
   onClose: () => void;
 }
 
@@ -74,6 +76,7 @@ export const SaveTestDialog: React.FC<SaveTestDialogProps> = ({
   sourceURI,
   casTableInfo,
   inputParameters,
+  decisionSignature,
   onClose,
 }) => {
   // Form state
@@ -89,79 +92,43 @@ export const SaveTestDialog: React.FC<SaveTestDialogProps> = ({
     loadPref('lastFolderName')
   );
 
-  // CAS output library state
-  const [servers, setServers] = useState<CasServer[]>([]);
-  const [caslibs, setCaslibs] = useState<CasLib[]>([]);
-  const [selectedServer, setSelectedServer] = useState(loadPref('lastServer') ?? '');
-  const [selectedCaslib, setSelectedCaslib] = useState(loadPref('lastCaslib') ?? '');
-  const [loadingServers, setLoadingServers] = useState(true);
-  const [loadingCaslibs, setLoadingCaslibs] = useState(false);
-
-  // Decision signature state
-  const [decisionSignature, setDecisionSignature] = useState<DecisionSignatureVariable[]>([]);
+  // CAS output library state — the catalogue itself comes from the shared
+  // session cache; only the two selections live here.
+  const [selectedServer, setSelectedServer] = useState('');
+  const [selectedCaslib, setSelectedCaslib] = useState('');
+  const {
+    servers,
+    caslibs,
+    loadingServers,
+    loadingCaslibs,
+    error: casError,
+  } = useCasCatalog(selectedServer);
 
   // Save state
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Load decision signature on mount
+  // Restore the last server, else the first one offered.
   useEffect(() => {
-    getDecisionSignature(sourceURI)
-      .then(setDecisionSignature)
-      .catch(() => {/* best-effort */});
-  }, [sourceURI]);
+    if (selectedServer || servers.length === 0) return;
+    const saved = loadPref('lastServer');
+    setSelectedServer(saved && servers.some(s => s.name === saved) ? saved : servers[0].name);
+  }, [servers, selectedServer]);
 
-  // Load CAS servers on mount
+  // Restore the last caslib, else Public, else the first one.
   useEffect(() => {
-    const load = async () => {
-      try {
-        const serverList = await getCasServers();
-        setServers(serverList);
-        const savedServer = loadPref('lastServer');
-        if (savedServer && serverList.some(s => s.name === savedServer)) {
-          setSelectedServer(savedServer);
-        } else if (serverList.length > 0) {
-          setSelectedServer(serverList[0].name);
-        }
-      } catch (err: unknown) {
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load CAS servers');
-      } finally {
-        setLoadingServers(false);
-      }
-    };
-    load();
-  }, []);
-
-  // Load caslibs when server changes
-  useEffect(() => {
-    if (!selectedServer) {
-      setCaslibs([]);
+    if (caslibs.length === 0) {
+      setSelectedCaslib('');
       return;
     }
-
-    const load = async () => {
-      setLoadingCaslibs(true);
-      try {
-        const caslibList = await getCaslibs(selectedServer);
-        setCaslibs(caslibList);
-        const savedCaslib = loadPref('lastCaslib');
-        if (savedCaslib && caslibList.some(c => c.name === savedCaslib)) {
-          setSelectedCaslib(savedCaslib);
-        } else {
-          const publicLib = caslibList.find(c => c.name.toLowerCase() === 'public');
-          setSelectedCaslib(publicLib?.name ?? caslibList[0]?.name ?? '');
-        }
-      } catch (err: unknown) {
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load caslibs');
-      } finally {
-        setLoadingCaslibs(false);
-      }
-    };
-    load();
-  }, [selectedServer]);
+    const saved = loadPref('lastCaslib');
+    setSelectedCaslib(
+      saved && caslibs.some(c => c.name === saved)
+        ? saved
+        : (caslibs.find(c => c.name.toLowerCase() === 'public')?.name ?? caslibs[0].name)
+    );
+  }, [caslibs]);
 
   const handleFolderSelect = useCallback((folderId: string, folderName: string) => {
     setSelectedFolderId(folderId);
@@ -438,9 +405,9 @@ export const SaveTestDialog: React.FC<SaveTestDialogProps> = ({
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <Alert variant="error">{error}</Alert>
+          {/* Error — the save failure wins over a catalogue failure */}
+          {(error ?? casError) && (
+            <Alert variant="error">{error ?? casError}</Alert>
           )}
         </div>
       )}

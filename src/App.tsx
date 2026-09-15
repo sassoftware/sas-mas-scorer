@@ -17,6 +17,7 @@ import { PublishingOverview } from './components/publishing';
 import { RulesImportPage } from './components/rulesImport/RulesImportPage';
 import { Loading } from './components/common/Loading';
 import { Modal } from './components/common/Modal';
+import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
@@ -25,6 +26,8 @@ import { decodeUIDefinition } from './utils/shareLink';
 import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import { applyEnvironmentColor } from './utils/envColor';
+import { clearAllViewCaches } from './utils/viewCaches';
+import { clearCasCatalog } from './hooks/useCasCatalog';
 import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
 import './styles/index.css';
 
@@ -400,6 +403,13 @@ function App() {
 
   // Called when a connection is switched or deleted in settings
   const handleConnectionSwitch = useCallback(async () => {
+    // Drop every module-scoped cache before the new connection loads: the CAS
+    // catalogue is keyed by the Viya URL, which two connections to the same
+    // host share, so the key alone does not isolate them. clearCasCatalog is
+    // called by name as well because clearAllViewCaches only reaches caches
+    // whose module has been loaded — this import guarantees the CAS one has.
+    clearAllViewCaches();
+    clearCasCatalog();
     setSelectedModule(null);
     setSelectedStep(null);
     setRecentModules([]);
@@ -476,7 +486,7 @@ function App() {
         return (
           <div className="error-message">
             <p>UI App not found.</p>
-            <button onClick={handleBackToUIApps}>Back to UI Apps</button>
+            <button type="button" onClick={handleBackToUIApps}>Back to UI Apps</button>
           </div>
         );
       }
@@ -549,7 +559,7 @@ function App() {
       return (
         <div className="error-message">
           <p>Error: {moduleError}</p>
-          <button onClick={handleBackToModules}>Back to Modules</button>
+          <button type="button" onClick={handleBackToModules}>Back to Modules</button>
         </div>
       );
     }
@@ -606,9 +616,17 @@ function App() {
   };
 
   // Lazily loaded views resolve inside this boundary; the fallback matches the
-  // other in-content loading states.
+  // other in-content loading states. ChunkErrorBoundary sits outside Suspense
+  // so a chunk that fails to load (stale index after a redeploy, dropped
+  // connection) turns into a recoverable alert instead of a blank app, and it
+  // wraps the content only, so the header and sidebar survive.
+  // Keyed on the active view so navigating away from a view whose chunk failed
+  // remounts the boundary with a clean state; a same-view re-render keeps the
+  // instance (getActiveView() returns one distinct string per view).
   const renderContent = () => (
-    <Suspense fallback={<Loading message="Loading..." />}>{renderView()}</Suspense>
+    <ChunkErrorBoundary key={getActiveView()}>
+      <Suspense fallback={<Loading message="Loading..." />}>{renderView()}</Suspense>
+    </ChunkErrorBoundary>
   );
 
   // Electron: show loading while checking active connection

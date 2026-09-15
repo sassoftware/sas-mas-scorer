@@ -5,8 +5,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PublishedItem, PublishedKind } from '../../types/modelPublish';
 import { DataTable, Column } from '../common/DataTable';
 import { Badge, BadgeVariant } from '../common/Badge';
-import { Button } from '../common/Button';
 import { SearchInput } from '../common/SearchInput';
+import { Pagination } from '../common/Pagination';
 import {
   extractDecisionFlowId,
   getPublishedKind,
@@ -179,15 +179,16 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
             {flowId && (
               <a
                 href={`#/flows/${flowId}`}
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title="View Flow Diagram"
+                aria-label={`View flow diagram for ${item.publishName}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
                   onNavigateToFlow(flowId);
                 }}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="5" r="2" />
                   <circle cx="6" cy="19" r="2" />
                   <circle cx="18" cy="19" r="2" />
@@ -200,11 +201,12 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
                 href={deeplink.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title={deeplink.label}
+                aria-label={`${deeplink.label}: ${item.publishName}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                   <polyline points="15 3 21 3 21 9" />
                   <line x1="10" y1="14" x2="21" y2="3" />
@@ -214,14 +216,15 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
             {isMas && (
               <button
                 type="button"
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title="Execute Score"
+                aria-label={`Execute score for ${item.publishName}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onNavigateToModule(item.publishName);
                 }}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                 </svg>
@@ -294,7 +297,9 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
       </div>
 
       <div className="publishing__items-count">
-        Showing {filtered.length} of {items.length} published items
+        {filtered.length === items.length
+          ? `${items.length} published items`
+          : `Filtered to ${filtered.length} of ${items.length} published items`}
       </div>
 
       <DataTable
@@ -305,27 +310,14 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
       />
 
       {pageCount > 1 && (
-        <nav className="publishing__pagination" aria-label="Published items pages">
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage === 0}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            Previous
-          </Button>
-          <span className="publishing__pagination-info">
-            Page {currentPage + 1} of {pageCount}
-          </span>
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage >= pageCount - 1}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Next
-          </Button>
-        </nav>
+        <Pagination
+          label="Published items pages"
+          page={currentPage + 1}
+          totalPages={pageCount}
+          pageSize={PAGE_SIZE}
+          totalItems={filtered.length}
+          onPageChange={(p) => setPage(p - 1)}
+        />
       )}
     </div>
   );
