@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { PublishDestination } from '../../types/modelPublish';
 import { Badge } from '../common/Badge';
 import { Card, CardBody } from '../common/Card';
+import { IconButton } from '../common/IconButton';
 import {
   formatDestinationTypeLabel,
   getDestinationDetailFields,
@@ -79,9 +80,8 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinatio
                 )}
               </div>
               {hasDetails && (
-                <button
-                  type="button"
-                  className="publishing__destination-toggle"
+                <IconButton
+                  size="medium"
                   onClick={() => toggle(d.id)}
                   aria-expanded={isOpen}
                   aria-label={isOpen ? 'Hide details' : 'Show details'}
@@ -95,7 +95,7 @@ export const DestinationsPanel: React.FC<DestinationsPanelProps> = ({ destinatio
                   >
                     <path d="M6 9l6 6 6-6" />
                   </svg>
-                </button>
+                </IconButton>
               )}
             </div>
 

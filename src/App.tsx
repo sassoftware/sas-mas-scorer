@@ -1,8 +1,8 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Module, Step } from './types';
 import { UIDefinition, UIDefinitionSummary } from './types/uiBuilder';
 import { Layout, ViewType } from './components/layout';
@@ -14,12 +14,10 @@ import { UIBuilder } from './components/uiBuilder/UIBuilder';
 import { UIRunner } from './components/uiRunner/UIRunner';
 import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
 import { PublishingOverview } from './components/publishing';
-import { JobMonitoringPage, JobDetailPage } from './components/jobMonitoring';
-import { SchemaBuilder } from './components/schemaBuilder/SchemaBuilder';
 import { RulesImportPage } from './components/rulesImport/RulesImportPage';
-import FlowListPage from './components/flows/FlowListPage';
-import FlowDetailPage from './components/flows/FlowDetailPage';
 import { Loading } from './components/common/Loading';
+import { Modal } from './components/common/Modal';
+import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
@@ -28,14 +26,31 @@ import { decodeUIDefinition } from './utils/shareLink';
 import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import { applyEnvironmentColor } from './utils/envColor';
+import { clearAllViewCaches } from './utils/viewCaches';
+import { clearCasCatalog } from './hooks/useCasCatalog';
 import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
 import './styles/index.css';
+
+// The views that carry the heavy vendor code (@xyflow/react + dagre for the
+// flow diagram, prismjs for the code panels) load on first visit instead of
+// riding in the entry chunk. The jobdef build inlines these chunks back into
+// its single HTML file (inlineDynamicImports in vite.config.ts).
+const FlowListPage = lazy(() => import('./components/flows/FlowListPage'));
+const FlowDetailPage = lazy(() => import('./components/flows/FlowDetailPage'));
+const JobMonitoringPage = lazy(() =>
+  import('./components/jobMonitoring').then((m) => ({ default: m.JobMonitoringPage }))
+);
+const JobDetailPage = lazy(() =>
+  import('./components/jobMonitoring').then((m) => ({ default: m.JobDetailPage }))
+);
+const SchemaBuilder = lazy(() =>
+  import('./components/schemaBuilder/SchemaBuilder').then((m) => ({ default: m.SchemaBuilder }))
+);
 
 const isElectron = !!window.electronAPI;
 
 function App() {
   const { isAuthenticated, checkAuth } = useSasAuth();
-  const prevAuthRef = useRef(isAuthenticated);
 
   // Electron: track whether an active connection is configured
   const [hasActiveConnection, setHasActiveConnection] = useState<boolean | null>(isElectron ? null : true);
@@ -62,18 +77,12 @@ function App() {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings);
   }, []);
 
-  // Escape dismisses the settings modal (matching the other modals)
-  useEffect(() => {
-    if (!showSettings) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowSettings(false);
-        loadActiveConnection();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showSettings, loadActiveConnection]);
+  // Closing the settings dialog (Escape, X, scrim, Save, Close) re-reads the
+  // active connection so a renamed/recoloured connection shows immediately.
+  const closeSettings = useCallback(() => {
+    setShowSettings(false);
+    loadActiveConnection();
+  }, [loadActiveConnection]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -144,18 +153,11 @@ function App() {
     displayModules,
   } = useModules({ enabled: isAuthenticated });
 
-  const { steps, loading: loadingSteps } = useSteps(selectedModule?.id ?? null);
-  const { submodules, loading: loadingSubmodules } = useSubmodules(
-    selectedModule?.id ?? null
-  );
-
-  // Auto-refresh modules when user logs in
-  useEffect(() => {
-    if (isAuthenticated && !prevAuthRef.current) {
-      refreshModules();
-    }
-    prevAuthRef.current = isAuthenticated;
-  }, [isAuthenticated, refreshModules]);
+  // Keyed on the URL, not the fetched module, so a deep link or refresh starts
+  // the steps/submodules requests alongside getModule instead of after it.
+  const routedModuleId = isAuthenticated ? moduleId : null;
+  const { steps, loading: loadingSteps } = useSteps(routedModuleId);
+  const { submodules, loading: loadingSubmodules } = useSubmodules(routedModuleId);
 
   // Load recent UI apps
   const loadRecentUIApps = useCallback(async () => {
@@ -228,7 +230,9 @@ function App() {
   useEffect(() => {
     if (stepId && steps.length > 0) {
       const step = steps.find((s) => s.id === stepId);
-      if (step && (!selectedStep || selectedStep.id !== stepId)) {
+      // Compare by identity, not id: two modules can share a step id, and the
+      // steps array is replaced whenever the module changes.
+      if (step && selectedStep !== step) {
         setSelectedStep(step);
       }
     } else if (!stepId) {
@@ -399,6 +403,13 @@ function App() {
 
   // Called when a connection is switched or deleted in settings
   const handleConnectionSwitch = useCallback(async () => {
+    // Drop every module-scoped cache before the new connection loads: the CAS
+    // catalogue is keyed by the Viya URL, which two connections to the same
+    // host share, so the key alone does not isolate them. clearCasCatalog is
+    // called by name as well because clearAllViewCaches only reaches caches
+    // whose module has been loaded — this import guarantees the CAS one has.
+    clearAllViewCaches();
+    clearCasCatalog();
     setSelectedModule(null);
     setSelectedStep(null);
     setRecentModules([]);
@@ -409,7 +420,7 @@ function App() {
   }, [loadActiveConnection, checkAuth, navigate]);
 
   // Render content based on current view
-  const renderContent = () => {
+  const renderView = () => {
     const activeView = getActiveView();
 
     // Flow Views
@@ -475,7 +486,7 @@ function App() {
         return (
           <div className="error-message">
             <p>UI App not found.</p>
-            <button onClick={handleBackToUIApps}>Back to UI Apps</button>
+            <button type="button" onClick={handleBackToUIApps}>Back to UI Apps</button>
           </div>
         );
       }
@@ -548,7 +559,7 @@ function App() {
       return (
         <div className="error-message">
           <p>Error: {moduleError}</p>
-          <button onClick={handleBackToModules}>Back to Modules</button>
+          <button type="button" onClick={handleBackToModules}>Back to Modules</button>
         </div>
       );
     }
@@ -576,7 +587,8 @@ function App() {
 
     // Score Panel View
     if (activeView === 'score') {
-      if (!selectedModule) {
+      // A stale module from the previous route must not drive the redirect below.
+      if (!selectedModule || selectedModule.id !== moduleId) {
         return <Loading message="Loading module..." />;
       }
       if (loadingSteps) {
@@ -587,8 +599,8 @@ function App() {
         if (step) {
           return <Loading message="Loading step..." />;
         }
-        navigate(`/modules/${encodeURIComponent(moduleId!)}`);
-        return null;
+        // Declarative redirect: navigate() must not be called during render.
+        return <Navigate to={`/modules/${encodeURIComponent(moduleId!)}`} replace />;
       }
       return (
         <ScorePanel
@@ -603,6 +615,20 @@ function App() {
     return null;
   };
 
+  // Lazily loaded views resolve inside this boundary; the fallback matches the
+  // other in-content loading states. ChunkErrorBoundary sits outside Suspense
+  // so a chunk that fails to load (stale index after a redeploy, dropped
+  // connection) turns into a recoverable alert instead of a blank app, and it
+  // wraps the content only, so the header and sidebar survive.
+  // Keyed on the active view so navigating away from a view whose chunk failed
+  // remounts the boundary with a clean state; a same-view re-render keeps the
+  // instance (getActiveView() returns one distinct string per view).
+  const renderContent = () => (
+    <ChunkErrorBoundary key={getActiveView()}>
+      <Suspense fallback={<Loading message="Loading..." />}>{renderView()}</Suspense>
+    </ChunkErrorBoundary>
+  );
+
   // Electron: show loading while checking active connection
   if (isElectron && hasActiveConnection === null) {
     return <Loading message="Loading..." />;
@@ -611,47 +637,14 @@ function App() {
   // Electron: show connection settings if no active connection
   if (isElectron && hasActiveConnection === false) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '24px', background: 'var(--sas-gray-50)' }}>
-        <div style={{ maxWidth: '560px', width: '100%' }}>
+      <div className="sas-connection-page">
+        <div className="sas-connection-page__inner">
           <ConnectionSettings
             onSave={() => loadActiveConnection()}
             onConnectionSwitch={handleConnectionSwitch}
           />
         </div>
       </div>
-    );
-  }
-
-  // Electron: settings modal overlay
-  if (showSettings) {
-    return (
-      <>
-        <Layout
-          activeView={getActiveView()}
-          onNavigate={handleNavigate}
-          selectedModule={selectedModule}
-          recentModules={recentModules}
-          onSelectModule={handleSelectModule}
-          onOpenSettings={() => setShowSettings(true)}
-          activeConnectionName={activeConnectionName}
-          recentUIApps={recentUIApps}
-          onSelectUIApp={handleRunUIApp}
-        >
-          {renderContent()}
-        </Layout>
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowSettings(false); loadActiveConnection(); } }}
-        >
-          <div style={{ maxWidth: '600px', width: '100%', margin: '24px' }}>
-            <ConnectionSettings
-              onSave={() => { setShowSettings(false); loadActiveConnection(); }}
-              onCancel={() => { setShowSettings(false); loadActiveConnection(); }}
-              onConnectionSwitch={handleConnectionSwitch}
-            />
-          </div>
-        </div>
-      </>
     );
   }
 
@@ -665,19 +658,36 @@ function App() {
   }
 
   return (
-    <Layout
-      activeView={getActiveView()}
-      onNavigate={handleNavigate}
-      selectedModule={selectedModule}
-      recentModules={recentModules}
-      onSelectModule={handleSelectModule}
-      onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
-      activeConnectionName={activeConnectionName}
-      recentUIApps={recentUIApps}
-      onSelectUIApp={handleRunUIApp}
-    >
-      {renderContent()}
-    </Layout>
+    <>
+      <Layout
+        activeView={getActiveView()}
+        onNavigate={handleNavigate}
+        selectedModule={selectedModule}
+        recentModules={recentModules}
+        onSelectModule={handleSelectModule}
+        onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
+        activeConnectionName={activeConnectionName}
+        recentUIApps={recentUIApps}
+        onSelectUIApp={handleRunUIApp}
+      >
+        {renderContent()}
+      </Layout>
+      {/* Electron: connection settings dialog. ConnectionSettings supplies the
+          title/actions/footer for its current view; Modal owns the chrome. */}
+      {showSettings && (
+        <ConnectionSettings
+          onSave={closeSettings}
+          onCancel={closeSettings}
+          onConnectionSwitch={handleConnectionSwitch}
+          frame={({ title, actions, children, footer }) => (
+            <Modal title={title} onClose={closeSettings} footer={footer}>
+              {actions && <div className="connection-settings__toolbar">{actions}</div>}
+              {children}
+            </Modal>
+          )}
+        />
+      )}
+    </>
   );
 }
 

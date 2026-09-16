@@ -125,6 +125,16 @@ export default defineConfig(async () => {
           ...(isJobDefBuild && {
             inlineDynamicImports: true,
           }),
+          // Web/Electron: keep the vendor libraries in their own content-hashed
+          // chunks so an app-code release does not re-download React or the
+          // flow-diagram stack. Never for jobdef — manualChunks is incompatible
+          // with inlineDynamicImports and that target must stay one file.
+          ...(!isJobDefBuild && {
+            manualChunks: {
+              'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+              'vendor-flow': ['@xyflow/react', '@dagrejs/dagre'],
+            },
+          }),
         },
       },
     },

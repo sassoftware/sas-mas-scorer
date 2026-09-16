@@ -1,12 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-sql';
 import 'prismjs/themes/prism-tomorrow.css';
 import { getCodeFileDetail, getFileContent, stripLeadingJsonComment } from '../../api/codeFiles';
+import { Alert, Button, Loading, Modal } from '../common';
 
 interface CodeModalProps {
   href: string;
@@ -47,6 +48,7 @@ export default function FlowCodeModal({ href, language, onClose }: CodeModalProp
   const [code, setCode] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const codeRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -57,43 +59,50 @@ export default function FlowCodeModal({ href, language, onClose }: CodeModalProp
       .finally(() => setLoading(false));
   }, [href]);
 
+  // Highlight only this modal's <code>. highlightAll() walks the whole
+  // document and would re-tokenise every other code block on the page.
+  // `loading` is in the deps because the <code> element only exists once
+  // loading is false: if setCode and setLoading(false) ever commit in
+  // separate renders, the code-only pass would find codeRef.current null.
   useEffect(() => {
-    if (code) Prism.highlightAll();
-  }, [code]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+    if (!loading && code && codeRef.current) Prism.highlightElement(codeRef.current);
+  }, [code, loading]);
 
   const prismLang = PRISM_LANG_MAP[language] ?? 'clike';
 
   return (
-    <div className="flow-code-modal__backdrop" onClick={onClose}>
-      <div className="flow-code-modal__dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="flow-code-modal__header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h3 className="flow-code-modal__title">Code Viewer</h3>
-            <span className="flow-code-modal__lang-badge">{language}</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => navigator.clipboard.writeText(code)} className="flow-code-modal__copy-btn">Copy</button>
-            <button onClick={onClose} className="flow-code-modal__close-btn">&times;</button>
-          </div>
-        </div>
-        <div className="flow-code-modal__body">
-          {loading && <div style={{ color: '#9ca3af', fontSize: '14px' }}>Loading code...</div>}
-          {error && <div style={{ color: '#f87171', fontSize: '14px' }}>Error: {error}</div>}
-          {!loading && !error && (
-            <pre style={{ background: 'transparent', padding: 0 }}>
-              <code className={`language-${prismLang}`}>{code}</code>
-            </pre>
-          )}
-        </div>
-      </div>
-    </div>
+    <Modal
+      title={
+        <span className="flow-code-modal__title">
+          Code Viewer
+          <span className="flow-code-modal__lang-badge">{language}</span>
+        </span>
+      }
+      onClose={onClose}
+      size="wide"
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            size="small"
+            disabled={!code}
+            onClick={() => navigator.clipboard.writeText(code)}
+          >
+            Copy
+          </Button>
+          <Button variant="tertiary" size="small" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      }
+    >
+      {loading && <Loading size="small" message="Loading code..." />}
+      {error && <Alert variant="error">Could not load the code: {error}</Alert>}
+      {!loading && !error && (
+        <pre className="flow-code-modal__code">
+          <code ref={codeRef} className={`language-${prismLang}`}>{code}</code>
+        </pre>
+      )}
+    </Modal>
   );
 }

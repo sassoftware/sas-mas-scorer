@@ -3,19 +3,21 @@
 
 import { useViewport } from '@xyflow/react';
 import type { GroupBox } from '../../flow/layoutGraph';
+import { NODE_COLORS } from '../../flow/constants';
 
+/** Group boxes echo the node family they wrap; the label uses the family's `badge` shade so it reads on the light tint. */
 const GROUP_STYLES: Record<string, { bg: string; border: string; badgeColor: string; badgeBg: string }> = {
   'sub-decision': {
     bg: 'rgba(253, 234, 235, 0.25)',
-    border: '#E06050',
-    badgeColor: '#E06050',
-    badgeBg: '#FDEAEB',
+    border: NODE_COLORS.decision.border,
+    badgeColor: NODE_COLORS.decision.badge,
+    badgeBg: NODE_COLORS.decision.bg,
   },
   'parallel': {
     bg: 'rgba(227, 242, 253, 0.25)',
-    border: '#42A5F5',
-    badgeColor: '#42A5F5',
-    badgeBg: '#E3F2FD',
+    border: NODE_COLORS.parallel.border,
+    badgeColor: NODE_COLORS.parallel.badge,
+    badgeBg: NODE_COLORS.parallel.bg,
   },
 };
 

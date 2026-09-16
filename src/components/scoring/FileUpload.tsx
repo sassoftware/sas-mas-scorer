@@ -170,19 +170,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const handleRunAll = useCallback(() => {
     if (!table) return;
 
+    // Resolve each parameter's column once (indexOf keeps first-wins semantics
+    // for duplicate headers) instead of per row × parameter.
+    const mapped = parameters
+      .map(param => {
+        const header = mapping[param.name];
+        return { name: param.name, type: param.type, index: header ? table.headers.indexOf(header) : -1 };
+      })
+      .filter(m => m.index !== -1);
+
     const rows: Record<string, unknown>[] = table.rows.map(row => {
       const rowData: Record<string, unknown> = {};
-
-      parameters.forEach(param => {
-        const header = mapping[param.name];
-        if (header) {
-          const headerIndex = table.headers.indexOf(header);
-          if (headerIndex !== -1) {
-            rowData[param.name] = convertValue(row[headerIndex], param.type);
-          }
-        }
-      });
-
+      for (const m of mapped) {
+        rowData[m.name] = convertValue(row[m.index], m.type);
+      }
       return rowData;
     });
 
@@ -250,7 +251,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             ))}
             <input
               type="text"
-              className="csv-upload__delimiter-input"
+              className="sas-input csv-upload__delimiter-input"
               placeholder="Custom"
               value={customDelimiter}
               maxLength={4}
@@ -280,7 +281,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               value={table.activeSheet ?? ''}
               onChange={(e) => handleSheetChange(e.target.value)}
               disabled={loading || executing}
-              className="csv-upload__select"
+              className="sas-input csv-upload__sheet-select"
             >
               {table.sheetNames.map(name => (
                 <option key={name} value={name}>{name}</option>
@@ -290,19 +291,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         )}
 
         {table && (
-          <div className="csv-upload__mapping-section">
-            <div className="csv-upload__mapping-header">
+          <div className="column-mapping">
+            <div className="column-mapping__header">
               <h4>Column Mapping</h4>
               <Badge variant={allMapped ? 'success' : 'warning'}>
                 {mappedCount}/{parameters.length} mapped
               </Badge>
             </div>
 
-            <div className="csv-upload__mapping-grid">
+            <div className="column-mapping__grid">
               {parameters.map(param => (
-                <div key={param.name} className="csv-upload__mapping-row">
-                  <div className="csv-upload__param-info">
-                    <span className="csv-upload__param-name">{param.name}</span>
+                <div key={param.name} className="column-mapping__row">
+                  <div className="column-mapping__param-info">
+                    <span className="column-mapping__param-name">{param.name}</span>
                     <TypeBadge type={param.type} />
                   </div>
                   <svg
@@ -310,14 +311,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="csv-upload__arrow"
+                    className="column-mapping__arrow"
+                    aria-hidden="true"
                   >
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                   <select
                     value={mapping[param.name] || ''}
                     onChange={(e) => handleMappingChange(param.name, e.target.value || null)}
-                    className={`csv-upload__select ${mapping[param.name] ? 'csv-upload__select--mapped' : 'csv-upload__select--unmapped'}`}
+                    className={`sas-input column-mapping__select ${mapping[param.name] ? 'column-mapping__select--mapped' : 'column-mapping__select--unmapped'}`}
+                    aria-label={`Column for ${param.name}`}
+                    disabled={executing}
                   >
                     <option value="">-- Select column --</option>
                     {table.headers.map(header => (
@@ -330,30 +334,30 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               ))}
             </div>
 
-            <div className="csv-upload__preview">
+            <div className="column-mapping__preview">
               <h4>Data Preview ({table.rows.length} rows)</h4>
-              <div className="csv-upload__preview-table-wrapper">
-                <table className="csv-upload__preview-table">
-                  <thead>
+              <div className="column-mapping__preview-table-wrapper">
+                <table className="sas-table sas-table--compact column-mapping__preview-table">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>#</th>
+                      <th className="sas-table__th">#</th>
                       {table.headers.map(header => (
-                        <th key={header}>{header}</th>
+                        <th className="sas-table__th" key={header}>{header}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {table.rows.slice(0, 5).map((row, index) => (
-                      <tr key={index}>
-                        <td>{index + 1}</td>
+                      <tr className="sas-table__row" key={index}>
+                        <td className="sas-table__td">{index + 1}</td>
                         {row.map((cell, cellIndex) => (
-                          <td key={cellIndex}>{formatCell(cell)}</td>
+                          <td className="sas-table__td" key={cellIndex}>{formatCell(cell)}</td>
                         ))}
                       </tr>
                     ))}
                     {table.rows.length > 5 && (
-                      <tr className="csv-upload__preview-more">
-                        <td colSpan={table.headers.length + 1}>
+                      <tr className="column-mapping__preview-more">
+                        <td className="sas-table__td" colSpan={table.headers.length + 1}>
                           ... and {table.rows.length - 5} more rows
                         </td>
                       </tr>
@@ -368,9 +372,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
       {table && (
         <CardFooter>
-          <div className="csv-upload__run-controls">
-            <div className="csv-upload__concurrency">
-              <label htmlFor="concurrency-input" className="csv-upload__concurrency-label">
+          <div className="batch-run__controls">
+            <div className="batch-run__concurrency">
+              <label htmlFor="concurrency-input" className="batch-run__label">
                 Parallel Requests:
               </label>
               <input
@@ -385,20 +389,27 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     setConcurrency(val);
                   }
                 }}
-                className="csv-upload__concurrency-input"
+                className="sas-input batch-run__number-input"
                 disabled={executing}
+                aria-describedby="concurrency-tooltip"
               />
-              <div className="csv-upload__concurrency-info">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {/* A real button so the explanation is reachable by keyboard (shown on focus) */}
+              <button
+                type="button"
+                className="batch-run__info"
+                aria-label="About parallel requests"
+                aria-describedby="concurrency-tooltip"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="16" x2="12" y2="12" />
                   <line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
-                <span className="csv-upload__concurrency-tooltip">
+                <span className="batch-run__tooltip" id="concurrency-tooltip" role="tooltip">
                   <strong>1</strong> = Sequential (one at a time)<br />
                   <strong>Higher values</strong> = Parallel requests (faster, but may overwhelm the server)
                 </span>
-              </div>
+              </button>
             </div>
             <Button
               variant="primary"
@@ -411,7 +422,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             </Button>
           </div>
           {!allMapped && (
-            <span className="csv-upload__warning">
+            <span className="batch-run__warning" role="status">
               Please map all input parameters before running
             </span>
           )}

@@ -1,23 +1,21 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StepParameter } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge, TypeBadge } from '../common/Badge';
 import {
-  getCasServers,
-  getCaslibs,
   getCasTables,
   getTableColumns,
   getTableRows,
-  CasServer,
-  CasLib,
+  getAllTableRows,
   CasTableInfo,
   CasColumnInfo,
 } from '../../api/cas';
+import { useCasCatalog } from '../../hooks/useCasCatalog';
 
 export interface CasTableTestInfo {
   serverName: string;
@@ -37,7 +35,22 @@ interface ColumnMapping {
   [paramName: string]: string | null;
 }
 
+interface FetchProgress {
+  loaded: number;
+  total: number | null;
+}
+
 const DEFAULT_ROW_LIMIT = 1000;
+
+// Above this many rows the run is still allowed, but the footer warns that it
+// sends one MAS request per row and keeps every row in memory until it ends.
+const LARGE_RUN_WARNING = 50_000;
+
+// Page size for a row-limited fetch. The rowSets service may cap a page below
+// what was asked, so the loop continues from the rows actually received and
+// stops on a page shorter than the limit the service echoed back.
+const LIMITED_FETCH_PAGE = 5000;
+const LIMITED_FETCH_MAX_PAGES = 1000;
 
 // Convert CAS cell value to appropriate type based on parameter type
 const convertValue = (value: unknown, type: string): unknown => {
@@ -92,24 +105,68 @@ const autoMapColumns = (
   return mapping;
 };
 
+// Extract a cell value from a row, handling both array and object row formats
+const getCellValue = (row: unknown, colName: string, colIndex: number): unknown => {
+  if (Array.isArray(row)) {
+    return row[colIndex];
+  }
+  if (row && typeof row === 'object') {
+    return (row as Record<string, unknown>)[colName];
+  }
+  return undefined;
+};
+
+/**
+ * Fetch the first `limit` rows of a table, page by page. Unlike a single
+ * request sized to `limit`, a capped page continues from where it stopped.
+ */
+const fetchRowsUpTo = async (
+  serverName: string,
+  caslibName: string,
+  tableName: string,
+  limit: number,
+  onProgress: (progress: FetchProgress) => void
+): Promise<unknown[][]> => {
+  const rows: unknown[][] = [];
+  let start = 0;
+  for (let page = 0; page < LIMITED_FETCH_MAX_PAGES && rows.length < limit; page++) {
+    const want = Math.min(LIMITED_FETCH_PAGE, limit - rows.length);
+    const result = await getTableRows(serverName, caslibName, tableName, start, want);
+    if (result.rows.length === 0) break;
+    for (const row of result.rows) rows.push(row);
+    start += result.rows.length;
+    onProgress({ loaded: Math.min(rows.length, limit), total: limit });
+
+    // Compare against the page size the service echoed, not the one requested
+    const echoedLimit = result.limit > 0 ? result.limit : want;
+    if (result.rows.length < echoedLimit) break;
+    if (result.count > 0 && start >= result.count) break;
+  }
+  return rows.length > limit ? rows.slice(0, limit) : rows;
+};
+
 export const CasTableScore: React.FC<CasTableScoreProps> = ({
   parameters,
   onExecuteBatch,
   executing,
   onSaveAsTest,
 }) => {
-  // Browse state
-  const [servers, setServers] = useState<CasServer[]>([]);
-  const [caslibs, setCaslibs] = useState<CasLib[]>([]);
+  // Browse state. The server/caslib catalogue comes from the shared session
+  // cache; tables are still fetched per caslib (cas.ts is unchanged).
   const [tables, setTables] = useState<CasTableInfo[]>([]);
   const [selectedServer, setSelectedServer] = useState('');
   const [selectedCaslib, setSelectedCaslib] = useState('');
   const [selectedTable, setSelectedTable] = useState('');
   const [tableFilter, setTableFilter] = useState('');
+  const {
+    servers,
+    caslibs,
+    loadingServers,
+    loadingCaslibs,
+    error: casError,
+  } = useCasCatalog(selectedServer);
 
   // Loading states
-  const [loadingServers, setLoadingServers] = useState(true);
-  const [loadingCaslibs, setLoadingCaslibs] = useState(false);
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingRows, setLoadingRows] = useState(false);
 
@@ -125,91 +182,92 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   const [concurrency, setConcurrency] = useState<number>(2);
 
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Load CAS servers on mount
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const serverList = await getCasServers();
-        setServers(serverList);
-        if (serverList.length > 0) {
-          setSelectedServer(serverList[0].name);
-        }
-      } catch (err: unknown) {
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load CAS servers');
-      } finally {
-        setLoadingServers(false);
-      }
-    };
-    load();
-  }, []);
+  // Generation of the current table selection. handleSelectTable captures it
+  // at entry and the caslib/table cascades bump it, so a slow column or
+  // preview response for an earlier table (or an earlier caslib) never lands
+  // under the selection that replaced it.
+  const selectionRef = useRef(0);
+  const invalidateSelection = () => ++selectionRef.current;
 
-  // Load caslibs when server changes
+  // Auto-select the first server offered. Nothing downstream is selected yet,
+  // so this path needs none of the resets handleServerChange does.
   useEffect(() => {
-    if (!selectedServer) {
-      setCaslibs([]);
+    if (selectedServer || servers.length === 0) return;
+    setSelectedServer(servers[0].name);
+  }, [servers, selectedServer]);
+
+  // Prefer the "Public" caslib of whatever server is selected, else the first.
+  useEffect(() => {
+    if (caslibs.length === 0) {
+      setSelectedCaslib('');
       return;
     }
+    const publicLib = caslibs.find(c => c.name.toLowerCase() === 'public');
+    setSelectedCaslib(publicLib?.name ?? caslibs[0].name);
+  }, [caslibs]);
 
-    const load = async () => {
-      setLoadingCaslibs(true);
-      setSelectedCaslib('');
-      setSelectedTable('');
-      setTables([]);
-      setColumns([]);
-      setPreviewRows([]);
-      setError(null);
-      try {
-        const caslibList = await getCaslibs(selectedServer);
-        setCaslibs(caslibList);
-        if (caslibList.length > 0) {
-          const publicLib = caslibList.find(c => c.name.toLowerCase() === 'public');
-          setSelectedCaslib(publicLib?.name ?? caslibList[0].name);
-        }
-      } catch (err: unknown) {
-        const e = err as { message?: string };
-        setError(e.message ?? 'Failed to load caslibs');
-      } finally {
-        setLoadingCaslibs(false);
-      }
-    };
-    load();
-  }, [selectedServer]);
+  // Picking a different server drops everything chosen underneath it. This
+  // used to live in the caslib-loading effect; the catalogue now loads in the
+  // hook, so the resets belong to the event that causes them.
+  const handleServerChange = useCallback((serverName: string) => {
+    invalidateSelection();
+    setSelectedServer(serverName);
+    setSelectedCaslib('');
+    setSelectedTable('');
+    setTables([]);
+    setColumns([]);
+    setPreviewRows([]);
+    setLoadingRows(false);
+    setError(null);
+  }, []);
 
-  // Load tables when caslib changes
+  // Load tables when caslib changes (getCasTables walks every page)
   useEffect(() => {
     if (!selectedServer || !selectedCaslib) {
       setTables([]);
       return;
     }
 
+    let cancelled = false;
     const load = async () => {
+      invalidateSelection();
       setLoadingTables(true);
       setSelectedTable('');
       setColumns([]);
       setPreviewRows([]);
+      setLoadingRows(false);
       setError(null);
       try {
         const result = await getCasTables(selectedServer, selectedCaslib, 0, 500);
+        if (cancelled) return;
         setTables(result.items.filter(t => (t.rowCount ?? 0) > 0));
       } catch (err: unknown) {
+        if (cancelled) return;
         const e = err as { message?: string };
         setError(e.message ?? 'Failed to load tables');
       } finally {
-        setLoadingTables(false);
+        if (!cancelled) setLoadingTables(false);
       }
     };
     load();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedServer, selectedCaslib]);
 
   // Load column metadata and preview rows when table is selected
   const handleSelectTable = useCallback(async (tableName: string) => {
+    const generation = invalidateSelection();
+    const isCurrent = () => generation === selectionRef.current;
+
     setSelectedTable(tableName);
     setColumns([]);
     setPreviewRows([]);
     setMapping({});
     setError(null);
+    setNotice(null);
 
     if (!tableName) return;
 
@@ -221,29 +279,32 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     try {
       // Fetch column metadata via dataTables endpoint
       const cols = await getTableColumns(selectedServer, selectedCaslib, tableName);
+      if (!isCurrent()) return;
       setColumns(cols);
 
       // Auto-map columns to parameters
       const colNames = cols.map(c => c.name);
-      const autoMapping = autoMapColumns(colNames, parameters);
-      setMapping(autoMapping);
+      setMapping(autoMapColumns(colNames, parameters));
 
       // Fetch a small row preview (best-effort — don't fail if this errors)
       try {
         const preview = await getTableRows(selectedServer, selectedCaslib, tableName, 0, 5);
+        if (!isCurrent()) return;
         setPreviewRows(preview.rows);
         if (preview.count > 0) {
           setTotalRowCount(preview.count);
         }
       } catch (previewErr: unknown) {
+        if (!isCurrent()) return;
         const pe = previewErr as { message?: string };
         console.warn('Row preview failed:', pe.message);
       }
     } catch (err: unknown) {
+      if (!isCurrent()) return;
       const e = err as { message?: string };
       setError(e.message ?? 'Failed to load table data');
     } finally {
-      setLoadingRows(false);
+      if (isCurrent()) setLoadingRows(false);
     }
   }, [selectedServer, selectedCaslib, parameters, tables]);
 
@@ -251,62 +312,87 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setMapping(prev => ({ ...prev, [paramName]: colName }));
   }, []);
 
-  // Extract a cell value from a row, handling both array and object row formats
-  const getCellValue = useCallback((row: unknown, colName: string, colIndex: number): unknown => {
-    if (Array.isArray(row)) {
-      return row[colIndex];
-    }
-    if (row && typeof row === 'object') {
-      return (row as Record<string, unknown>)[colName];
-    }
-    return undefined;
-  }, []);
-
   const [fetchingForScore, setFetchingForScore] = useState(false);
+  const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
 
   const handleRunAll = useCallback(async () => {
     if (!selectedTable || columns.length === 0) return;
 
     setError(null);
+    setNotice(null);
     setFetchingForScore(true);
 
-    try {
-      const effectiveLimit = scoreFullTable ? totalRowCount : Math.min(rowLimit, totalRowCount);
-      const result = await getTableRows(selectedServer, selectedCaslib, selectedTable, 0, effectiveLimit);
+    const effectiveLimit = scoreFullTable ? totalRowCount : Math.min(rowLimit, totalRowCount);
+    setFetchProgress({ loaded: 0, total: scoreFullTable ? (totalRowCount || null) : effectiveLimit });
 
-      if (result.rows.length === 0) {
+    try {
+      let fetched: unknown[][];
+      if (scoreFullTable) {
+        // Page through the whole table; the walker honours the page size the
+        // service actually applies, so a capped page continues instead of
+        // silently scoring a subset.
+        const result = await getAllTableRows(
+          selectedServer,
+          selectedCaslib,
+          selectedTable,
+          progress => setFetchProgress(progress)
+        );
+        fetched = result.rows;
+        if (result.count > 0) setTotalRowCount(result.count);
+        if (result.truncated) {
+          setNotice(
+            `Only the first ${fetched.length.toLocaleString()} rows could be fetched (page cap reached); scoring those.`
+          );
+        }
+      } else {
+        // The service is not guaranteed to honour the requested limit, so the
+        // loop pages until the limit is reached and the result is sliced to it.
+        fetched = await fetchRowsUpTo(
+          selectedServer,
+          selectedCaslib,
+          selectedTable,
+          effectiveLimit,
+          progress => setFetchProgress(progress)
+        );
+      }
+
+      if (fetched.length === 0) {
         setError('No rows returned from the table');
-        setFetchingForScore(false);
         return;
       }
 
-      const colNames = columns.map(c => c.name);
+      // Resolve each parameter's column once (first-wins on duplicate names,
+      // matching indexOf) instead of a linear search per row × parameter.
+      const colIndexByName = new Map<string, number>();
+      columns.forEach((c, i) => {
+        if (!colIndexByName.has(c.name)) colIndexByName.set(c.name, i);
+      });
+      const mapped: { name: string; type: string; colName: string; colIndex: number }[] = [];
+      for (const param of parameters) {
+        const colName = mapping[param.name];
+        const colIndex = colName ? colIndexByName.get(colName) : undefined;
+        if (colName && colIndex !== undefined) {
+          mapped.push({ name: param.name, type: param.type, colName, colIndex });
+        }
+      }
 
-      // The rowSets service is not guaranteed to honor the requested limit
-      const limitedRows = result.rows.slice(0, effectiveLimit);
-
-      const rows: Record<string, unknown>[] = limitedRows.map(row => {
+      const rows: Record<string, unknown>[] = fetched.map(row => {
         const rowData: Record<string, unknown> = {};
-        parameters.forEach(param => {
-          const colName = mapping[param.name];
-          if (colName) {
-            const colIndex = colNames.indexOf(colName);
-            if (colIndex !== -1) {
-              rowData[param.name] = convertValue(getCellValue(row, colName, colIndex), param.type);
-            }
-          }
-        });
+        for (const m of mapped) {
+          rowData[m.name] = convertValue(getCellValue(row, m.colName, m.colIndex), m.type);
+        }
         return rowData;
       });
 
-      setFetchingForScore(false);
       onExecuteBatch(rows, concurrency);
     } catch (err: unknown) {
       const e = err as { message?: string };
       setError(e.message ?? 'Failed to fetch table rows');
+    } finally {
       setFetchingForScore(false);
+      setFetchProgress(null);
     }
-  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, mapping, parameters, concurrency, onExecuteBatch, getCellValue]);
+  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, mapping, parameters, concurrency, onExecuteBatch]);
 
   const unmappedParams = parameters.filter(p => !mapping[p.name]);
   const allMapped = unmappedParams.length === 0;
@@ -318,6 +404,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
   const effectiveRowCount = scoreFullTable ? totalRowCount : Math.min(rowLimit, totalRowCount);
 
+  const fetchLabel = fetchProgress && fetchProgress.loaded > 0
+    ? `Fetching rows... ${fetchProgress.loaded.toLocaleString()}${fetchProgress.total ? ` of ${fetchProgress.total.toLocaleString()}` : ''}`
+    : 'Fetching rows...';
+
   return (
     <Card className="cas-table-score">
       <CardHeader>
@@ -328,14 +418,15 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         <div className="cas-table-score__browser">
           <div className="cas-table-score__selectors">
             <div className="cas-table-score__field">
-              <label className="cas-table-score__label">CAS Server</label>
+              <label className="cas-table-score__label" htmlFor="cas-server-select">CAS Server</label>
               {loadingServers ? (
-                <span className="cas-table-score__loading-text">Loading servers...</span>
+                <span className="cas-table-score__loading-text" role="status">Loading servers...</span>
               ) : (
                 <select
-                  className="cas-table-score__select"
+                  id="cas-server-select"
+                  className="sas-input"
                   value={selectedServer}
-                  onChange={e => setSelectedServer(e.target.value)}
+                  onChange={e => handleServerChange(e.target.value)}
                   disabled={executing}
                 >
                   {servers.length === 0 && <option value="">No servers available</option>}
@@ -347,12 +438,13 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
             </div>
 
             <div className="cas-table-score__field">
-              <label className="cas-table-score__label">Caslib</label>
+              <label className="cas-table-score__label" htmlFor="cas-caslib-select">Caslib</label>
               {loadingCaslibs ? (
-                <span className="cas-table-score__loading-text">Loading caslibs...</span>
+                <span className="cas-table-score__loading-text" role="status">Loading caslibs...</span>
               ) : (
                 <select
-                  className="cas-table-score__select"
+                  id="cas-caslib-select"
+                  className="sas-input"
                   value={selectedCaslib}
                   onChange={e => setSelectedCaslib(e.target.value)}
                   disabled={executing || !selectedServer}
@@ -372,32 +464,35 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           {selectedCaslib && (
             <div className="cas-table-score__table-list">
               <div className="cas-table-score__table-header">
-                <label className="cas-table-score__label">
+                <span className="cas-table-score__label" id="cas-tables-label">
                   Tables {!loadingTables && `(${filteredTables.length})`}
-                </label>
+                </span>
                 <input
-                  type="text"
-                  className="cas-table-score__filter"
+                  type="search"
+                  className="sas-input cas-table-score__filter"
                   placeholder="Filter tables..."
+                  aria-label="Filter tables"
                   value={tableFilter}
                   onChange={e => setTableFilter(e.target.value)}
                   disabled={executing || loadingTables}
                 />
               </div>
               {loadingTables ? (
-                <span className="cas-table-score__loading-text">Loading tables...</span>
+                <span className="cas-table-score__loading-text" role="status">Loading tables...</span>
               ) : filteredTables.length === 0 ? (
                 <span className="cas-table-score__empty">
                   {tableFilter ? 'No tables match filter' : 'No tables in this caslib'}
                 </span>
               ) : (
-                <div className="cas-table-score__table-grid">
+                <div className="cas-table-score__table-grid" role="group" aria-labelledby="cas-tables-label">
                   {filteredTables.map(t => (
                     <button
                       key={t.name}
+                      type="button"
                       className={`cas-table-score__table-item ${selectedTable === t.name ? 'cas-table-score__table-item--selected' : ''}`}
                       onClick={() => handleSelectTable(t.name)}
                       disabled={executing}
+                      aria-pressed={selectedTable === t.name}
                     >
                       <span className="cas-table-score__table-name">{t.name}</span>
                       {t.rowCount != null && (
@@ -417,26 +512,37 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           </Alert>
         )}
 
+        {/* Catalogue failure — owned by the hook, so there is nothing to dismiss */}
+        {!error && casError && (
+          <Alert variant="error" title="Error">{casError}</Alert>
+        )}
+
+        {notice && (
+          <Alert variant="warning" dismissible onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
+        )}
+
         {/* Loading rows indicator */}
         {loadingRows && (
-          <div className="cas-table-score__loading-text">Loading table data...</div>
+          <div className="cas-table-score__loading-text" role="status">Loading table data...</div>
         )}
 
         {/* Column Mapping (shown after table selection) */}
         {columns.length > 0 && !loadingRows && (
-          <div className="cas-table-score__mapping-section">
-            <div className="csv-upload__mapping-header">
+          <div className="cas-table-score__mapping-section column-mapping">
+            <div className="column-mapping__header">
               <h4>Column Mapping</h4>
               <Badge variant={allMapped ? 'success' : 'warning'}>
                 {mappedCount}/{parameters.length} mapped
               </Badge>
             </div>
 
-            <div className="csv-upload__mapping-grid">
+            <div className="column-mapping__grid">
               {parameters.map(param => (
-                <div key={param.name} className="csv-upload__mapping-row">
-                  <div className="csv-upload__param-info">
-                    <span className="csv-upload__param-name">{param.name}</span>
+                <div key={param.name} className="column-mapping__row">
+                  <div className="column-mapping__param-info">
+                    <span className="column-mapping__param-name">{param.name}</span>
                     <TypeBadge type={param.type} />
                   </div>
                   <svg
@@ -444,14 +550,17 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    className="csv-upload__arrow"
+                    className="column-mapping__arrow"
+                    aria-hidden="true"
                   >
                     <path d="M5 12h14M12 5l7 7-7 7" />
                   </svg>
                   <select
                     value={mapping[param.name] || ''}
                     onChange={(e) => handleMappingChange(param.name, e.target.value || null)}
-                    className={`csv-upload__select ${mapping[param.name] ? 'csv-upload__select--mapped' : 'csv-upload__select--unmapped'}`}
+                    className={`sas-input column-mapping__select ${mapping[param.name] ? 'column-mapping__select--mapped' : 'column-mapping__select--unmapped'}`}
+                    aria-label={`Column for ${param.name}`}
+                    disabled={executing}
                   >
                     <option value="">-- Select column --</option>
                     {columns.map(col => (
@@ -465,34 +574,34 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
             </div>
 
             {/* Data Preview */}
-            <div className="csv-upload__preview">
+            <div className="column-mapping__preview">
               <h4>Data Preview ({totalRowCount.toLocaleString()} rows in table)</h4>
               {previewRows.length > 0 ? (
-                <div className="csv-upload__preview-table-wrapper">
-                  <table className="csv-upload__preview-table">
-                    <thead>
+                <div className="column-mapping__preview-table-wrapper">
+                  <table className="sas-table sas-table--compact column-mapping__preview-table">
+                    <thead className="sas-table__head">
                       <tr>
-                        <th>#</th>
+                        <th className="sas-table__th">#</th>
                         {columns.map(col => (
-                          <th key={col.name}>{col.name}</th>
+                          <th className="sas-table__th" key={col.name}>{col.name}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.slice(0, 5).map((row, index) => (
-                        <tr key={index}>
-                          <td>{index + 1}</td>
+                        <tr className="sas-table__row" key={index}>
+                          <td className="sas-table__td">{index + 1}</td>
                           {columns.map((col, colIndex) => {
                             const cell = getCellValue(row, col.name, colIndex);
                             return (
-                              <td key={col.name}>{cell != null ? String(cell) : ''}</td>
+                              <td className="sas-table__td" key={col.name}>{cell != null ? String(cell) : ''}</td>
                             );
                           })}
                         </tr>
                       ))}
                       {totalRowCount > 5 && (
-                        <tr className="csv-upload__preview-more">
-                          <td colSpan={columns.length + 1}>
+                        <tr className="column-mapping__preview-more">
+                          <td className="sas-table__td" colSpan={columns.length + 1}>
                             ... and {(totalRowCount - 5).toLocaleString()} more rows
                           </td>
                         </tr>
@@ -512,7 +621,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
       {columns.length > 0 && !loadingRows && (
         <CardFooter>
-          <div className="csv-upload__run-controls">
+          <div className="batch-run__controls">
             <div className="cas-table-score__options">
               <label className="cas-table-score__checkbox-label">
                 <input
@@ -525,7 +634,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
               </label>
               {!scoreFullTable && (
                 <div className="cas-table-score__row-limit">
-                  <label htmlFor="cas-row-limit" className="csv-upload__concurrency-label">
+                  <label htmlFor="cas-row-limit" className="batch-run__label">
                     Row Limit:
                   </label>
                   <input
@@ -540,15 +649,15 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                         setRowLimit(val);
                       }
                     }}
-                    className="csv-upload__concurrency-input"
+                    className="sas-input batch-run__number-input"
                     disabled={executing}
                   />
                 </div>
               )}
             </div>
 
-            <div className="csv-upload__concurrency">
-              <label htmlFor="cas-concurrency-input" className="csv-upload__concurrency-label">
+            <div className="batch-run__concurrency">
+              <label htmlFor="cas-concurrency-input" className="batch-run__label">
                 Parallel Requests:
               </label>
               <input
@@ -563,7 +672,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                     setConcurrency(val);
                   }
                 }}
-                className="csv-upload__concurrency-input"
+                className="sas-input batch-run__number-input"
                 disabled={executing}
               />
             </div>
@@ -591,13 +700,22 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                 disabled={!allMapped || executing || fetchingForScore || totalRowCount === 0}
                 loading={executing || fetchingForScore}
               >
-                {executing ? 'Executing...' : fetchingForScore ? 'Fetching rows...' : `Run All (${effectiveRowCount.toLocaleString()} rows)`}
+                {executing ? 'Executing...' : fetchingForScore ? fetchLabel : `Run All (${effectiveRowCount.toLocaleString()} rows)`}
               </Button>
             </div>
           </div>
+          {/* Live region so the paged fetch is announced without re-reading the button */}
+          <span className="sr-only" role="status" aria-live="polite">
+            {fetchingForScore ? fetchLabel : ''}
+          </span>
           {!allMapped && (
-            <span className="csv-upload__warning">
+            <span className="batch-run__warning" role="status">
               Please map all input parameters before running
+            </span>
+          )}
+          {allMapped && effectiveRowCount > LARGE_RUN_WARNING && (
+            <span className="batch-run__warning" role="status">
+              Scoring {effectiveRowCount.toLocaleString()} rows sends one request per row and keeps every row in memory until the run finishes.
             </span>
           )}
         </CardFooter>

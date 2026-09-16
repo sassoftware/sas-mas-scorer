@@ -3,60 +3,16 @@
 
 /* Test Coverage Analysis Styles */
 
-/* ─── Progress Card ─── */
-
-.coverage-progress-card {
-  margin-bottom: var(--space-6);
-}
-
-.coverage-progress {
-  padding: var(--space-4);
-}
-
-.coverage-progress__header {
+/* The page container owns the vertical rhythm (like .publishing and
+   .module-list), so cards and alerts need no margins of their own. */
+.coverage-analysis {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-6);
 }
 
-.coverage-progress__phase {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-md);
-  color: var(--sas-gray-800);
-}
-
-.coverage-progress__count {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  font-variant-numeric: tabular-nums;
-}
-
-.coverage-progress__bar-track {
-  height: 8px;
-  background: var(--sas-gray-200);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  margin-bottom: var(--space-3);
-}
-
-.coverage-progress__bar-fill {
-  height: 100%;
-  background: var(--sas-blue-primary);
-  border-radius: var(--radius-full);
-  transition: width 0.4s ease;
-}
-
-.coverage-progress__message {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-  margin-bottom: var(--space-1);
-}
-
-.coverage-progress__step {
-  font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
-}
+/* The collection progress block is the shared <ProgressBar> (.sas-progress
+   in components.css); this feature adds nothing to it. */
 
 /* ─── Welcome State ─── */
 
@@ -89,7 +45,7 @@
 
 .coverage-welcome__note {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   margin: 0 auto var(--space-6);
   font-style: italic;
 }
@@ -100,7 +56,6 @@
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: var(--space-6);
-  margin-bottom: var(--space-6);
 }
 
 @media (max-width: 800px) {
@@ -161,60 +116,37 @@
 
 /* ─── Stats Grid ─── */
 
+/* The tiles are the shared `.sas-card .sas-stat-card` (components.css); this
+   file keeps only the grid minimum and the two accent modifiers. */
 .coverage-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-4);
-  padding: var(--space-4) 0;
-}
-
-@media (max-width: 600px) {
-  .coverage-stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.coverage-stat {
-  text-align: center;
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--sas-gray-50);
 }
 
 .coverage-stat--success {
-  background: var(--sas-success-light);
+  border-left-color: var(--sas-success);
 }
 
-.coverage-stat--error {
-  background: var(--sas-error-light);
-}
-
-.coverage-stat__value {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--sas-gray-800);
-  margin-bottom: var(--space-1);
-  font-variant-numeric: tabular-nums;
-}
-
-.coverage-stat--success .coverage-stat__value {
+.coverage-stat--success .sas-stat-value {
   color: var(--sas-success-dark);
 }
 
-.coverage-stat--error .coverage-stat__value {
+.coverage-stat--error {
+  border-left-color: var(--sas-error);
+}
+
+.coverage-stat--error .sas-stat-value {
   color: var(--sas-error-dark);
 }
 
-.coverage-stat__label {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
+/* The last tile shows a formatted date, not a KPI numeral: at the 3xl
+   display size it wraps inside the tile. */
+.coverage-stat--date .sas-stat-value {
+  font-size: var(--font-size-xl);
 }
 
 /* ─── Coverage by Type Bars ─── */
-
-.coverage-by-type-card {
-  margin-bottom: var(--space-6);
-}
 
 .coverage-type-bars {
   display: flex;
@@ -249,7 +181,7 @@
 
 .coverage-type-row__count {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -289,10 +221,8 @@
 
 /* ─── Detail Table ─── */
 
-.coverage-detail-card {
-  margin-bottom: var(--space-6);
-}
-
+/* The filter block is passed as CardHeader actions; .sas-card__header now
+   wraps on its own, so this feature adds nothing there. */
 .coverage-detail__filters {
   display: flex;
   gap: var(--space-3);
@@ -300,91 +230,76 @@
   flex-wrap: wrap;
 }
 
+/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
 .coverage-detail__search {
-  padding: 6px 12px;
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-family: var(--font-family-primary);
   min-width: 200px;
-  outline: none;
-  transition: border-color var(--transition-fast);
 }
 
-.coverage-detail__search:focus {
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
+.coverage-detail__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.coverage-detail__select {
-  padding: 6px 12px;
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
+.coverage-detail__filter-label {
   font-size: var(--font-size-sm);
-  font-family: var(--font-family-primary);
-  background: var(--sas-white);
-  cursor: pointer;
-  outline: none;
-}
-
-.coverage-detail__select:focus {
-  border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
-}
-
-/* ─── Coverage Badge ─── */
-
-.coverage-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
   white-space: nowrap;
 }
 
-.coverage-badge--covered {
-  background: var(--sas-success-light);
-  color: var(--sas-success-dark);
+.coverage-detail__select {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  background: var(--sas-white);
+  color: var(--sas-gray-900);
+  cursor: pointer;
 }
 
-.coverage-badge--uncovered {
-  background: var(--sas-error-light);
-  color: var(--sas-error-dark);
+.coverage-detail__select:focus {
+  outline: none;
+  border-color: var(--sas-blue-primary);
+  box-shadow: var(--focus-ring);
 }
 
-/* ─── Deep Link ─── */
+.coverage-detail__empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--sas-text-muted);
+}
 
-.coverage-deep-link {
+/* Paging is the shared <Pagination> and sortable headers are the shared
+   .sas-table__sort-header; both live in components.css, including their
+   own spacing. */
+
+/* ─── Deep Links ─── */
+
+/* The links themselves are .sas-deep-link (components.css). */
+.coverage-detail__links {
   display: inline-flex;
   align-items: center;
-  color: var(--sas-blue-primary);
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.coverage-deep-link:hover {
-  color: var(--sas-blue-dark);
-}
-
-/* ─── Sortable Headers ─── */
-
-.sas-table__th--sortable {
-  user-select: none;
-}
-
-.sas-table__th--sortable:hover {
-  background: var(--sas-gray-100);
+  gap: var(--space-2);
 }
 
 /* ─── Expandable Rows ─── */
+
+/* Keyboard focus on the row's toggle or links highlights the row, the way
+   DataTable's clickable rows do. Scoped under the table modifier so it
+   outranks the --striped even-row tint. */
+.sas-table--hoverable .coverage-row:focus-within {
+  background-color: var(--sas-blue-light);
+}
 
 .coverage-row--expandable {
   cursor: pointer;
 }
 
-.coverage-row--expandable:hover {
-  background: var(--sas-blue-lighter) !important;
+/* Hover uses the shared .sas-table--hoverable tint; the chevron reinforces
+   that the row is clickable. */
+.coverage-row--expandable:hover .coverage-row__chevron {
+  color: var(--sas-blue-primary);
 }
 
 .coverage-row--expanded {
@@ -431,34 +346,30 @@
   color: var(--sas-gray-700);
   margin-bottom: var(--space-3);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
-.coverage-scenarios__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
+/* The nested scenario table is the shared .sas-table--compact, but it lives
+   inside the outer detail table, which is .sas-table--striped
+   .sas-table--hoverable. Both modifiers are written as DESCENDANT selectors in
+   components.css, so they also reach these nested .sas-table__row elements:
+   without the reset below a non-interactive scenario row would zebra-stripe and
+   would paint --sas-blue-light on hover, i.e. wear the app's clickable-row
+   affordance. Each selector here carries four class-level components, matching
+   `.sas-table--striped.sas-table--hoverable .sas-table__row:hover` (the most
+   specific of the inherited rules), and coverage.css is imported after
+   components.css, so it wins on source order. */
+.coverage-scenarios__table.sas-table .sas-table__row:nth-child(even),
+.coverage-scenarios__table.sas-table .sas-table__row:hover {
+  background-color: transparent;
 }
 
-.coverage-scenarios__table thead th {
-  text-align: left;
-  padding: var(--space-2) var(--space-3);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-600);
-  border-bottom: 1px solid var(--sas-gray-200);
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.3px;
-}
-
-.coverage-scenarios__table tbody td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--sas-gray-100);
-  color: var(--sas-gray-800);
-  vertical-align: top;
-}
-
-.coverage-scenarios__table tbody tr:last-child td {
+.coverage-scenarios__table .sas-table__row:last-child {
   border-bottom: none;
+}
+
+.coverage-scenarios__table .sas-table__td {
+  vertical-align: top;
 }
 
 .coverage-scenarios__desc {
@@ -467,6 +378,6 @@
 }
 
 .coverage-scenarios__none {
-  color: var(--sas-gray-400);
+  color: var(--sas-text-muted);
   font-style: italic;
 }

@@ -17,6 +17,7 @@ import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
+import { StepNav } from '../common/StepNav';
 import { useSasAuth } from '../../auth';
 import { RulesGrid } from './RulesGrid';
 import { ImportConfirmDialog, ConfirmEntry } from './ImportConfirmDialog';
@@ -70,8 +71,9 @@ export const RulesImportPage: React.FC = () => {
   const lastErrorJumpRef = useRef<number>(-1);
 
   // ---- Derived validation state ----
-  const clientIssues = useMemo(() => [...fileIssues, ...validateRows(rows)], [rows, fileIssues]);
+  // groups first: validateRows reuses it instead of grouping the file a second time.
   const groups = useMemo(() => groupRuleSets(rows), [rows]);
+  const clientIssues = useMemo(() => [...fileIssues, ...validateRows(rows, groups)], [rows, groups, fileIssues]);
   const groupSignature = useMemo(() => JSON.stringify(groups.map((g) => g.key).sort()), [groups]);
   const preflightStale = preflight !== null && preflight.forSignature !== groupSignature;
   const serverIssues = useMemo(() => outcome?.serverIssues ?? [], [outcome]);
@@ -117,14 +119,15 @@ export const RulesImportPage: React.FC = () => {
     [clientIssues, preflight, preflightStale, idConflictIssues, serverIssues]
   );
 
-  const issuesByCell = useMemo(() => {
-    const index = new Map<string, CellIssue[]>();
+  // Issues per grid row (row-level and cell-level together); the grid splits
+  // them by column inside its memoized row component.
+  const issuesByRow = useMemo(() => {
+    const index = new Map<number, CellIssue[]>();
     for (const issue of allIssues) {
       if (issue.row < 0) continue;
-      const key = issue.col === null ? `${issue.row}:*` : `${issue.row}:${issue.col}`;
-      const list = index.get(key) ?? [];
+      const list = index.get(issue.row) ?? [];
       list.push(issue);
-      index.set(key, list);
+      index.set(issue.row, list);
     }
     return index;
   }, [allIssues]);
@@ -313,9 +316,13 @@ export const RulesImportPage: React.FC = () => {
   };
 
   /** Rows still carrying a ruleset_id or rule_id from the environment they were exported from. */
-  const rowsWithIds = rows.reduce(
-    (n, row) => (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '' ? n + 1 : n),
-    0
+  const rowsWithIds = useMemo(
+    () =>
+      rows.reduce(
+        (n, row) => (row[COL.RULESET_ID].trim() !== '' || row[COL.RULE_ID].trim() !== '' ? n + 1 : n),
+        0
+      ),
+    [rows]
   );
 
   /**
@@ -491,39 +498,21 @@ export const RulesImportPage: React.FC = () => {
         }
       />
 
-      <nav className="rules-import__steps">
-        <button
-          className={`rules-import__step${activeStep === 'upload' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('upload')}
-          type="button"
-        >
-          1. Upload
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'review' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('review')}
-          disabled={!hasRows}
-          type="button"
-        >
-          2. Review &amp; Fix{hasRows ? ` (${rows.length})` : ''}
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'checks' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('checks')}
-          disabled={!hasRows}
-          type="button"
-        >
-          3. Server Checks
-        </button>
-        <button
-          className={`rules-import__step${activeStep === 'import' ? ' rules-import__step--active' : ''}`}
-          onClick={() => setActiveStep('import')}
-          disabled={!hasRows}
-          type="button"
-        >
-          4. Import
-        </button>
-      </nav>
+      <StepNav
+        label="Import steps"
+        active={activeStep}
+        onSelect={(id) => setActiveStep(id as WizardStep)}
+        steps={[
+          { id: 'upload', label: '1. Upload' },
+          {
+            id: 'review',
+            label: `2. Review & Fix${hasRows ? ` (${rows.length})` : ''}`,
+            disabled: !hasRows,
+          },
+          { id: 'checks', label: '3. Server Checks', disabled: !hasRows },
+          { id: 'import', label: '4. Import', disabled: !hasRows },
+        ]}
+      />
 
       {globalError && (
         <Alert variant="error" dismissible onClose={() => setGlobalError(null)}>
@@ -543,14 +532,20 @@ export const RulesImportPage: React.FC = () => {
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
           >
+            {/* Visually hidden but still focusable: [hidden]/display:none would
+                drop the control out of the tab order and out of the a11y tree,
+                so the ring is carried by the label instead (#94). */}
             <input
+              id="rules-import-file"
               type="file"
               accept=".csv"
               onChange={handleFileSelect}
-              className="rules-import__file-input"
-              id="rules-import-file-input"
+              className="sr-only rules-import__file-input"
             />
-            <label htmlFor="rules-import-file-input" className="rules-import__file-label">
+            <label
+              htmlFor="rules-import-file"
+              className="sas-button sas-button--primary sas-button--medium rules-import__file-label"
+            >
               Choose a CSV file
             </label>
             <span className="rules-import__dropzone-hint">or drag &amp; drop it here</span>
@@ -583,7 +578,7 @@ export const RulesImportPage: React.FC = () => {
               <Button variant="tertiary" size="small" onClick={handleStartOver}>
                 Start over
               </Button>
-              <Button variant="primary" onClick={() => setActiveStep('review')}>
+              <Button variant="primary" size="small" onClick={() => setActiveStep('review')}>
                 Review &amp; fix rows
               </Button>
             </div>
@@ -649,7 +644,7 @@ export const RulesImportPage: React.FC = () => {
 
           <RulesGrid
             rows={rows}
-            issuesByCell={issuesByCell}
+            issuesByRow={issuesByRow}
             visibleRowIndexes={visibleRowIndexes}
             onCellChange={handleCellChange}
             highlightRowIndexes={scopeSet ?? undefined}
@@ -737,40 +732,42 @@ export const RulesImportPage: React.FC = () => {
             </Alert>
           )}
           {preflight && !preflightStale && (
-            <table className="rules-import__preflight-table">
-              <thead>
-                <tr>
-                  <th>Rule set</th>
-                  <th>Folder</th>
-                  <th>Folder exists</th>
-                  <th>Action</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preflight.results.map((result) => (
-                  <tr key={result.key}>
-                    <td>{result.name}</td>
-                    <td className="rules-import__preflight-folder">{result.folderPath}</td>
-                    <td>
-                      {result.folderExists === null ? '?' : result.folderExists ? 'yes' : 'no (will be created)'}
-                    </td>
-                    <td>
-                      <Badge
-                        variant={result.action === 'create' ? 'success' : result.action === 'update' ? 'warning' : 'default'}
-                        size="small"
-                      >
-                        {result.action.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="rules-import__preflight-details">
-                      {result.action === 'update' && result.existingRevision && `current revision ${result.existingRevision}`}
-                      {result.checkError && ` ${result.checkError}`}
-                    </td>
+            <div className="sas-table__wrapper">
+              <table className="sas-table sas-table--compact">
+                <thead className="sas-table__head">
+                  <tr>
+                    <th scope="col" className="sas-table__th">Rule set</th>
+                    <th scope="col" className="sas-table__th">Folder</th>
+                    <th scope="col" className="sas-table__th">Folder exists</th>
+                    <th scope="col" className="sas-table__th">Action</th>
+                    <th scope="col" className="sas-table__th">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preflight.results.map((result) => (
+                    <tr key={result.key} className="sas-table__row">
+                      <td className="sas-table__td">{result.name}</td>
+                      <td className="sas-table__td rules-import__preflight-folder">{result.folderPath}</td>
+                      <td className="sas-table__td">
+                        {result.folderExists === null ? '?' : result.folderExists ? 'yes' : 'no (will be created)'}
+                      </td>
+                      <td className="sas-table__td">
+                        <Badge
+                          variant={result.action === 'create' ? 'success' : result.action === 'update' ? 'warning' : 'default'}
+                          size="small"
+                        >
+                          {result.action.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="sas-table__td rules-import__preflight-details">
+                        {result.action === 'update' && result.existingRevision && `current revision ${result.existingRevision}`}
+                        {result.checkError && ` ${result.checkError}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -798,6 +795,7 @@ export const RulesImportPage: React.FC = () => {
               </Button>
               <Button
                 variant="primary"
+                size="small"
                 onClick={() => setPhase('confirming')}
                 loading={importing}
                 disabled={importBlockedReason !== null}

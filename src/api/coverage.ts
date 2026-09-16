@@ -1,15 +1,8 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { sasViyaClient } from './client';
+import { fetchAllPaginated } from './paginate';
 import { ContentItem, ContentType, CoverageByType, CoverageResult, CoverageStats, CollectionProgress, TestScenarioInfo } from '../types/coverage';
-
-interface ApiCollectionResponse {
-  items?: Array<Record<string, unknown>>;
-  count?: number;
-  start?: number;
-  limit?: number;
-}
 
 interface ScoreDefinition {
   id: string;
@@ -62,38 +55,22 @@ const CONTENT_ENDPOINTS: Record<ContentType, { path: string; accept: string; acc
   },
 };
 
-async function fetchAllPaginated(
+const COVERAGE_PAGE_SIZE = 100;
+
+/** Walk one content collection completely, with the endpoint's own Accept headers. */
+function fetchCollection(
   path: string,
   accept: string,
   acceptItem?: string,
-  pageSize = 100,
 ): Promise<Array<Record<string, unknown>>> {
-  const allItems: Array<Record<string, unknown>>[] = [];
-  let start = 0;
-  let hasMore = true;
-
   const headers: Record<string, string> = { Accept: accept };
   if (acceptItem) {
     headers['Accept-Item'] = acceptItem;
   }
-
-  while (hasMore) {
-    const response = await sasViyaClient.get<ApiCollectionResponse>(path, {
-      params: { start, limit: pageSize },
-      headers,
-    });
-
-    const items = response.data.items ?? [];
-    allItems.push(items);
-
-    if (items.length < pageSize) {
-      hasMore = false;
-    } else {
-      start += pageSize;
-    }
-  }
-
-  return allItems.flat();
+  return fetchAllPaginated<Record<string, unknown>>(path, {
+    headers,
+    pageSize: COVERAGE_PAGE_SIZE,
+  });
 }
 
 function mapToContentItem(raw: Record<string, unknown>, contentType: ContentType): ContentItem {
@@ -270,62 +247,73 @@ export async function collectCoverage(
   onProgress: (progress: CollectionProgress) => void,
 ): Promise<CoverageResult> {
   const contentTypes = Object.keys(CONTENT_ENDPOINTS) as ContentType[];
-  const totalSteps = contentTypes.length + 2; // +1 for score definitions, +1 for analysis
-  let currentStep = 0;
+  const collectionSteps = contentTypes.length + 1; // +1 for score definitions
+  const totalSteps = collectionSteps + 1; // +1 for analysis
+  // The seven walks are independent of each other, so they run concurrently
+  // and progress counts completed collections rather than a sequential index.
+  let completedSteps = 0;
   let itemsCollected = 0;
 
-  const allItems: ContentItem[] = [];
-
-  // Collect each content type
-  for (const contentType of contentTypes) {
-    const endpoint = CONTENT_ENDPOINTS[contentType];
-    currentStep++;
+  const reportCollecting = (message: string): void => {
     onProgress({
       phase: 'collecting',
-      currentStep,
+      currentStep: completedSteps,
       totalSteps,
-      message: `Collecting ${endpoint.label}...`,
+      message,
       itemsCollected,
     });
+  };
 
+  reportCollecting('Collecting content and score definitions...');
+
+  const collectContentType = async (contentType: ContentType): Promise<ContentItem[]> => {
+    const endpoint = CONTENT_ENDPOINTS[contentType];
     try {
-      const rawItems = await fetchAllPaginated(endpoint.path, endpoint.accept);
+      const rawItems = await fetchCollection(endpoint.path, endpoint.accept);
       const items = rawItems.map(raw => mapToContentItem(raw, contentType));
-      allItems.push(...items);
       itemsCollected += items.length;
+      completedSteps++;
+      reportCollecting(`Collected ${endpoint.label} (${items.length})`);
+      return items;
     } catch (err) {
       // Some endpoints may 404 if the service isn't licensed — skip gracefully
       console.warn(`Failed to collect ${endpoint.label}:`, err);
+      completedSteps++;
+      reportCollecting(`Skipped ${endpoint.label}`);
+      return [];
     }
-  }
+  };
 
-  // Collect score definitions for test scenario linking
-  currentStep++;
-  onProgress({
-    phase: 'collecting',
-    currentStep,
-    totalSteps,
-    message: 'Collecting Score Definitions (test scenarios)...',
-    itemsCollected,
-  });
+  const collectScoreDefinitions = async (): Promise<ScoreDefinition[]> => {
+    try {
+      const rawScoreDefs = await fetchCollection(
+        '/scoreDefinitions/definitions',
+        'application/vnd.sas.collection+json, application/json',
+        'application/vnd.sas.score.definition+json', // Accept-Item: get full details with objectDescriptor
+      );
+      completedSteps++;
+      reportCollecting(`Collected Score Definitions (${rawScoreDefs.length})`);
+      return rawScoreDefs as unknown as ScoreDefinition[];
+    } catch (err) {
+      console.warn('Failed to collect score definitions:', err);
+      completedSteps++;
+      reportCollecting('Skipped Score Definitions');
+      return [];
+    }
+  };
 
-  let scoreDefinitions: ScoreDefinition[] = [];
-  try {
-    const rawScoreDefs = await fetchAllPaginated(
-      '/scoreDefinitions/definitions',
-      'application/vnd.sas.collection+json, application/json',
-      'application/vnd.sas.score.definition+json', // Accept-Item: get full details with objectDescriptor
-    );
-    scoreDefinitions = rawScoreDefs as unknown as ScoreDefinition[];
-  } catch (err) {
-    console.warn('Failed to collect score definitions:', err);
-  }
+  // Promise.all keeps the input order, so allItems stays grouped by content
+  // type exactly as the sequential walk produced it (exports are unchanged).
+  const [contentResults, scoreDefinitions] = await Promise.all([
+    Promise.all(contentTypes.map(collectContentType)),
+    collectScoreDefinitions(),
+  ]);
+  const allItems: ContentItem[] = contentResults.flat();
 
   // Analyze: link test scenarios to content items
-  currentStep++;
   onProgress({
     phase: 'analyzing',
-    currentStep,
+    currentStep: totalSteps,
     totalSteps,
     message: `Analyzing test coverage for ${allItems.length} items...`,
     itemsCollected,

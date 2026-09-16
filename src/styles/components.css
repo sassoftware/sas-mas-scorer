@@ -9,9 +9,17 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   font-weight: var(--font-weight-medium);
+  /* Every variant shares this 1px border box so --secondary (which colours
+     the border) is the same height as --primary/--tertiary/--danger. */
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   transition: all var(--transition-fast);
   white-space: nowrap;
+}
+
+.sas-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .sas-button--small {
@@ -41,7 +49,7 @@
 .sas-button--secondary {
   background-color: var(--sas-white);
   color: var(--sas-blue-primary);
-  border: 1px solid var(--sas-blue-primary);
+  border-color: var(--sas-blue-primary); /* width/style come from .sas-button */
 }
 
 .sas-button--secondary:hover:not(:disabled) {
@@ -70,18 +78,33 @@
   width: 100%;
 }
 
+/* Unavailable but still focusable (Pagination's Previous/Next at the ends of
+   the range): looks like :disabled — base.css dims real :disabled buttons the
+   same way — but keeps its place in the tab order, so the keyboard is not
+   dumped onto <body> when the control becomes unavailable under the user. */
+.sas-button[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ...and no hover feedback, since there is nothing to press. */
+.sas-button--primary[aria-disabled='true']:hover { background-color: var(--sas-blue-primary); }
+.sas-button--secondary[aria-disabled='true']:hover { background-color: var(--sas-white); }
+.sas-button--tertiary[aria-disabled='true']:hover { background-color: transparent; }
+.sas-button--danger[aria-disabled='true']:hover { background-color: var(--sas-error); }
+
 .sas-button--loading .sas-button__spinner {
   animation: spin 1s linear infinite;
 }
 
 .sas-button__spinner {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .sas-button__icon {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 @keyframes spin {
@@ -89,7 +112,61 @@
   to { transform: rotate(360deg); }
 }
 
-/* Badge Component */
+/* Icon Button Component — a square, icon-only control (IconButton.tsx) */
+.sas-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--sas-gray-600);
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sas-icon-button:hover:not(:disabled) {
+  color: var(--sas-gray-900);
+  background-color: var(--sas-gray-100);
+}
+
+.sas-icon-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.sas-icon-button--small {
+  width: var(--icon-lg);   /* 24px — WCAG 2.5.8 minimum target */
+  height: var(--icon-lg);
+}
+
+.sas-icon-button--small svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.sas-icon-button--medium {
+  width: 32px;
+  height: 32px;
+}
+
+.sas-icon-button--medium svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.sas-icon-button--danger {
+  color: var(--sas-error-dark);
+}
+
+.sas-icon-button--danger:hover:not(:disabled) {
+  color: var(--sas-white);
+  background-color: var(--sas-error-dark);
+}
+
+/* Badge Component — each variant pairs a *-light ground with its *-dark text
+   token; the tokens are tuned so every pair clears 4.5:1 at 11px. */
 .sas-badge {
   display: inline-flex;
   align-items: center;
@@ -98,12 +175,14 @@
   font-weight: var(--font-weight-medium);
   border-radius: var(--radius-full);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--letter-spacing-wide);
+  /* A badge never wraps mid-label; the column widens or the cell scrolls. */
+  white-space: nowrap;
 }
 
 .sas-badge--small {
   padding: 2px var(--space-1);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .sas-badge--default {
@@ -131,9 +210,32 @@
   color: var(--sas-info-dark);
 }
 
+/* Direction badges — ONE mapping for the input/output concept app-wide
+   (Flow Detail's IN/OUT chips and the UI Builder's field chips used to
+   invert each other): input = blue, output = green, both = neutral gray.
+   Use these instead of picking a semantic variant per feature. */
+.sas-badge--direction-input {
+  background-color: var(--sas-info-light);
+  color: var(--sas-info-dark);
+}
+
+.sas-badge--direction-output {
+  background-color: var(--sas-success-light);
+  color: var(--sas-success-dark);
+}
+
+.sas-badge--direction-both {
+  background-color: var(--sas-gray-200);
+  color: var(--sas-gray-700);
+}
+
 /* Alert Component */
 .sas-alert {
   display: flex;
+  align-items: flex-start;
+  /* The actions slot sits in this row and drops below the message when the
+     alert is too narrow for both (jobdef embeds). */
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-4);
   border-radius: var(--radius-md);
@@ -143,31 +245,46 @@
 .sas-alert--success {
   background-color: var(--sas-success-light);
   border-color: var(--sas-success);
+  color: var(--sas-success-dark);
 }
 
 .sas-alert--warning {
   background-color: var(--sas-warning-light);
   border-color: var(--sas-warning);
+  color: var(--sas-warning-dark);
 }
 
 .sas-alert--error {
   background-color: var(--sas-error-light);
   border-color: var(--sas-error);
+  color: var(--sas-error-dark);
 }
 
 .sas-alert--info {
   background-color: var(--sas-info-light);
   border-color: var(--sas-info);
+  color: var(--sas-info-dark);
 }
 
 .sas-alert__icon {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 .sas-alert__content {
   flex: 1;
+}
+
+/* Buttons/links passed as <Alert actions={…}> — same row as the message,
+   pushed to the trailing edge. Replaces the per-feature "alert row" wrappers. */
+.sas-alert__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
 .sas-alert__title {
@@ -175,16 +292,10 @@
   margin-bottom: var(--space-1);
 }
 
-.sas-alert__close {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  color: var(--sas-gray-600);
-}
-
-.sas-alert__close:hover {
-  color: var(--sas-gray-800);
+/* Rendered as <IconButton size="small">; only the colour is alert-specific. */
+.sas-alert__close.sas-icon-button {
+  align-self: flex-start;
+  color: inherit;
 }
 
 /* Card Component */
@@ -203,10 +314,23 @@
 .sas-card--padding-medium { padding: var(--space-4); }
 .sas-card--padding-large { padding: var(--space-6); }
 
+/* A card composed from CardHeader/CardBody/CardFooter lets those parts own
+   the spacing, so the card's own padding modifier must not stack on top
+   (and the header/footer rules must reach the card edges). Direct-child
+   combinator so a Card nested inside another card's body cannot zero the
+   outer card. */
+.sas-card:has(> .sas-card__header, > .sas-card__body, > .sas-card__footer) {
+  padding: 0;
+}
+
+/* Title and actions wrap onto separate lines rather than squeezing the
+   title when the card is narrow (jobdef embeds, side-by-side cards). */
 .sas-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
   padding: var(--space-4);
   border-bottom: 1px solid var(--sas-gray-200);
 }
@@ -218,7 +342,10 @@
 
 .sas-card__header-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  margin-left: auto; /* stays on the trailing edge after the header wraps */
 }
 
 .sas-card__body {
@@ -273,6 +400,96 @@
   z-index: var(--z-modal-backdrop);
 }
 
+/* A "still working" row inside existing content: spinner + text on one line,
+   no padding block of its own, and inline so it can sit beside running text
+   or inside a toolbar. Pair with .sas-spinner. */
+.sas-loading--inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+/* Inline ring spinner. Draws itself in currentColor, so it inherits the
+   colour of whatever it sits in; size it with width/height (default 16px).
+   The one `spin` keyframe in this file is the app's only rotation. */
+.sas-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.sas-spinner--small { width: 12px; height: 12px; }
+.sas-spinner--large { width: var(--icon-lg); height: var(--icon-lg); }
+
+/* Frozen by the global reduced-motion brake, a ring with a transparent
+   quarter reads as broken — close the ring instead. It stays in currentColor
+   (no opacity dimming, which would drop the indicator under the 3:1 that
+   WCAG 1.4.11 asks of non-text UI). */
+@media (prefers-reduced-motion: reduce) {
+  .sas-spinner {
+    border-color: currentColor;
+  }
+
+  /* Same problem, same fix, for the two SVG spinners: both draw a dashed arc
+     (Button.tsx 31.4/10, Loading.tsx 80/60) that is meaningless once it stops
+     turning. CSS beats the presentation attributes, so the circle closes. */
+  .sas-button__spinner circle,
+  .sas-loading__svg circle {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Empty State Component (EmptyState.tsx) */
+.sas-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12) var(--space-4);
+  text-align: center;
+  color: var(--sas-text-muted);
+}
+
+.sas-empty-state__icon {
+  display: flex;
+  color: var(--sas-gray-400);
+}
+
+.sas-empty-state__icon svg {
+  width: var(--icon-2xl);
+  height: var(--icon-2xl);
+}
+
+.sas-empty-state__title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+}
+
+.sas-empty-state__hint {
+  margin: 0;
+  max-width: 48ch;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.sas-empty-state__action {
+  margin-top: var(--space-2);
+}
+
 /* Skeleton Loading */
 .sas-skeleton {
   display: flex;
@@ -303,18 +520,94 @@
   border-collapse: collapse;
 }
 
+/* ONE header treatment for every table in the app: gray-50 ground, a single
+   1px rule, and an uppercase xs label. Feature tables adopt these classes
+   instead of restyling their own <th>. */
 .sas-table__head {
   background-color: var(--sas-gray-50);
-  border-bottom: 2px solid var(--sas-gray-200);
+  border-bottom: 1px solid var(--sas-gray-200);
 }
 
 .sas-table__th {
   padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-700);
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+  /* No white-space: nowrap — a narrow jobdef embed must be allowed to wrap
+     a header label rather than force the whole table to scroll. */
+}
+
+/* Sortable header: a real <button> filling the WHOLE header cell, so the
+   pointer/tap target is the padded <th> and not just the 11px label. The
+   cell hands its padding to the button. aria-sort belongs on the <th>, not
+   on the button. (Specificity 0,3,0 so it also beats the --compact cell
+   padding below, whatever the source order.) */
+.sas-table .sas-table__th:has(> .sas-table__sort-header) {
+  padding: 0;
+}
+
+.sas-table__sort-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  color: var(--sas-gray-700);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast);
+}
+
+/* The button carries the cell's padding, so the dense variant has to shrink
+   the button rather than the <th>. */
+.sas-table--compact .sas-table__sort-header {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* A numeric column that aligns right wants its sort label on the right too. */
+.sas-table__th[align='right'] .sas-table__sort-header,
+.sas-table__sort-header--end {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.sas-table__sort-header:hover,
+.sas-table__sort-header--active {
+  color: var(--sas-blue-primary);
+}
+
+.sas-table__sort-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.sas-table__sort-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Dense tables (editable grids, detail panes) — same treatment, less air. */
+.sas-table--compact .sas-table__th,
+.sas-table--compact .sas-table__td {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.sas-table--compact .sas-table__th {
+  font-size: var(--font-size-xs);
 }
 
 .sas-table__row {
@@ -326,12 +619,44 @@
   background-color: var(--sas-gray-50);
 }
 
-.sas-table--hoverable .sas-table__row:hover {
+/* ONE row hover for every table: the same tint whether the row is hoverable
+   or clickable, and the same tint for keyboard focus. The --striped variants
+   are spelled out because the zebra rule above is 0,3,0 and would otherwise
+   win on even rows of a striped table. */
+.sas-table--hoverable .sas-table__row:hover,
+.sas-table--striped.sas-table--hoverable .sas-table__row:hover,
+.sas-table .sas-table__row--clickable:hover,
+.sas-table--striped .sas-table__row--clickable:hover,
+.sas-table .sas-table__row--clickable:focus-within,
+.sas-table--striped .sas-table__row--clickable:focus-within {
   background-color: var(--sas-blue-light);
 }
 
-.sas-table--clickable .sas-table__row {
+/* Clickable rows: the whole row reacts to the mouse, and the first cell
+   carries a real <button> (.sas-table__row-button) so the same navigation is
+   reachable by keyboard — a focusable element inside a cell, not
+   role="button" on the <tr>. */
+.sas-table--clickable .sas-table__row,
+.sas-table__row--clickable {
   cursor: pointer;
+}
+
+.sas-table__row-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.sas-table__row-button:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .sas-table__row--selected {
@@ -341,23 +666,6 @@
 .sas-table__td {
   padding: var(--space-3) var(--space-4);
   vertical-align: middle;
-}
-
-.sas-table__loading,
-.sas-table__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-12);
-  color: var(--sas-gray-500);
-}
-
-.sas-table__empty-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--sas-gray-400);
 }
 
 /* Form Inputs */
@@ -376,13 +684,13 @@
 .sas-textarea:focus {
   outline: none;
   border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 3px var(--sas-blue-light);
+  box-shadow: var(--focus-ring);
 }
 
 .sas-input:disabled,
 .sas-textarea:disabled {
   background-color: var(--sas-gray-100);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-disabled);
   cursor: not-allowed;
 }
 
@@ -393,5 +701,375 @@
 
 .sas-input::placeholder,
 .sas-textarea::placeholder {
+  color: var(--sas-text-muted);
+}
+
+/* Search Input Component (SearchInput.tsx) */
+.sas-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sas-search__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+.sas-search__field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sas-search__icon {
+  position: absolute;
+  left: var(--space-3);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--sas-gray-400);
+  pointer-events: none;
+}
+
+.sas-search__input.sas-input {
+  padding-left: calc(var(--space-3) + var(--icon-sm) + var(--space-2));
+  padding-right: calc(var(--space-2) + var(--icon-lg) + var(--space-2));
+}
+
+/* The browser's own clear affordance would duplicate the IconButton */
+.sas-search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.sas-search__clear {
+  position: absolute;
+  right: var(--space-2);
+}
+
+/* Modal Component (Modal.tsx) */
+.sas-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background-color: var(--sas-overlay-bg);
+  z-index: var(--z-modal-backdrop);
+}
+
+.sas-modal-backdrop--elevated {
+  z-index: var(--z-modal-elevated);
+}
+
+.sas-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 100%;
+  color: var(--sas-gray-900);
+  background-color: var(--sas-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  z-index: var(--z-modal);
+  outline: none; /* the dialog itself takes initial focus; the ring belongs on its controls */
+}
+
+.sas-modal--small { max-width: 400px; }
+.sas-modal--medium { max-width: 560px; }
+.sas-modal--large { max-width: 720px; }
+.sas-modal--wide { max-width: 960px; }
+
+.sas-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.sas-modal__title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sas-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.sas-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  padding: var(--space-4);
+  border-top: 1px solid var(--sas-gray-200);
+}
+
+/* Stat Card — the KPI tile used by Publishing, Job Monitoring and Batch
+   Results. Compose it with the card: `class="sas-card sas-stat-card"` (or
+   <Card padding="none" className="sas-stat-card">). A feature adds only its
+   own accent modifier, e.g. `.publishing__stat-card--models { border-left-color: … }`,
+   and its own grid minimum. */
+.sas-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border-left: 4px solid var(--sas-gray-400);
+}
+
+/* Restate the padding at 0,2,0 so it also wins against
+   `.sas-card:has(> .sas-card__header, …) { padding: 0 }` if a stat card ever
+   grows a card header. */
+.sas-card.sas-stat-card {
+  padding: var(--space-5);
+}
+
+.sas-stat-value {
+  font-size: var(--font-size-3xl);
+  line-height: 1.1; /* display numeral; deliberately tighter than --line-height-tight */
+  font-weight: var(--font-weight-bold);
+  color: var(--sas-gray-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.sas-stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+/* Progress block (ProgressBar.tsx) — phase + count above a track, message
+   and step list below. Add --indeterminate when there is no total to fill
+   against and the bar should sweep instead. */
+.sas-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sas-progress__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.sas-progress__phase {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-800);
+}
+
+.sas-progress__count {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sas-progress__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  background-color: var(--sas-gray-200);
+  border-radius: var(--radius-full);
+}
+
+.sas-progress__fill {
+  height: 100%;
+  background-color: var(--sas-blue-primary);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+/* No total to measure against: a fixed-width bar sweeps across the track.
+   The global reduced-motion rule in base.css stops the sweep; the override
+   below leaves a legible bar behind instead of a stranded sliver. */
+.sas-progress--indeterminate .sas-progress__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  height: auto;
+  animation: sas-progress-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes sas-progress-sweep {
+  from { left: -40%; }
+  to { left: 100%; }
+}
+
+/* Stopped, a 40% sliver stranded mid-track means nothing and a full-width
+   bar would read as "100% complete". Fill the track with solid diagonal
+   stripes instead: unmistakably "working, amount unknown", and every colour
+   is a solid token (no opacity), so the indicator keeps its contrast. */
+@media (prefers-reduced-motion: reduce) {
+  .sas-progress--indeterminate .sas-progress__fill {
+    left: 0;
+    width: 100%;
+    background-image: repeating-linear-gradient(
+      135deg,
+      var(--sas-blue-primary) 0,
+      var(--sas-blue-primary) 6px,
+      var(--sas-blue-light) 6px,
+      var(--sas-blue-light) 12px
+    );
+  }
+}
+
+.sas-progress__message {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.sas-progress__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.sas-progress__step--done {
+  color: var(--sas-success-dark);
+}
+
+/* Step Navigation (StepNav.tsx) — the wizard tab strip shared by the rules
+   import, the schema builder and the job detail tabs. */
+.sas-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.sas-steps__step {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-600);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sas-steps__step:hover:not(:disabled) {
+  color: var(--sas-blue-primary);
+}
+
+/* Active state is carried by aria-current="step" as well as the colour, so
+   it does not rely on colour alone. */
+.sas-steps__step--active {
+  color: var(--sas-blue-primary);
+  border-bottom-color: var(--sas-blue-primary);
+}
+
+.sas-steps__step:disabled {
+  color: var(--sas-gray-400);
+  cursor: not-allowed;
+}
+
+/* Pulled inside the strip so the ring is not clipped by the bottom border. */
+.sas-steps__step:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: -2px;
+}
+
+/* Pagination (Pagination.tsx) — Previous / "Page X of Y" / Next, with an
+   optional range summary and page-size select. */
+.sas-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.sas-pagination__range,
+.sas-pagination__status {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sas-pagination__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sas-pagination__size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.sas-pagination__size-select {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+  background-color: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.sas-pagination__size-select:disabled {
+  background-color: var(--sas-gray-100);
+  color: var(--sas-text-disabled);
+  cursor: not-allowed;
+}
+
+/* Deep link — an icon-only link out to SAS Environment Manager / Studio /
+   the flow editor. The icon is 16px inside a 32px pointer target. */
+.sas-deep-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  color: var(--sas-blue-primary);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sas-deep-link:hover {
+  color: var(--sas-blue-dark);
+  background-color: var(--sas-gray-100);
+  text-decoration: none;
+}
+
+.sas-deep-link:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.sas-deep-link__icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* Header controls sit on the (possibly custom) environment colour, where the
+   blue focus outline can vanish — draw it in the header foreground instead. */
+.sas-header :focus-visible {
+  outline-color: var(--env-header-fg, var(--sas-white));
 }

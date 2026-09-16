@@ -5,13 +5,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PublishedItem, PublishedKind } from '../../types/modelPublish';
 import { DataTable, Column } from '../common/DataTable';
 import { Badge, BadgeVariant } from '../common/Badge';
+import { SearchInput } from '../common/SearchInput';
+import { Pagination } from '../common/Pagination';
 import {
   extractDecisionFlowId,
   getPublishedKind,
 } from '../../utils/publishHelpers';
 import { buildDeepLink } from '../../utils/deepLinks';
+import { formatTimestamp } from '../../utils/formatters';
 
 type KindFilter = 'all' | PublishedKind;
+
+/** Rows rendered per page; the filters and counts still cover the whole list. */
+const PAGE_SIZE = 25;
 
 interface PublishedItemsTableProps {
   items: PublishedItem[];
@@ -41,11 +47,17 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [destinationFilter, setDestinationFilter] = useState<string>('all');
   const [codeTypeFilter, setCodeTypeFilter] = useState<string>('all');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchText), 200);
     return () => clearTimeout(timer);
   }, [searchText]);
+
+  // A changed filter or search term starts again from the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, kindFilter, destinationFilter, codeTypeFilter]);
 
   const destinations = useMemo(() => {
     const s = new Set<string>();
@@ -95,6 +107,14 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
     });
   }, [enrichedItems, debouncedSearch, kindFilter, destinationFilter, codeTypeFilter]);
 
+  // Clamp rather than only reset so a shrinking list never shows an empty page.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = useMemo(
+    () => filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [filtered, currentPage]
+  );
+
   const columns: Column<Row>[] = [
     {
       key: 'name',
@@ -138,9 +158,7 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
       header: 'Created',
       width: '14%',
       render: ({ item }) => (
-        <span className="date-cell">
-          {new Date(item.creationTimeStamp).toLocaleString()}
-        </span>
+        <span className="publishing__date">{formatTimestamp(item.creationTimeStamp)}</span>
       ),
     },
     {
@@ -161,15 +179,16 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
             {flowId && (
               <a
                 href={`#/flows/${flowId}`}
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title="View Flow Diagram"
+                aria-label={`View flow diagram for ${item.publishName}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
                   onNavigateToFlow(flowId);
                 }}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="5" r="2" />
                   <circle cx="6" cy="19" r="2" />
                   <circle cx="18" cy="19" r="2" />
@@ -182,11 +201,12 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
                 href={deeplink.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title={deeplink.label}
+                aria-label={`${deeplink.label}: ${item.publishName}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                   <polyline points="15 3 21 3 21 9" />
                   <line x1="10" y1="14" x2="21" y2="3" />
@@ -196,14 +216,15 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
             {isMas && (
               <button
                 type="button"
-                className="coverage-deep-link"
+                className="sas-deep-link"
                 title="Execute Score"
+                aria-label={`Execute score for ${item.publishName}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onNavigateToModule(item.publishName);
                 }}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" />
                 </svg>
@@ -266,50 +287,38 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
           </label>
         </div>
 
-        <div className="publishing__search">
-          <svg
-            className="publishing__search-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            className="publishing__search-input"
-            placeholder="Search name, kind, or code type..."
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          {searchText && (
-            <button
-              className="publishing__search-clear"
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setSearchText('')}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <SearchInput
+          className="publishing__search"
+          aria-label="Search published items by name, kind, or code type"
+          placeholder="Search name, kind, or code type..."
+          value={searchText}
+          onChange={setSearchText}
+        />
       </div>
 
       <div className="publishing__items-count">
-        Showing {filtered.length} of {items.length} published items
+        {filtered.length === items.length
+          ? `${items.length} published items`
+          : `Filtered to ${filtered.length} of ${items.length} published items`}
       </div>
 
       <DataTable
         columns={columns}
-        data={filtered}
+        data={pageItems}
         keyField="id"
         emptyMessage="No published items match the current filters."
       />
+
+      {pageCount > 1 && (
+        <Pagination
+          label="Published items pages"
+          page={currentPage + 1}
+          totalPages={pageCount}
+          pageSize={PAGE_SIZE}
+          totalItems={filtered.length}
+          onPageChange={(p) => setPage(p - 1)}
+        />
+      )}
     </div>
   );
 };

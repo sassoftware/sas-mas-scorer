@@ -4,8 +4,8 @@
 import React from 'react';
 import { useSasAuth } from '../../auth';
 import { Button } from '../common/Button';
-import { clearPublishingOverviewCache } from '../../hooks/usePublishingOverview';
-import { clearCoverageAnalysisCache } from '../coverage/CoverageAnalysis';
+import { clearAllViewCaches } from '../../utils/viewCaches';
+import { clearCasCatalog } from '../../hooks/useCasCatalog';
 
 // Check build mode at runtime
 const isJobDefBuild = typeof __BUILD_MODE__ !== 'undefined' && __BUILD_MODE__ === 'jobdef';
@@ -14,9 +14,24 @@ const isElectron = !!window.electronAPI;
 interface HeaderProps {
   onOpenSettings?: () => void;
   activeConnectionName?: string | null;
+  /** Whether the off-canvas sidebar (narrow viewports) is open. */
+  navOpen?: boolean;
+  /** Toggles the off-canvas sidebar; the button only shows below the layout breakpoint. */
+  onToggleNav?: () => void;
+  /** id of the sidebar the toggle controls. */
+  navId?: string;
+  /** Lets Layout give focus back to the toggle when the sidebar closes. */
+  navToggleRef?: React.RefObject<HTMLButtonElement>;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnectionName }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenSettings,
+  activeConnectionName,
+  navOpen = false,
+  onToggleNav,
+  navId,
+  navToggleRef,
+}) => {
   const { isAuthenticated, isLoading, login, logout } = useSasAuth();
 
   const handleAuthClick = async () => {
@@ -26,8 +41,13 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
     try {
       if (isAuthenticated) {
         await logout();
-        clearPublishingOverviewCache();
-        clearCoverageAnalysisCache();
+        // The registry clears every loaded view cache without the header
+        // importing a view module (that pulled the whole coverage view into
+        // the entry chunk). The CAS catalogue is cleared by name too: its key
+        // is the Viya URL, which does not change when another user logs in,
+        // and clearAllViewCaches only reaches modules that have been loaded.
+        clearAllViewCaches();
+        clearCasCatalog();
       } else {
         await login();
       }
@@ -41,6 +61,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
   return (
     <header className="sas-header">
       <div className="sas-header__brand">
+        {onToggleNav && (
+          <button
+            ref={navToggleRef}
+            type="button"
+            className="sas-header__nav-toggle"
+            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={navOpen}
+            aria-controls={navId}
+            onClick={onToggleNav}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              {navOpen ? <path d="M6 18L18 6M6 6l12 12" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
+            </svg>
+          </button>
+        )}
         <div className="sas-header__logo">
           <svg viewBox="0 0 40 40" className="sas-header__logo-icon">
             {/* White tile with brand-blue mark stays visible on any environment color */}
@@ -63,8 +98,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
       <div className="sas-header__actions">
         {isElectron && onOpenSettings && (
           <button
+            type="button"
             className="sas-header__help-link"
             title="Connection Settings"
+            aria-label="Connection settings"
             onClick={onOpenSettings}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -79,6 +116,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, activeConnection
           rel="noopener noreferrer"
           className="sas-header__help-link"
           title="User Guide"
+          aria-label="User guide (opens in a new tab)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />

@@ -70,11 +70,11 @@ export const InputForm: React.FC<InputFormProps> = ({
     const summary = datagridSummary(value);
 
     return (
-      <div className="datagrid-input-field">
-        <span className={`datagrid-input-field__summary ${summary ? '' : 'datagrid-input-field__summary--empty'}`}>
+      <div className="datagrid__field">
+        <span className={`datagrid__field-summary ${summary ? '' : 'datagrid__field-summary--empty'}`}>
           {summary ?? 'No grid defined'}
         </span>
-        <div className="datagrid-input-field__buttons">
+        <div className="datagrid__field-buttons">
           <Button
             variant="secondary"
             size="small"

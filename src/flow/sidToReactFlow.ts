@@ -5,6 +5,8 @@ import type { Node, Edge } from '@xyflow/react';
 import type { Step, DecisionFlow, SidNodeData, SidNodeType } from '../types/sid';
 import { classifyStep, extractSteps, buildConditionExpression, buildBranchCaseExpression } from '../utils/classify';
 import { uriTemplateHost, type RestApiDefinitionDetail } from '../api/restApiDefinitions';
+import type { RuleSetBundle } from '../api/rulesets';
+import { ruleSetViewOf } from './ruleSetViewCache';
 
 interface Pending {
   nodeId: string;
@@ -26,6 +28,7 @@ interface ConversionState {
   linkLabels: Map<string, string>;
   subDecisionCache: Map<string, DecisionFlow>;
   restApiCache: Map<string, RestApiDefinitionDetail>;
+  ruleSetCache: Map<string, RuleSetBundle>;
   depth: number;
   groups: NodeGroup[];
   activeGroupStack: NodeGroup[];
@@ -41,6 +44,31 @@ function restApiNodeData(
   const def = state.restApiCache.get(step.customObject.uri);
   if (!def) return undefined;
   return { restMethod: def.method, restHost: uriTemplateHost(def.uriTemplate) };
+}
+
+/** Rule count, kind and validation badge for a rule set node, once its rules are cached. */
+function ruleSetNodeData(
+  state: ConversionState,
+  step: Step,
+  nodeType: SidNodeType,
+): Partial<SidNodeData> | undefined {
+  if (nodeType !== 'ruleset' || !step.ruleset?.id) return undefined;
+  const bundle = state.ruleSetCache.get(step.ruleset.id);
+  if (!bundle) return undefined;
+  return {
+    ruleCount: bundle.rules.length,
+    ruleSetType: bundle.detail.ruleSetType,
+    ruleIssueCount: ruleSetViewOf(bundle).invalidCount,
+  };
+}
+
+/** The badges a node carries once its referenced object has been fetched. */
+function nodeBadges(
+  state: ConversionState,
+  step: Step,
+  nodeType: SidNodeType,
+): Partial<SidNodeData> | undefined {
+  return restApiNodeData(state, step, nodeType) ?? ruleSetNodeData(state, step, nodeType);
 }
 
 function nextId(state: ConversionState): string {
@@ -92,10 +120,14 @@ function addEdge(
     type: 'smoothstep',
     style: dotted ? { strokeDasharray: '6 3', opacity: 0.7 } : undefined,
     animated: dotted,
+    // labelStyle is applied as an inline CSS declaration on React Flow's
+    // <text className="react-flow__edge-text" style={labelStyle}> element
+    // (@xyflow/react EdgeText), not as an SVG presentation attribute, so a
+    // custom property inherited from :root resolves here like anywhere else.
     labelStyle: label === 'Yes'
-      ? { fill: '#16a34a', fontWeight: 600, fontSize: 11 }
+      ? { fill: 'var(--sas-success-dark)', fontWeight: 600, fontSize: 11 }
       : label === 'No'
-        ? { fill: '#dc2626', fontWeight: 600, fontSize: 11 }
+        ? { fill: 'var(--sas-error-dark)', fontWeight: 600, fontSize: 11 }
         : { fontSize: 11 },
   });
 }
@@ -337,7 +369,7 @@ function processSteps(
 
     // Regular node
     const nid = nextId(state);
-    addNode(state, nid, nodeType, label, step, restApiNodeData(state, step, nodeType));
+    addNode(state, nid, nodeType, label, step, nodeBadges(state, step, nodeType));
     if (step.linkLabel) state.linkLabels.set(step.linkLabel, nid);
     connectPending(state, pending, nid);
     if (!firstId) firstId = nid;
@@ -351,6 +383,7 @@ export function convertFlowToGraph(
   flow: DecisionFlow,
   subDecisionCache: Map<string, DecisionFlow> = new Map(),
   restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
+  ruleSetCache: Map<string, RuleSetBundle> = new Map(),
 ): { nodes: Node<SidNodeData>[]; edges: Edge[]; groups: NodeGroup[] } {
   const steps = flow.flow?.steps ?? [];
 
@@ -362,6 +395,7 @@ export function convertFlowToGraph(
     linkLabels: new Map(),
     subDecisionCache,
     restApiCache,
+    ruleSetCache,
     depth: 0,
     groups: [],
     activeGroupStack: [],

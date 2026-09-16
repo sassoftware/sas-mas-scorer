@@ -7,6 +7,7 @@
 // CSRF token handling needed beyond what the shared interceptor already does.
 
 import { sasViyaClient, SAS_CONTENT_TYPES } from './client';
+import { paginateCollection } from './paginate';
 import {
   ExecutionJob,
   ExecutionJobCollection,
@@ -98,9 +99,11 @@ export interface AverageRuntimeResult {
 export interface JobPage {
   items: ExecutionJob[];
   pageIndex: number;
+  // The page size that was requested; the service may have applied a smaller one.
   pageSize: number;
-  // True when this page came back full and another page likely exists. We
-  // derive this from items.length only — never from the envelope `count`.
+  // True when this page came back full — measured against the limit the
+  // service echoed back, never the requested size, and never the envelope
+  // `count` — so another page exists.
   hasMore: boolean;
   // Total items received across all pages walked so far.
   cumulativeCount: number;
@@ -108,43 +111,43 @@ export interface JobPage {
 
 export interface WalkJobsOptions {
   pageSize?: number;
-  // Safety cap on number of pages. Default 100 pages × 100 items/page = 10k jobs.
+  // Safety cap on number of pages. Default 100 pages × up to 100 items/page,
+  // i.e. 10k jobs when the service honours the requested page size, fewer
+  // when it caps the page.
   maxPages?: number;
 }
 
 // Walks /jobExecution/jobs page by page (newest-first), invoking `onPage`
 // after each fetch. The walk stops when:
 //   - the callback returns `false` (cooperative cancellation), or
-//   - a page comes back with fewer than `pageSize` items (end of list), or
+//   - a page comes back shorter than the limit the service echoed (end of list), or
 //   - `maxPages` is reached (safety cap).
-// We rely entirely on items.length — never on the envelope `count` — so a
-// degraded gateway that omits `count` still produces accurate numbers up to
-// the cap. Callers should treat `hasMore === true` on the final page as a
-// signal that more jobs exist beyond what was scanned.
+// The envelope `count` is deliberately ignored (`trustCount: false`) so a
+// degraded gateway that omits or misreports it still produces accurate
+// numbers up to the cap. Callers should treat `hasMore === true` on the final
+// page as a signal that more jobs exist beyond what was scanned.
 export const walkJobs = async (
   onPage: (page: JobPage) => boolean | void | Promise<boolean | void>,
   options: WalkJobsOptions = {}
 ): Promise<void> => {
   const pageSize = options.pageSize ?? 100;
   const maxPages = options.maxPages ?? 100;
-  let start = 0;
-  let cumulative = 0;
-  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
-    const collection = await getJobs({ start, limit: pageSize });
-    const items = collection.items ?? [];
-    cumulative += items.length;
-    const hasMore = items.length === pageSize;
-    const cont = await onPage({
-      items,
-      pageIndex,
-      pageSize,
-      hasMore,
-      cumulativeCount: cumulative,
-    });
-    if (cont === false) return;
-    if (!hasMore) return;
-    start += pageSize;
-  }
+  await paginateCollection<ExecutionJob>('/jobExecution/jobs', {
+    params: { sortBy: DEFAULT_SORT },
+    headers: { Accept: COLLECTION_ACCEPT },
+    pageSize,
+    maxPages,
+    trustCount: false,
+    accumulate: false,
+    onPage: (page) =>
+      onPage({
+        items: page.items,
+        pageIndex: page.pageIndex,
+        pageSize,
+        hasMore: page.hasMore,
+        cumulativeCount: page.loaded,
+      }),
+  });
 };
 
 // --- Live log / listing for running jobs --------------------------------

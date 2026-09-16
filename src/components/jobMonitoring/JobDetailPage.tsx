@@ -1,8 +1,11 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
+import { PageHeader } from '../layout/Layout';
+import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
+import { EmptyState } from '../common/EmptyState';
 import { Loading } from '../common/Loading';
 import { useSasAuth } from '../../auth';
 import { useJobDetail } from '../../hooks/useJobDetail';
@@ -33,6 +36,8 @@ const TABS: { value: Tab; label: string }[] = [
   { value: 'parameters', label: 'Parameters' },
 ];
 
+const BREADCRUMB_ROOT = 'Job Monitoring';
+
 // Live elapsed ticker — used in the header while the job is running.
 const useNowTick = (intervalMs: number, enabled: boolean): number => {
   const [now, setNow] = useState<number>(() => Date.now());
@@ -48,6 +53,10 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
   const { isAuthenticated } = useSasAuth();
   const detail = useJobDetail(jobId, { enabled: isAuthenticated });
   const [activeTab, setActiveTab] = useState<Tab>('log');
+  // Ids wiring each tab to the single panel (aria-controls / aria-labelledby).
+  const idBase = useId();
+  const tabId = (tab: Tab) => `${idBase}-tab-${tab}`;
+  const panelId = `${idBase}-panel`;
 
   // Confirmation dialog state for the destructive job actions. `pending`
   // tracks which action is awaiting confirmation; `busy` toggles while
@@ -103,6 +112,33 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
     setActionError(null);
   };
 
+  // Roving tabindex: only the active tab is in the Tab order; arrow keys move
+  // between tabs and activate them (the WAI-ARIA automatic-activation pattern).
+  const handleTabListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const current = TABS.findIndex((tab) => tab.value === activeTab);
+    let next: number;
+    switch (e.key) {
+      case 'ArrowRight':
+        next = (current + 1) % TABS.length;
+        break;
+      case 'ArrowLeft':
+        next = (current - 1 + TABS.length) % TABS.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = TABS.length - 1;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const value = TABS[next].value;
+    setActiveTab(value);
+    document.getElementById(tabId(value))?.focus();
+  };
+
   if (detail.jobLoading && !job) {
     return <Loading message="Loading job…" />;
   }
@@ -110,11 +146,18 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
   if (detail.jobError && !job) {
     return (
       <div className="job-detail">
-        <button className="job-detail__back" onClick={onBack}>← Back to Job Monitoring</button>
-        <div className="job-monitoring__error">
-          <span>{detail.jobError}</span>
-          <Button variant="tertiary" size="small" onClick={detail.refresh}>Retry</Button>
-        </div>
+        <PageHeader
+          title="Job Detail"
+          breadcrumbs={[{ label: BREADCRUMB_ROOT, onClick: onBack }, { label: 'Job Detail' }]}
+        />
+        <Alert
+          variant="error"
+          actions={
+            <Button variant="tertiary" size="small" onClick={detail.refresh}>Retry</Button>
+          }
+        >
+          {detail.jobError}
+        </Alert>
       </div>
     );
   }
@@ -122,8 +165,11 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
   if (!job) {
     return (
       <div className="job-detail">
-        <button className="job-detail__back" onClick={onBack}>← Back to Job Monitoring</button>
-        <p className="job-monitoring__empty">Job not found.</p>
+        <PageHeader
+          title="Job Detail"
+          breadcrumbs={[{ label: BREADCRUMB_ROOT, onClick: onBack }, { label: 'Job Detail' }]}
+        />
+        <EmptyState title="Job not found." />
       </div>
     );
   }
@@ -188,36 +234,37 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
 
   return (
     <div className="job-detail">
-      <button className="job-detail__back" onClick={onBack}>← Back to Job Monitoring</button>
-
       <div className="job-detail__header">
-        <div className="job-detail__title-row">
-          <h1 className="job-detail__title">{name}</h1>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <JobStateBadge state={job.state} />
-            <Button variant="secondary" size="small" onClick={detail.refresh}>
-              Refresh
-            </Button>
-            {isTerminal ? (
-              <Button
-                variant="danger"
-                size="small"
-                onClick={() => setPendingAction('delete')}
-              >
-                Delete Job
+        <PageHeader
+          title={name}
+          subtitle={description}
+          breadcrumbs={[{ label: BREADCRUMB_ROOT, onClick: onBack }, { label: name }]}
+          actions={
+            <div className="job-detail__header-actions">
+              <JobStateBadge state={job.state} />
+              <Button variant="secondary" size="small" onClick={detail.refresh}>
+                Refresh
               </Button>
-            ) : (
-              <Button
-                variant="danger"
-                size="small"
-                onClick={() => setPendingAction('cancel')}
-              >
-                Cancel Job
-              </Button>
-            )}
-          </div>
-        </div>
-        {description && <p className="job-detail__description">{description}</p>}
+              {isTerminal ? (
+                <Button
+                  variant="danger"
+                  size="small"
+                  onClick={() => setPendingAction('delete')}
+                >
+                  Delete Job
+                </Button>
+              ) : (
+                <Button
+                  variant="danger"
+                  size="small"
+                  onClick={() => setPendingAction('cancel')}
+                >
+                  Cancel Job
+                </Button>
+              )}
+            </div>
+          }
+        />
         <div className="job-detail__meta">
           <span><strong>By:</strong> {job.createdBy ?? '—'}</span>
           {type && <span><strong>Type:</strong> {type}</span>}
@@ -230,21 +277,38 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
         </div>
       </div>
 
-      <div className="job-detail__tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.value}
-            role="tab"
-            aria-selected={activeTab === tab.value}
-            className={`job-detail__tab${activeTab === tab.value ? ' job-detail__tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.value)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div
+        className="job-detail__tabs"
+        role="tablist"
+        aria-label="Job output"
+        onKeyDown={handleTabListKeyDown}
+      >
+        {TABS.map((tab) => {
+          const selected = activeTab === tab.value;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              id={tabId(tab.value)}
+              aria-selected={selected}
+              aria-controls={panelId}
+              tabIndex={selected ? 0 : -1}
+              className={`job-detail__tab${selected ? ' job-detail__tab--active' : ''}`}
+              onClick={() => setActiveTab(tab.value)}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="job-detail__panel" role="tabpanel">
+      <div
+        className="job-detail__panel"
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabId(activeTab)}
+      >
         {renderPanel()}
       </div>
 
@@ -253,14 +317,12 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
           title="Cancel this job?"
           message={
             <>
-              <p style={{ margin: 0 }}>
+              <p>
                 You're about to cancel <strong>{name}</strong>. This will terminate the SAS
                 session backing the job (if one is active) and mark the job record as
                 <strong> canceled</strong>.
               </p>
-              <p style={{ margin: 'var(--space-2) 0 0' }}>
-                This cannot be undone.
-              </p>
+              <p>This cannot be undone.</p>
             </>
           }
           confirmLabel="Cancel job"
@@ -278,14 +340,12 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
           title="Delete this job?"
           message={
             <>
-              <p style={{ margin: 0 }}>
+              <p>
                 You're about to permanently delete <strong>{name}</strong> from SAS Viya. The
                 job record, its log, its listing, and any attached result files will be
                 removed.
               </p>
-              <p style={{ margin: 'var(--space-2) 0 0' }}>
-                This cannot be undone.
-              </p>
+              <p>This cannot be undone.</p>
             </>
           }
           confirmLabel="Delete job"

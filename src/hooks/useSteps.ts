@@ -1,9 +1,9 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useCallback } from 'react';
-import { Step, StepCollection, StepInput, StepOutput } from '../types';
-import { getSteps, getStep, executeStep, buildStepInput, ExecuteStepOptions } from '../api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Step, StepInput, StepOutput } from '../types';
+import { getAllSteps, getStep, executeStep, buildStepInput, ExecuteStepOptions } from '../api';
 
 interface UseStepsReturn {
   steps: Step[];
@@ -16,8 +16,13 @@ export const useSteps = (moduleId: string | null): UseStepsReturn => {
   const [steps, setSteps] = useState<Step[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every fetch; a response for an older module is dropped so a
+  // slow earlier request cannot overwrite the current module's steps.
+  const requestIdRef = useRef(0);
 
   const fetchSteps = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (!moduleId) {
       setSteps([]);
       return;
@@ -27,12 +32,14 @@ export const useSteps = (moduleId: string | null): UseStepsReturn => {
     setError(null);
 
     try {
-      const result: StepCollection = await getSteps(moduleId);
-      setSteps(result.items);
+      const result = await getAllSteps(moduleId);
+      if (requestId !== requestIdRef.current) return;
+      setSteps(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch steps');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [moduleId]);
 
@@ -54,8 +61,11 @@ export const useStep = (moduleId: string | null, stepId: string | null): UseStep
   const [step, setStep] = useState<Step | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const fetchStep = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (!moduleId || !stepId) {
       setStep(null);
       return;
@@ -66,11 +76,13 @@ export const useStep = (moduleId: string | null, stepId: string | null): UseStep
 
     try {
       const result = await getStep(moduleId, stepId);
+      if (requestId !== requestIdRef.current) return;
       setStep(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch step');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [moduleId, stepId]);
 

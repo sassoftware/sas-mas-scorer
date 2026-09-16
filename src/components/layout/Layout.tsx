@@ -1,11 +1,14 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Header } from './Header';
+import { isAnyModalOpen } from '../common/Modal';
 import { Sidebar, ViewType } from './Sidebar';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
+
+const NAV_COLLAPSED_KEY = 'mas-scorer:nav-collapsed';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -32,19 +35,114 @@ export const Layout: React.FC<LayoutProps> = ({
   recentUIApps,
   onSelectUIApp,
 }) => {
+  // Below the layout breakpoint (layout.css) the sidebar is an off-canvas
+  // drawer behind the header's toggle; above it these have no visible effect.
+  const [navOpen, setNavOpen] = useState(false);
+
+  // Above the breakpoint the user can fold the sidebar to an icon rail. Default
+  // expanded; the choice persists per browser and survives a republish.
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(NAV_COLLAPSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? '1' : '0');
+    } catch {
+      // Storage unavailable (private window, embed): the choice lasts the session.
+    }
+  }, [navCollapsed]);
+  const toggleCollapsed = useCallback(() => {
+    setNavCollapsed((collapsed) => !collapsed);
+  }, []);
+  const sidebarId = useId();
+  const sidebarRef = useRef<HTMLElement>(null);
+  const navToggleRef = useRef<HTMLButtonElement>(null);
+
+  const closeNav = useCallback(() => {
+    // Give focus back to the toggle when it is about to leave the drawer, or
+    // when nothing holds it (a scrim click leaves focus on <body>). Focus that
+    // sits elsewhere (e.g. inside a Modal) is left alone. Above the breakpoint
+    // the toggle is display:none, so focus() is a no-op.
+    const active = document.activeElement;
+    if (!active || active === document.body || sidebarRef.current?.contains(active)) {
+      navToggleRef.current?.focus();
+    }
+    setNavOpen(false);
+  }, []);
+
+  const toggleNav = useCallback(() => {
+    setNavOpen((open) => !open);
+  }, []);
+
+  // Move focus into the drawer when it opens; Escape closes it.
+  useEffect(() => {
+    if (!navOpen) return;
+    sidebarRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // An open Modal owns Escape; leave the drawer alone until it is gone.
+      // isAnyModalOpen also covers the dialogs that are still hand-rolled
+      // overlays (ShareDialog) and never register with the Modal stack.
+      if (isAnyModalOpen()) return;
+      closeNav();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [navOpen, closeNav]);
+
+  // Any choice made in the drawer closes it.
+  const handleNavigate = useCallback(
+    (view: ViewType) => {
+      closeNav();
+      onNavigate(view);
+    },
+    [closeNav, onNavigate]
+  );
+  const handleSelectModule = useCallback(
+    (module: Module) => {
+      closeNav();
+      onSelectModule?.(module);
+    },
+    [closeNav, onSelectModule]
+  );
+  const handleSelectUIApp = useCallback(
+    (id: string) => {
+      closeNav();
+      onSelectUIApp?.(id);
+    },
+    [closeNav, onSelectUIApp]
+  );
+
   return (
-    <div className="sas-layout">
-      <Header onOpenSettings={onOpenSettings} activeConnectionName={activeConnectionName} />
+    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}`}>
+      <Header
+        onOpenSettings={onOpenSettings}
+        activeConnectionName={activeConnectionName}
+        navOpen={navOpen}
+        onToggleNav={toggleNav}
+        navId={sidebarId}
+        navToggleRef={navToggleRef}
+      />
       <div className="sas-layout__container">
         <Sidebar
+          ref={sidebarRef}
+          id={sidebarId}
+          open={navOpen}
+          collapsed={navCollapsed}
+          onToggleCollapsed={toggleCollapsed}
           activeView={activeView}
-          onNavigate={onNavigate}
+          onNavigate={handleNavigate}
           selectedModule={selectedModule}
           recentModules={recentModules}
-          onSelectModule={onSelectModule}
+          onSelectModule={handleSelectModule}
           recentUIApps={recentUIApps}
-          onSelectUIApp={onSelectUIApp}
+          onSelectUIApp={handleSelectUIApp}
         />
+        {navOpen && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
         <main className="sas-layout__main">
           <div className="sas-layout__content">{children}</div>
         </main>
@@ -75,6 +173,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
               <li key={index} className="sas-breadcrumbs__item">
                 {crumb.onClick ? (
                   <button
+                    type="button"
                     className="sas-breadcrumbs__link"
                     onClick={crumb.onClick}
                   >

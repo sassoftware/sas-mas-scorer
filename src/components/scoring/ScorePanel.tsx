@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import axios from 'axios';
 import { Module, Step, ModuleSource, StepOutput, getModuleType } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Loading } from '../common/Loading';
+import { ProgressBar } from '../common/ProgressBar';
 import { PageHeader } from '../layout/Layout';
 import { InputForm } from './InputForm';
 import { OutputDisplay } from './OutputDisplay';
@@ -19,7 +21,7 @@ import { SaveBatchScenariosDialog } from './SaveBatchScenariosDialog';
 import { SaveTestDialog } from './SaveTestDialog';
 import { LoadScenarioDialog } from './LoadScenarioDialog';
 import { useStepExecution } from '../../hooks';
-import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo, getDecisionSignature } from '../../api';
+import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo, getDecisionSignature, DecisionSignatureVariable } from '../../api';
 import { DataGridParamInfo } from './DataGridInputModal';
 import { coerceDatagridValue } from '../../utils/datagrid';
 
@@ -52,6 +54,11 @@ interface BatchStats {
   errorCount: number;
 }
 
+// Stable empty values so "no signature" / "no datagrid params" keep their
+// identity across renders and do not re-run the consumers' effects.
+const EMPTY_SIGNATURE: DecisionSignatureVariable[] = [];
+const EMPTY_DATAGRID_PARAMS: Record<string, DataGridParamInfo> = {};
+
 export const ScorePanel: React.FC<ScorePanelProps> = ({
   module,
   step,
@@ -74,6 +81,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const batchAbortRef = useRef(false);
+  // Aborts the HTTP requests of the running batch; fired only on unmount.
+  const batchAbortControllerRef = useRef<AbortController | null>(null);
   const [showCasUpload, setShowCasUpload] = useState(false);
   const [showSaveScenario, setShowSaveScenario] = useState(false);
   const [showLoadScenario, setShowLoadScenario] = useState(false);
@@ -85,8 +94,14 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   // Decision/Model metadata for CAS upload columns
   const [decisionInfo, setDecisionInfo] = useState<DecisionSourceInfo | null>(null);
   const [modelInfo, setModelInfo] = useState<PublishedModelInfo | null>(null);
-  // MAS input param name → datagrid schema info (columns/max rows) from the decision signature
-  const [datagridParams, setDatagridParams] = useState<Record<string, DataGridParamInfo>>({});
+  // The decision's variable signature, loaded once and passed to every child
+  // that needs it instead of each dialog refetching it on open.
+  const [decisionSignature, setDecisionSignature] =
+    useState<DecisionSignatureVariable[]>(EMPTY_SIGNATURE);
+  // Bumped to re-run the one signature fetch after a failure; the ref records
+  // whether the last attempt failed, so a retry only fires when it can help.
+  const [signatureAttempt, setSignatureAttempt] = useState(0);
+  const signatureFailedRef = useRef(false);
   const moduleType = useMemo(() => getModuleType(module), [module]);
 
   const sourceURI = useMemo(() => {
@@ -130,51 +145,74 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
       .catch(() => setModelInfo(null));
   }, [moduleType, module.name]);
 
-  // Resolve which MAS input params are decision datagrids, and their declared
-  // columns (dataGridExtension) and row cap (dataGridMaxRowCount) if any.
-  // MAS lowercases decision variable names and appends a trailing '_'.
+  // The decision signature is fetched ONCE here and handed to every child that
+  // needs it (the three Save dialogs and Load Scenario); each of them used to
+  // refetch the same document on open.
   useEffect(() => {
     if (moduleType !== 'Decision' || !sourceURI) {
-      setDatagridParams({});
+      signatureFailedRef.current = false;
+      setDecisionSignature(EMPTY_SIGNATURE);
       return;
     }
     let cancelled = false;
     getDecisionSignature(sourceURI)
       .then(signature => {
         if (cancelled) return;
-        const gridVars = signature.filter(
-          v => v.dataType?.toLowerCase() === 'datagrid' && v.direction !== 'output'
-        );
-        if (gridVars.length === 0) {
-          setDatagridParams({});
-          return;
-        }
-        const byLower = new Map(gridVars.map(v => [v.name.toLowerCase(), v]));
-        const map: Record<string, DataGridParamInfo> = {};
-        for (const param of step.inputs ?? []) {
-          const masName = param.name.toLowerCase();
-          const match = byLower.get(masName)
-            ?? (masName.endsWith('_') ? byLower.get(masName.slice(0, -1)) : undefined);
-          if (match) {
-            map[param.name] = {
-              columns: match.dataGridExtension?.length
-                ? match.dataGridExtension.map(c => ({
-                    name: c.name,
-                    dataType: c.dataType,
-                    length: c.length,
-                  }))
-                : null,
-              maxRows: match.dataGridMaxRowCount ?? null,
-            };
-          }
-        }
-        setDatagridParams(map);
+        signatureFailedRef.current = false;
+        setDecisionSignature(signature);
       })
-      .catch(() => setDatagridParams({}));
+      .catch(() => {
+        // Best-effort: the dialogs fall back to stripping the MAS '_' suffix.
+        // The flag lets the next dialog open try again (see below).
+        if (cancelled) return;
+        signatureFailedRef.current = true;
+        setDecisionSignature(EMPTY_SIGNATURE);
+      });
     return () => {
       cancelled = true;
     };
-  }, [moduleType, sourceURI, step.inputs]);
+  }, [moduleType, sourceURI, signatureAttempt]);
+
+  // Retry hook for the Save/Load dialogs. Now that the signature is fetched
+  // once per visit instead of once per dialog open, a single transient
+  // failure would otherwise leave every dialog on the '_'-stripping fallback
+  // for the whole session — a decision variable "Cylinders" would silently
+  // save as "cylinders". Opening a dialog re-attempts the fetch, which is
+  // what the per-dialog fetches used to give us for free.
+  const retryDecisionSignature = useCallback(() => {
+    if (signatureFailedRef.current) setSignatureAttempt(n => n + 1);
+  }, []);
+
+  // Resolve which MAS input params are decision datagrids, and their declared
+  // columns (dataGridExtension) and row cap (dataGridMaxRowCount) if any.
+  // MAS lowercases decision variable names and appends a trailing '_'.
+  const datagridParams = useMemo<Record<string, DataGridParamInfo>>(() => {
+    const gridVars = decisionSignature.filter(
+      v => v.dataType?.toLowerCase() === 'datagrid' && v.direction !== 'output'
+    );
+    if (gridVars.length === 0) return EMPTY_DATAGRID_PARAMS;
+
+    const byLower = new Map(gridVars.map(v => [v.name.toLowerCase(), v]));
+    const map: Record<string, DataGridParamInfo> = {};
+    for (const param of step.inputs ?? []) {
+      const masName = param.name.toLowerCase();
+      const match = byLower.get(masName)
+        ?? (masName.endsWith('_') ? byLower.get(masName.slice(0, -1)) : undefined);
+      if (match) {
+        map[param.name] = {
+          columns: match.dataGridExtension?.length
+            ? match.dataGridExtension.map(c => ({
+                name: c.name,
+                dataType: c.dataType,
+                length: c.length,
+              }))
+            : null,
+          maxRows: match.dataGridMaxRowCount ?? null,
+        };
+      }
+    }
+    return map;
+  }, [decisionSignature, step.inputs]);
 
   const moduleVersion = useMemo(() => {
     if (moduleType === 'Decision' && decisionInfo) {
@@ -281,14 +319,15 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   // Execute a single row and return the result
   const executeRow = useCallback(async (
     rowIndex: number,
-    rawInput: Record<string, unknown>
-  ): Promise<BatchResult> => {
+    rawInput: Record<string, unknown>,
+    signal?: AbortSignal
+  ): Promise<BatchResult | undefined> => {
     const requestStartTime = performance.now();
     const input = normalizeDatagridInputs(rawInput);
 
     try {
       const stepInput = buildStepInput(step, input);
-      const output = await executeStep(module.id, step.id, stepInput);
+      const output = await executeStep(module.id, step.id, stepInput, { signal });
       const requestEndTime = performance.now();
       return {
         rowIndex,
@@ -298,6 +337,11 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
         executionTime: requestEndTime - requestStartTime,
       };
     } catch (err) {
+      // An aborted request is the panel unmounting mid-batch, not a scoring
+      // failure — return nothing so the row is dropped instead of recorded as
+      // an error. Tested before the message is read: a CanceledError's message
+      // ("canceled") would otherwise land in the results table.
+      if (axios.isCancel(err)) return undefined;
       const requestEndTime = performance.now();
       return {
         rowIndex,
@@ -312,6 +356,10 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   // Batch execution handler with configurable concurrency
   const handleBatchExecute = useCallback(async (rows: Record<string, unknown>[], concurrency: number) => {
     batchAbortRef.current = false;
+    // One controller per batch. Stop does NOT abort it (in-flight rows are
+    // allowed to land and be counted); only the unmount cleanup does.
+    const controller = new AbortController();
+    batchAbortControllerRef.current = controller;
     setBatchExecuting(true);
     setBatchProgress({ current: 0, total: rows.length });
     setBatchResults([]);
@@ -330,16 +378,16 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
           const index = currentIndex++;
           const input = rows[index];
 
-          const result = await executeRow(index, input);
+          const result = await executeRow(index, input, controller.signal);
+          // Cancelled: the panel is unmounting, so this worker stops rather
+          // than recording a row nobody will see.
+          if (!result) return;
           results[index] = result;
           completedCount++;
 
-          // Update progress
+          // Only the progress is published per row. The results table is not
+          // rendered while the batch runs, so the array is published once below.
           setBatchProgress({ current: completedCount, total: rows.length });
-
-          // Update results (sorted by rowIndex for consistent display)
-          const currentResults = results.filter(r => r !== undefined);
-          setBatchResults([...currentResults].sort((a, b) => a.rowIndex - b.rowIndex));
         }
       };
 
@@ -353,11 +401,16 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
     await processWithConcurrency();
 
+    if (batchAbortControllerRef.current === controller) {
+      batchAbortControllerRef.current = null;
+    }
+
     const batchEndTime = performance.now();
     const totalRuntime = batchEndTime - batchStartTime;
 
-    // Sort final results (may be partial if stopped early)
-    const sortedResults = results.filter(r => r !== undefined).sort((a, b) => a.rowIndex - b.rowIndex);
+    // Each result sits at its own row index, so the filtered array is already
+    // in rowIndex order (it may be partial if stopped early).
+    const sortedResults = results.filter(r => r !== undefined);
     setBatchResults(sortedResults);
 
     // Calculate statistics on completed results
@@ -390,6 +443,18 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     batchAbortRef.current = true;
   }, []);
 
+  // Leaving the panel mid-batch (breadcrumb, "Select Different Step") must not
+  // keep issuing scoring requests nobody will see: stop the worker loop AND
+  // abort the requests already in flight (up to `concurrency`). Stop only sets
+  // the flag, so a user-requested stop still keeps the rows it already has.
+  useEffect(() => {
+    return () => {
+      batchAbortRef.current = true;
+      batchAbortControllerRef.current?.abort();
+      batchAbortControllerRef.current = null;
+    };
+  }, []);
+
   // Clear batch results
   const handleClearBatchResults = useCallback(() => {
     setBatchResults([]);
@@ -398,15 +463,17 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
   // Save selected batch rows as scenarios
   const handleSaveAsScenarios = useCallback((selectedIndices: number[]) => {
+    retryDecisionSignature();
     setSelectedBatchIndices(selectedIndices);
     setShowBatchScenarios(true);
-  }, []);
+  }, [retryDecisionSignature]);
 
   // Save CAS table setup as a test
   const handleSaveAsTest = useCallback((info: CasTableTestInfo) => {
+    retryDecisionSignature();
     setCasTableTestInfo(info);
     setShowSaveTest(true);
-  }, []);
+  }, [retryDecisionSignature]);
 
   // Generate API call code examples
   const generateApiCode = useCallback((mode: 'single' | 'parallel') => {
@@ -570,6 +637,11 @@ title;`;
 
     // --- Helper: Build input names/types for parallel ---
     const inputParamNames = (step.inputs ?? []).map(p => p.name);
+    const numericInputs = new Set(
+      (step.inputs ?? [])
+        .filter(p => ['decimal', 'integer', 'bigint'].includes(p.type))
+        .map(p => p.name)
+    );
 
     // --- PARALLEL MODE ---
     const pythonCode = `import requests
@@ -603,8 +675,7 @@ def score_row(index, row):
     """Score a single row and return the result."""
     payload = {
         "inputs": [${sampleInputs.map(inp => {
-          const param = (step.inputs ?? []).find(p => p.name === inp.name);
-          const isNumeric = param && ['decimal', 'integer', 'bigint'].includes(param.type);
+          const isNumeric = numericInputs.has(inp.name);
           return `{"name": "${inp.name}", "value": ${isNumeric ? `float(row["${inp.name}"])` : `row["${inp.name}"]`}}`;
         }).join(',\n                   ')}],
         "version": 1
@@ -674,8 +745,7 @@ console.log(\`Scoring \${inputRows.length} rows with \${nThreads} parallel worke
 async function scoreRow(index, row) {
   const payload = {
     inputs: [${sampleInputs.map(inp => {
-      const param = (step.inputs ?? []).find(p => p.name === inp.name);
-      const isNumeric = param && ['decimal', 'integer', 'bigint'].includes(param.type);
+      const isNumeric = numericInputs.has(inp.name);
       return `{ name: "${inp.name}", value: ${isNumeric ? `Number(row["${inp.name}"])` : `row["${inp.name}"]`} }`;
     }).join(',\n              ')}],
     version: 1
@@ -952,6 +1022,18 @@ title;`;
     return { pythonCode, javascriptCode, sasCode };
   }, [module.id, step.id, step.inputs, step.outputs]);
 
+  // Built once per mode while the card is open, not on every keystroke in the
+  // input form (ScorePanel re-renders per character while it is mounted).
+  const apiCode = useMemo(
+    () => (showApiCall ? generateApiCode(apiCodeMode) : null),
+    [showApiCall, apiCodeMode, generateApiCode]
+  );
+  const apiCodeText = apiCodeLanguage === 'python'
+    ? apiCode?.pythonCode
+    : apiCodeLanguage === 'sas'
+    ? apiCode?.sasCode
+    : apiCode?.javascriptCode;
+
   // Build CSV string from batch results
   const buildResultsCsv = useCallback(() => {
     if (batchResults.length === 0) return '';
@@ -978,9 +1060,9 @@ title;`;
         row.push(toCsvValue(result.input[param]));
       });
 
+      const outputByName = new Map(result.output?.outputs?.map(o => [o.name, o.value]) ?? []);
       outputParams.forEach(param => {
-        const outputVar = result.output?.outputs?.find(o => o.name === param);
-        row.push(toCsvValue(outputVar?.value));
+        row.push(toCsvValue(outputByName.get(param)));
       });
 
       row.push(String(result.executionTime));
@@ -995,6 +1077,13 @@ title;`;
       ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
     ].join('\n');
   }, [batchResults, sourceLink, moduleVersion]);
+
+  // The multi-megabyte CSV for a large batch is built when the upload dialog
+  // opens, not on every render while it is open; it is released on close.
+  const uploadCsv = useMemo(
+    () => (showCasUpload ? buildResultsCsv() : ''),
+    [showCasUpload, buildResultsCsv]
+  );
 
   // Download batch results as CSV
   const handleDownloadResults = useCallback(() => {
@@ -1102,11 +1191,7 @@ title;`;
                   variant="tertiary"
                   size="small"
                   onClick={() => {
-                    const codes = generateApiCode(apiCodeMode);
-                    const code = apiCodeLanguage === 'python' ? codes.pythonCode
-                      : apiCodeLanguage === 'sas' ? codes.sasCode
-                      : codes.javascriptCode;
-                    navigator.clipboard.writeText(code);
+                    if (apiCodeText) navigator.clipboard.writeText(apiCodeText);
                   }}
                 >
                   Copy Code
@@ -1137,13 +1222,7 @@ title;`;
               </Button>
             </div>
             <pre className="score-panel__source-code">
-              <code>
-                {apiCodeLanguage === 'python'
-                  ? generateApiCode(apiCodeMode).pythonCode
-                  : apiCodeLanguage === 'sas'
-                  ? generateApiCode(apiCodeMode).sasCode
-                  : generateApiCode(apiCodeMode).javascriptCode}
-              </code>
+              <code>{apiCodeText ?? ''}</code>
             </pre>
           </CardBody>
         </Card>
@@ -1180,7 +1259,14 @@ title;`;
                 actions={
                   <div className="score-panel__input-actions">
                     {moduleType === 'Decision' && sourceURI && (
-                      <Button variant="tertiary" size="small" onClick={() => setShowLoadScenario(true)}>
+                      <Button
+                        variant="tertiary"
+                        size="small"
+                        onClick={() => {
+                          retryDecisionSignature();
+                          setShowLoadScenario(true);
+                        }}
+                      >
                         Load Scenario
                       </Button>
                     )}
@@ -1233,13 +1319,14 @@ title;`;
               <Card className="score-panel__progress-card">
                 <CardBody>
                   <div className="score-panel__progress">
-                    <Loading message={`Processing row ${batchProgress.current} of ${batchProgress.total}...`} />
-                    <div className="score-panel__progress-bar">
-                      <div
-                        className="score-panel__progress-fill"
-                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-                      />
-                    </div>
+                    <ProgressBar
+                      value={batchProgress.current}
+                      max={batchProgress.total}
+                      label="Batch scoring progress"
+                      phase="Scoring rows"
+                      count={`${batchProgress.current} of ${batchProgress.total}`}
+                      className="score-panel__progress-track"
+                    />
                     <Button variant="danger" size="small" onClick={handleStopBatch}>
                       Stop
                     </Button>
@@ -1279,13 +1366,14 @@ title;`;
               <Card className="score-panel__progress-card">
                 <CardBody>
                   <div className="score-panel__progress">
-                    <Loading message={`Processing row ${batchProgress.current} of ${batchProgress.total}...`} />
-                    <div className="score-panel__progress-bar">
-                      <div
-                        className="score-panel__progress-fill"
-                        style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
-                      />
-                    </div>
+                    <ProgressBar
+                      value={batchProgress.current}
+                      max={batchProgress.total}
+                      label="Batch scoring progress"
+                      phase="Scoring rows"
+                      count={`${batchProgress.current} of ${batchProgress.total}`}
+                      className="score-panel__progress-track"
+                    />
                     <Button variant="danger" size="small" onClick={handleStopBatch}>
                       Stop
                     </Button>
@@ -1323,7 +1411,14 @@ title;`;
               <h3>Results</h3>
               <div className="score-panel__output-actions">
                 {moduleType === 'Decision' && executionMode === 'single' && output?.executionState === 'completed' && sourceURI && (
-                  <Button variant="secondary" size="small" onClick={() => setShowSaveScenario(true)}>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => {
+                      retryDecisionSignature();
+                      setShowSaveScenario(true);
+                    }}
+                  >
                     Save as Scenario
                   </Button>
                 )}
@@ -1344,7 +1439,8 @@ title;`;
       {/* CAS Upload Dialog */}
       {showCasUpload && (
         <CasUploadDialog
-          csvContent={buildResultsCsv()}
+          csvContent={uploadCsv}
+          rowCount={batchResults.length}
           defaultTableName={`${module.name}_${step.id}_results`.replace(/[^a-zA-Z0-9_]/g, '_')}
           onClose={() => setShowCasUpload(false)}
         />
@@ -1354,6 +1450,7 @@ title;`;
         <LoadScenarioDialog
           sourceURI={sourceURI}
           inputParameters={step.inputs ?? []}
+          signature={decisionSignature}
           onLoad={(values) => setInputValues(prev => ({ ...prev, ...values }))}
           onClose={() => setShowLoadScenario(false)}
         />
@@ -1367,6 +1464,7 @@ title;`;
           inputParameters={step.inputs ?? []}
           outputValues={output.outputs}
           outputParameters={step.outputs ?? []}
+          decisionSignature={decisionSignature}
           onClose={() => setShowSaveScenario(false)}
         />
       )}
@@ -1381,6 +1479,7 @@ title;`;
             .map(r => ({ input: r.input, output: r.output! }))}
           inputParameters={step.inputs ?? []}
           outputParameters={step.outputs ?? []}
+          decisionSignature={decisionSignature}
           onClose={() => setShowBatchScenarios(false)}
         />
       )}
@@ -1391,6 +1490,7 @@ title;`;
           sourceURI={sourceURI}
           casTableInfo={casTableTestInfo}
           inputParameters={step.inputs ?? []}
+          decisionSignature={decisionSignature}
           onClose={() => setShowSaveTest(false)}
         />
       )}

@@ -8,12 +8,31 @@ import {
 } from '../api/modelPublish';
 import { PublishDestination, PublishedItem } from '../types/modelPublish';
 import { dedupPublishedItems, getPublishedKind } from '../utils/publishHelpers';
+import { registerViewCache } from '../utils/viewCaches';
 
 export interface PublishingStats {
   destinationCount: number;
   modelCount: number;
   decisionCount: number;
 }
+
+/** Live counts while the overview loads, so the wait is visibly advancing. */
+export interface PublishingProgress {
+  destinationsLoaded: number;
+  destinationsComplete: boolean;
+  itemsLoaded: number;
+  itemsComplete: boolean;
+  /** Page requests made for the deployed items, which is the slow half. */
+  itemPages: number;
+}
+
+const EMPTY_PROGRESS: PublishingProgress = {
+  destinationsLoaded: 0,
+  destinationsComplete: false,
+  itemsLoaded: 0,
+  itemsComplete: false,
+  itemPages: 0,
+};
 
 export interface DestinationCounts {
   models: number;
@@ -26,6 +45,7 @@ interface UsePublishingOverviewReturn {
   stats: PublishingStats;
   destinationCounts: Record<string, DestinationCounts>;
   loading: boolean;
+  progress: PublishingProgress;
   error: string | null;
   refresh: () => Promise<void>;
 }
@@ -45,6 +65,10 @@ export const clearPublishingOverviewCache = (): void => {
   cachedData = null;
 };
 
+// The shell clears this through the registry, so Header/App never import the
+// publishing hook (which would pull it into the entry chunk).
+registerViewCache('publishing', clearPublishingOverviewCache);
+
 export const usePublishingOverview = (
   options: UsePublishingOverviewOptions = {}
 ): UsePublishingOverviewReturn => {
@@ -58,6 +82,7 @@ export const usePublishingOverview = (
   );
   const [loading, setLoading] = useState<boolean>(enabled && cachedData === null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<PublishingProgress>(EMPTY_PROGRESS);
 
   const fetchAll = useCallback(async () => {
     if (!enabled) {
@@ -66,11 +91,34 @@ export const usePublishingOverview = (
     }
     setLoading(true);
     setError(null);
+    setProgress(EMPTY_PROGRESS);
 
     try {
       const [dests, items] = await Promise.all([
-        getAllDestinations(),
-        getAllCompletedPublishedItems(),
+        getAllDestinations((page) => {
+          setProgress((prev) => ({ ...prev, destinationsLoaded: page.loaded }));
+        }).then((result) => {
+          setProgress((prev) => ({
+            ...prev,
+            destinationsLoaded: result.length,
+            destinationsComplete: true,
+          }));
+          return result;
+        }),
+        getAllCompletedPublishedItems((page) => {
+          setProgress((prev) => ({
+            ...prev,
+            itemsLoaded: page.loaded,
+            itemPages: page.page,
+          }));
+        }).then((result) => {
+          setProgress((prev) => ({
+            ...prev,
+            itemsLoaded: result.length,
+            itemsComplete: true,
+          }));
+          return result;
+        }),
       ]);
       setDestinations(dests);
       setRawItems(items);
@@ -129,6 +177,7 @@ export const usePublishingOverview = (
     stats,
     destinationCounts,
     loading,
+    progress,
     error,
     refresh: fetchAll,
   };

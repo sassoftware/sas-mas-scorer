@@ -3,6 +3,7 @@
 
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { SidNodeData } from '../../../types/sid';
+import { NODE_COLORS } from '../../../flow/constants';
 
 type StartEndNodeType = Node<SidNodeData, 'start' | 'end'>;
 
@@ -14,9 +15,9 @@ export default function StartEndNode({ data }: NodeProps<StartEndNodeType>) {
   const isGlobalStart = isStart && !isConnector;
   const isGlobalEnd = !isStart && !isConnector;
 
-  // Connector nodes get a subtle tint to distinguish them from global Start/End
-  const borderColor = isConnector ? '#E06050' : '#999999';
-  const bgColor = isConnector ? '#FEF2F2' : '#ffffff';
+  // Connector nodes take the sub-decision family tint so they match the
+  // group box they sit inside; global Start/End stay neutral.
+  const colors = isConnector ? NODE_COLORS.decision : NODE_COLORS.start;
 
   return (
     <>
@@ -28,11 +29,11 @@ export default function StartEndNode({ data }: NodeProps<StartEndNodeType>) {
           justifyContent: 'center',
           padding: '8px 24px',
           borderRadius: '9999px',
-          border: `2px solid ${borderColor}`,
+          border: `2px solid ${colors.border}`,
           fontSize: '14px',
           fontWeight: 500,
-          backgroundColor: bgColor,
-          color: '#333333',
+          backgroundColor: colors.bg,
+          color: colors.text,
           minWidth: 80,
         }}
       >

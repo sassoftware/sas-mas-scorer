@@ -6,6 +6,7 @@ import { UIDefinition } from '../../types/uiBuilder';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
+import { Alert } from '../common/Alert';
 import { DynamicForm } from '../uiRunner/DynamicForm';
 
 interface Props {
@@ -29,10 +30,9 @@ export const BuilderPreview: React.FC<Props> = ({ definition }) => {
 
   return (
     <div className="ui-builder__preview">
-      <div className="ui-builder__preview-banner">
-        <Badge variant="warning">Preview Mode</Badge>
-        <span>This is a preview of how your UI App will look when running. Output fields show sample data.</span>
-      </div>
+      <Alert variant="warning" title="Preview Mode">
+        This is a preview of how your UI App will look when running. Output fields show sample data.
+      </Alert>
 
       <Card>
         <CardHeader

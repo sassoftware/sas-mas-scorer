@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { sasViyaClient } from './client';
+import { fetchAllPaginated } from './paginate';
 import type { DecisionFlow, SidPaginatedResponse, WorkflowHistoryResponse } from '../types/sid';
 
 export async function listDecisions(
@@ -25,25 +26,18 @@ export async function listDecisions(
   return response.data;
 }
 
-/** Fetch all decisions by paginating until fewer items than the limit are returned. */
+/** Fetch all decisions, paging until the service reports the collection exhausted. */
 export async function listAllDecisions(
   search?: string,
   sortBy = 'name:ascending',
 ): Promise<DecisionFlow[]> {
-  const pageSize = 100;
-  const all: DecisionFlow[] = [];
-  let start = 0;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const page = await listDecisions(search, start, pageSize, sortBy);
-    const items = page.items ?? [];
-    all.push(...items);
-    if (items.length < pageSize) break;
-    start += pageSize;
-  }
-
-  return all;
+  return fetchAllPaginated<DecisionFlow>('/decisions/flows', {
+    params: {
+      sortBy,
+      filter: search ? `contains(name,'${search}')` : undefined,
+    },
+    pageSize: 100,
+  });
 }
 
 export async function getDecision(id: string): Promise<DecisionFlow> {

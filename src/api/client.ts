@@ -23,14 +23,18 @@ const clearCsrfToken = (): void => {
 const addAuthInterceptor = (client: AxiosInstance, basePath: string): void => {
   client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
-      // Electron mode: dynamic baseURL + Bearer token
+      // Electron mode: dynamic baseURL + Bearer token. The two IPC reads are
+      // independent, so they run concurrently — one main-process round trip
+      // per request instead of two in series.
       if (isElectron && window.electronAPI) {
-        const viyaUrl = await window.electronAPI.getViyaUrl();
+        const [viyaUrl, token] = await Promise.all([
+          window.electronAPI.getViyaUrl(),
+          window.electronAPI.getAccessToken(),
+        ]);
         if (viyaUrl) {
           config.baseURL = basePath ? `${viyaUrl}${basePath}` : viyaUrl;
         }
 
-        const token = await window.electronAPI.getAccessToken();
         if (token) {
           config.headers['Authorization'] = `Bearer ${token}`;
         }

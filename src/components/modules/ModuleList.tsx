@@ -6,6 +6,9 @@ import { Module, ModuleType, getModuleStepCount, getModuleType } from '../../typ
 import { DataTable, Column } from '../common/DataTable';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
+import { Alert } from '../common/Alert';
+import { SearchInput } from '../common/SearchInput';
+import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
 
@@ -87,10 +90,6 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     onSearch(debouncedSearch);
   }, [debouncedSearch, onSearch]);
 
-  const handleClearSearch = useCallback(() => {
-    setSearchTerm('');
-  }, []);
-
   // Handle column header click for sorting
   const handleSortClick = useCallback((field: string) => {
     let newDirection: 'asc' | 'desc' = 'asc';
@@ -108,24 +107,24 @@ export const ModuleList: React.FC<ModuleListProps> = ({
 
     return (
       <button
-        className={`module-list__sort-header ${isActive ? 'module-list__sort-header--active' : ''}`}
+        className={`sas-table__sort-header ${isActive ? 'sas-table__sort-header--active' : ''}`}
         onClick={() => handleSortClick(field)}
         type="button"
       >
         {label}
-        <span className="module-list__sort-icon">
+        <span className="sas-table__sort-icon">
           {direction === 'asc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
           )}
           {direction === 'desc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
           )}
           {!direction && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" aria-hidden="true">
               <path d="M12 5v14M5 12l7 7 7-7" />
             </svg>
           )}
@@ -142,11 +141,12 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       key: 'name',
       header: renderSortableHeader('Module Name', 'name'),
       width: '25%',
+      // Inline wrapper: DataTable puts the first column inside a <button>.
       render: (module) => (
-        <div className="module-name-cell">
-          <span className="module-name-cell__name">{module.name}</span>
-          <span className="module-name-cell__id">{module.id}</span>
-        </div>
+        <span className="module-list__name-cell">
+          <span className="module-list__name-cell-name">{module.name}</span>
+          <span className="module-list__name-cell-id">{module.id}</span>
+        </span>
       ),
     },
     {
@@ -183,7 +183,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       header: renderSortableHeader('Last Modified', 'modifiedTimeStamp'),
       width: '20%',
       render: (module) => (
-        <span className="date-cell">
+        <span className="module-list__date">
           {new Date(module.modifiedTimeStamp).toLocaleString()}
         </span>
       ),
@@ -194,7 +194,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       width: '15%',
       align: 'center',
       render: (module) => (
-        <div className="action-buttons">
+        <div className="module-list__actions">
           <Button
             variant="tertiary"
             size="small"
@@ -271,47 +271,27 @@ export const ModuleList: React.FC<ModuleListProps> = ({
             <option value="Decision">Decision</option>
           </select>
         </div>
-        <div className="module-list__search">
-          <svg
-            className="module-list__search-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            className="module-list__search-input"
-            placeholder="Search all modules by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button
-              className="module-list__search-clear"
-              onClick={handleClearSearch}
-              type="button"
-              aria-label="Clear search"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <SearchInput
+          className="module-list__search"
+          aria-label="Search all modules by name"
+          placeholder="Search all modules by name..."
+          value={searchTerm}
+          onChange={setSearchTerm}
+        />
       </div>
 
       {error && (
-        <div className="module-list__error">
-          <span>{error}</span>
-          <Button variant="tertiary" size="small" onClick={onRefresh}>
-            Retry
-          </Button>
-        </div>
+        <Alert
+          variant="error"
+          title="Failed to load modules"
+          actions={
+            <Button variant="tertiary" size="small" onClick={onRefresh}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       )}
 
       <DataTable
@@ -324,27 +304,14 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       />
 
       {totalPages > 1 && (
-        <div className="module-list__pagination">
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage === 0}
-            onClick={() => onPageChange(currentPage - 1)}
-          >
-            Previous
-          </Button>
-          <span className="module-list__pagination-info">
-            Page {currentPage + 1} of {totalPages}
-          </span>
-          <Button
-            variant="tertiary"
-            size="small"
-            disabled={currentPage >= totalPages - 1}
-            onClick={() => onPageChange(currentPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
+        <Pagination
+          label="Module pages"
+          page={currentPage + 1}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={displayCount}
+          onPageChange={(p) => onPageChange(p - 1)}
+        />
       )}
     </div>
   );

@@ -3,11 +3,12 @@
 
 import React from 'react';
 import { DataTable, Column } from '../common/DataTable';
-import { Button } from '../common/Button';
+import { Pagination } from '../common/Pagination';
+import { SearchInput } from '../common/SearchInput';
 import { ExecutionJob } from '../../types/jobExecution';
 import { CompletedStateFilter } from '../../hooks/useJobMonitoring';
 import { JobStateBadge } from './JobStateBadge';
-import { formatDuration, formatTimestamp } from './utils';
+import { STATE_LABELS, formatDuration, formatTimestamp } from './utils';
 
 interface CompletedJobsTableProps {
   jobs: ExecutionJob[];
@@ -24,12 +25,14 @@ interface CompletedJobsTableProps {
   onOpenJob: (jobId: string) => void;
 }
 
+// 'all' is a filter value, not a job state, so it is the one chip whose label
+// does not come from STATE_LABELS.
 const STATE_CHIPS: { value: CompletedStateFilter; label: string }[] = [
   { value: 'all', label: 'All' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'canceled', label: 'Canceled' },
-  { value: 'timedOut', label: 'Timed Out' },
+  { value: 'completed', label: STATE_LABELS.completed },
+  { value: 'failed', label: STATE_LABELS.failed },
+  { value: 'canceled', label: STATE_LABELS.canceled },
+  { value: 'timedOut', label: STATE_LABELS.timedOut },
 ];
 
 export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
@@ -46,12 +49,17 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
   onOpenJob,
 }) => {
   // No total to anchor against — Viya's envelope `count` is unreliable on
-  // this tenant. We base navigation purely on what the page returned.
+  // this tenant. We base navigation purely on what the page returned, so the
+  // furthest page we can claim exists is the current one, plus one more while
+  // the server says there is another. That keeps <Pagination>'s Next enabled
+  // exactly while `hasMore`; the honest, open-ended "Showing 1–20+" count
+  // lives in the toolbar above the table.
   const rangeStart = jobs.length === 0 ? 0 : page * pageSize + 1;
   const rangeEnd = page * pageSize + jobs.length;
   const showPagination = page > 0 || hasMore;
-  const canPrev = page > 0;
-  const canNext = hasMore;
+  // The hook's `page` is 0-based; <Pagination> is 1-based.
+  const currentPage = page + 1;
+  const knownPages = hasMore ? currentPage + 1 : currentPage;
 
   const columns: Column<ExecutionJob>[] = [
     {
@@ -60,11 +68,12 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
       render: (job) => {
         const name = job.jobRequest.jobDefinition?.name ?? job.jobRequest.name ?? job.id;
         const description = job.jobRequest.description ?? job.jobRequest.jobDefinition?.description;
+        // Inline wrapper: DataTable puts this inside the row's <button>.
         return (
-          <div className="job-monitoring__cell-name job-monitoring__cell-name--link">
+          <span className="job-monitoring__cell-name job-monitoring__cell-name--link">
             <span className="job-monitoring__cell-name-main">{name}</span>
             {description && <span className="job-monitoring__cell-name-sub">{description}</span>}
-          </div>
+          </span>
         );
       },
     },
@@ -117,16 +126,13 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
   return (
     <div>
       <div className="job-monitoring__toolbar">
-        <div className="job-monitoring__search">
-          <input
-            type="search"
-            className="job-monitoring__search-input"
-            placeholder="Search by job name…"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            aria-label="Search completed jobs by name"
-          />
-        </div>
+        <SearchInput
+          className="job-monitoring__search"
+          aria-label="Search completed jobs by name"
+          placeholder="Search by job name…"
+          value={search}
+          onChange={onSearchChange}
+        />
         <div className="job-monitoring__chips" role="group" aria-label="Filter by state">
           {STATE_CHIPS.map((chip) => (
             <button
@@ -140,8 +146,8 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
           ))}
         </div>
         <div className="job-monitoring__toolbar-spacer" />
-        <div className="job-monitoring__toolbar-hint" aria-hidden="true">
-          Click a row to view details
+        <div className="job-monitoring__toolbar-hint">
+          Select a job to view details
         </div>
         <div className="job-monitoring__toolbar-count" aria-live="polite">
           {loading
@@ -164,31 +170,13 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
       />
 
       {showPagination && (
-        <div className="job-monitoring__pagination">
-          <span className="job-monitoring__pagination-info">
-            Showing {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()}
-            {hasMore ? ' (more available)' : ''}
-          </span>
-          <div className="job-monitoring__pagination-controls">
-            <Button
-              variant="tertiary"
-              size="small"
-              onClick={() => onPageChange(Math.max(0, page - 1))}
-              disabled={!canPrev}
-            >
-              Previous
-            </Button>
-            <span className="job-monitoring__pagination-page">Page {page + 1}</span>
-            <Button
-              variant="tertiary"
-              size="small"
-              onClick={() => onPageChange(page + 1)}
-              disabled={!canNext}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          className="job-monitoring__pagination"
+          label="Completed jobs"
+          page={currentPage}
+          totalPages={knownPages}
+          onPageChange={(next) => onPageChange(next - 1)}
+        />
       )}
     </div>
   );

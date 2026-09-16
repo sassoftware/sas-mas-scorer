@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { sasViyaClient } from './client';
+import { fetchAllPaginated, PageProgress } from './paginate';
 import {
   PublishDestination,
   PublishDestinationCollection,
@@ -9,47 +9,35 @@ import {
   PublishedItemCollection,
 } from '../types/modelPublish';
 
-const PAGE_SIZE = 100;
-const MAX_PAGES = 200; // safety cap (20,000 items)
+/**
+ * modelPublish honours a page size well above the usual 100, and each request
+ * costs a couple of seconds, so a larger page is worth far more than a smaller
+ * one: 424 items came back in one 2s request instead of five totalling ~16s.
+ * (modelPublish does not send `count`, so `total` in the progress is null.)
+ */
+const PAGE_SIZE = 500;
 
-async function fetchAllPaginated<T>(
-  url: string,
-  params: Record<string, string | number | undefined> = {}
-): Promise<T[]> {
-  const items: T[] = [];
-  let start = 0;
+export type { PageProgress };
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const response = await sasViyaClient.get<{
-      items: T[];
-      count?: number;
-      start?: number;
-      limit?: number;
-    }>(url, {
-      params: { ...params, start, limit: PAGE_SIZE },
-      headers: { Accept: 'application/vnd.sas.collection+json' },
-    });
-
-    const pageItems = response.data.items ?? [];
-    items.push(...pageItems);
-
-    if (pageItems.length < PAGE_SIZE) break;
-    if (typeof response.data.count === 'number' && items.length >= response.data.count) break;
-
-    start += PAGE_SIZE;
-  }
-
-  return items;
-}
-
-export const getAllDestinations = async (): Promise<PublishDestination[]> => {
-  return fetchAllPaginated<PublishDestination>('/modelPublish/destinations');
+export const getAllDestinations = async (
+  onPage?: (progress: PageProgress) => void
+): Promise<PublishDestination[]> => {
+  return fetchAllPaginated<PublishDestination>('/modelPublish/destinations', {
+    pageSize: PAGE_SIZE,
+    onPage,
+  });
 };
 
-export const getAllCompletedPublishedItems = async (): Promise<PublishedItem[]> => {
+export const getAllCompletedPublishedItems = async (
+  onPage?: (progress: PageProgress) => void
+): Promise<PublishedItem[]> => {
   return fetchAllPaginated<PublishedItem>('/modelPublish/models', {
-    filter: "eq(state,'completed')",
-    sortBy: 'creationTimeStamp:descending',
+    params: {
+      filter: "eq(state,'completed')",
+      sortBy: 'creationTimeStamp:descending',
+    },
+    pageSize: PAGE_SIZE,
+    onPage,
   });
 };
 

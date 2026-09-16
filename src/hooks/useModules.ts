@@ -1,9 +1,9 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Module, ModuleType, ModuleCollection, Submodule, SubmoduleCollection, getModuleType } from '../types';
-import { getModules, getModule, getSubmodules, GetModulesParams } from '../api';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Module, ModuleType, Submodule, getModuleType } from '../types';
+import { getModules, getAllModules, getModule, getAllSubmodules, GetModulesParams } from '../api';
 
 interface UseModulesState {
   modules: Module[];
@@ -51,7 +51,20 @@ export const useModules = (options: UseModulesOptions = {}): UseModulesReturn =>
 
   const isTypeFiltered = typeFilter !== 'All';
 
+  // The server query is either one page, or — with a type filter, which the
+  // MAS filter grammar cannot express — the whole collection filtered
+  // client-side. Depending on these two derived values rather than on the raw
+  // page state means client-side paging does not refetch the collection.
+  const serverStart = isTypeFiltered ? 0 : state.currentPage * state.pageSize;
+  const serverLimit = isTypeFiltered ? null : state.pageSize;
+
+  // Bumped on every fetch; a response for an older request is dropped so a
+  // slow page 1 cannot overwrite page 2 (the same idiom as useJobMonitoring).
+  const requestIdRef = useRef(0);
+
   const fetchModules = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (!enabled) {
       setState((prev) => ({ ...prev, loading: false, modules: [], error: null }));
       return;
@@ -60,17 +73,13 @@ export const useModules = (options: UseModulesOptions = {}): UseModulesReturn =>
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      // When type filter is active, fetch all modules so we can filter client-side
-      const limit = isTypeFiltered ? 10000 : state.pageSize;
-      const start = isTypeFiltered ? 0 : state.currentPage * state.pageSize;
+      const query = { filter: filter || undefined, sortBy: sortBy || undefined };
+      const result =
+        serverLimit === null
+          ? await getAllModules(query).then((items) => ({ items, count: items.length }))
+          : await getModules({ ...query, start: serverStart, limit: serverLimit });
 
-      const result: ModuleCollection = await getModules({
-        start,
-        limit,
-        filter: filter || undefined,
-        sortBy: sortBy || undefined,
-      });
-
+      if (requestId !== requestIdRef.current) return;
       setState((prev) => ({
         ...prev,
         modules: result.items,
@@ -79,13 +88,14 @@ export const useModules = (options: UseModulesOptions = {}): UseModulesReturn =>
         error: null,
       }));
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setState((prev) => ({
         ...prev,
         error: err instanceof Error ? err.message : 'Failed to fetch modules',
         loading: false,
       }));
     }
-  }, [state.currentPage, state.pageSize, filter, sortBy, enabled, isTypeFiltered]);
+  }, [serverStart, serverLimit, filter, sortBy, enabled]);
 
   useEffect(() => {
     fetchModules();
@@ -154,8 +164,11 @@ export const useModule = (moduleId: string | null): UseModuleReturn => {
   const [module, setModule] = useState<Module | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const fetchModule = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (!moduleId) {
       setModule(null);
       return;
@@ -166,11 +179,13 @@ export const useModule = (moduleId: string | null): UseModuleReturn => {
 
     try {
       const result = await getModule(moduleId);
+      if (requestId !== requestIdRef.current) return;
       setModule(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch module');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [moduleId]);
 
@@ -192,8 +207,11 @@ export const useSubmodules = (moduleId: string | null): UseSubmodulesReturn => {
   const [submodules, setSubmodules] = useState<Submodule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const fetchSubmodules = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (!moduleId) {
       setSubmodules([]);
       return;
@@ -203,12 +221,14 @@ export const useSubmodules = (moduleId: string | null): UseSubmodulesReturn => {
     setError(null);
 
     try {
-      const result: SubmoduleCollection = await getSubmodules(moduleId);
-      setSubmodules(result.items);
+      const result = await getAllSubmodules(moduleId);
+      if (requestId !== requestIdRef.current) return;
+      setSubmodules(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch submodules');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [moduleId]);
 

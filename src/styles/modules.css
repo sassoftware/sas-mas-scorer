@@ -11,6 +11,7 @@
 .module-list__toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-4);
   padding: var(--space-4);
   background-color: var(--sas-white);
@@ -27,86 +28,32 @@
 
 .module-list__type-filter-label {
   font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--sas-text-secondary);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
   white-space: nowrap;
 }
 
 .module-list__type-filter-select {
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--sas-border);
+  border: 1px solid var(--sas-gray-300);
   border-radius: var(--radius-md);
   background-color: var(--sas-white);
-  color: var(--sas-text-primary);
+  color: var(--sas-gray-900);
   font-size: var(--font-size-sm);
   cursor: pointer;
 }
 
 .module-list__type-filter-select:focus {
   outline: none;
-  border-color: var(--sas-blue);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
-}
-
-.module-list__search {
-  position: relative;
-  flex: 1;
-  max-width: 400px;
-}
-
-.module-list__search-icon {
-  position: absolute;
-  left: var(--space-3);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--sas-gray-400);
-  pointer-events: none;
-}
-
-.module-list__search-input {
-  width: 100%;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-10);
-  font-size: var(--font-size-base);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  background-color: var(--sas-white);
-}
-
-.module-list__search-input:focus {
-  outline: none;
   border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 3px var(--sas-blue-light);
+  box-shadow: var(--focus-ring);
 }
 
-.module-list__search-clear {
-  position: absolute;
-  right: var(--space-2);
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--sas-gray-400);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
-.module-list__search-clear:hover {
-  background-color: var(--sas-gray-100);
-  color: var(--sas-gray-600);
-}
-
-.module-list__search-clear svg {
-  width: 16px;
-  height: 16px;
+/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
+.module-list__search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 400px;
 }
 
 .module-list__search-info {
@@ -115,64 +62,8 @@
   white-space: nowrap;
 }
 
-/* Sortable column headers */
-.module-list__sort-header {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  background: transparent;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.module-list__sort-header:hover {
-  color: var(--sas-blue-primary);
-}
-
-.module-list__sort-header--active {
-  color: var(--sas-blue-primary);
-}
-
-.module-list__sort-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-
-.module-list__sort-icon svg {
-  width: 14px;
-  height: 14px;
-}
-
-.module-list__error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--sas-error-light);
-  color: var(--sas-error-dark);
-  border-radius: var(--radius-md);
-}
-
-.module-list__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-4);
-}
-
-.module-list__pagination-info {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
+/* Sortable column headers are the shared .sas-table__sort-header and paging
+   is the shared <Pagination>; both live in components.css. */
 
 /* Login Prompt */
 .module-list__login-prompt {
@@ -216,28 +107,30 @@
   line-height: 1.5;
 }
 
-.module-name-cell {
+/* First column of the module table. It sits inside DataTable's
+   .sas-table__row-button, so it is a <span> rather than a block <div>. */
+.module-list__name-cell {
   display: flex;
   flex-direction: column;
 }
 
-.module-name-cell__name {
+.module-list__name-cell-name {
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
 }
 
-.module-name-cell__id {
+.module-list__name-cell-id {
   font-size: var(--font-size-xs);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-family: var(--font-family-mono);
 }
 
-.date-cell {
+.module-list__date {
   font-size: var(--font-size-sm);
   color: var(--sas-gray-600);
 }
 
-.action-buttons {
+.module-list__actions {
   display: flex;
   gap: var(--space-2);
   justify-content: center;
@@ -248,11 +141,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-}
-
-.module-details__actions {
-  display: flex;
-  gap: var(--space-2);
 }
 
 .module-details__content {
@@ -277,40 +165,20 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-/* Entries Table */
+/* Entries Table — the shared .sas-table--compact; only the framed, scrollable
+   wrapper is this feature's. */
 .module-details__entries-table-wrapper {
   overflow-x: auto;
   border: 1px solid var(--sas-gray-200);
   border-radius: var(--radius-md);
 }
 
-.module-details__entries-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.module-details__entries-table th,
-.module-details__entries-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--sas-gray-200);
-  white-space: nowrap;
-}
-
-.module-details__entries-table th {
-  background-color: var(--sas-gray-50);
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-700);
-  font-size: var(--font-size-xs);
-}
-
-.module-details__entries-table tbody tr:hover {
-  background-color: var(--sas-gray-50);
+.module-details__entries-table .sas-table__row:last-child {
+  border-bottom: none;
 }
 
 .module-details__empty-message {
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   font-style: italic;
   text-align: center;
   padding: var(--space-4);
@@ -329,7 +197,7 @@
 .module-details__info-item dt {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-500);
+  color: var(--sas-text-muted);
   text-transform: uppercase;
 }
 
@@ -373,28 +241,77 @@
   color: var(--sas-gray-600);
 }
 
-/* Job List */
-.job-list {
+/* Module Details - Danger Zone */
+.module-details__danger-card {
+  border: 1px solid var(--sas-error-light);
+  background-color: rgba(244, 67, 54, 0.02);
+}
+
+.module-details__danger-card .sas-card__header {
+  background-color: var(--sas-error-light);
+}
+
+.module-details__danger-card .sas-card__header h3 {
+  color: var(--sas-error-dark);
+}
+
+.module-details__danger-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.module-details__danger-info {
+  flex: 1;
+}
+
+.module-details__danger-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.module-details__danger-description {
+  color: var(--sas-gray-600);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.module-details__delete-confirm {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
 }
 
-.job-list__error {
+.module-details__delete-actions {
   display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* Module Details - Source Link */
+.module-details__source-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--sas-error-light);
-  color: var(--sas-error-dark);
+  gap: var(--space-2);
+  color: var(--sas-blue-primary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-blue-light);
   border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
 }
 
-.job-id-cell {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
+.module-details__source-link:hover,
+.module-details__source-link:focus-visible {
+  background-color: var(--sas-blue-primary);
+  color: var(--sas-white);
 }
 
-.job-operation {
-  text-transform: capitalize;
+.module-details__source-link svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex-shrink: 0;
 }

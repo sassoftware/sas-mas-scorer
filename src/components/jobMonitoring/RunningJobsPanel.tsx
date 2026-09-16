@@ -4,6 +4,8 @@
 import React, { useEffect, useState } from 'react';
 import { ExecutionJob } from '../../types/jobExecution';
 import { Button } from '../common/Button';
+import { EmptyState } from '../common/EmptyState';
+import { Loading } from '../common/Loading';
 import { JobStateBadge } from './JobStateBadge';
 import { elapsedSince, formatDuration, formatTimestamp } from './utils';
 
@@ -31,10 +33,10 @@ export const RunningJobsPanel: React.FC<RunningJobsPanelProps> = ({
   const now = useNowTick(1000);
 
   if (jobs.length === 0) {
-    return (
-      <p className="job-monitoring__empty">
-        {loading ? 'Loading running jobs…' : 'No jobs are currently running.'}
-      </p>
+    return loading ? (
+      <Loading size="small" message="Loading running jobs…" />
+    ) : (
+      <EmptyState title="No jobs are currently running." />
     );
   }
 

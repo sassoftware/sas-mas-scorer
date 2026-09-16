@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { PageHeader } from '../layout/Layout';
+import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 import { useSasAuth } from '../../auth';
 import { useJobMonitoring } from '../../hooks/useJobMonitoring';
@@ -57,7 +58,7 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
           role="status"
           aria-live="polite"
         >
-          <span className="job-monitoring__scanning-spinner" />
+          <span className="sas-spinner sas-spinner--small" aria-hidden="true" />
           <span>
             Loading jobs…
             {monitor.stats && monitor.stats.scanned > 0
@@ -71,29 +72,33 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
 
 
       {monitor.pollingPaused && (
-        <div className="job-monitoring__error">
-          <span>
-            Auto-refresh paused due to errors from SAS Viya.
-            {monitor.statsError || monitor.runningError || monitor.completedError
-              ? ` Last error: ${monitor.statsError ?? monitor.runningError ?? monitor.completedError}`
-              : ''}
-          </span>
-          <Button variant="tertiary" size="small" onClick={monitor.refresh}>
-            Retry
-          </Button>
-        </div>
+        <Alert
+          variant="error"
+          actions={
+            <Button variant="tertiary" size="small" onClick={monitor.refresh}>
+              Retry
+            </Button>
+          }
+        >
+          Auto-refresh paused due to errors from SAS Viya.
+          {monitor.statsError || monitor.runningError || monitor.completedError
+            ? ` Last error: ${monitor.statsError ?? monitor.runningError ?? monitor.completedError}`
+            : ''}
+        </Alert>
       )}
 
       <section className="job-monitoring__section" aria-label="Currently running jobs">
         <div className="job-monitoring__section-header">
-          <h2 className="job-monitoring__section-title">
-            Running
+          {/* The live count sits beside the heading, not inside it, so the
+              heading's accessible name is stable across polls. */}
+          <div className="job-monitoring__section-title-group">
+            <h2 className="job-monitoring__section-title">Running</h2>
             <span className="job-monitoring__section-meta">
               {monitor.runningLoading && monitor.runningJobs.length === 0
                 ? 'Loading…'
                 : `${runningCount} active`}
             </span>
-          </h2>
+          </div>
           <span className="job-monitoring__section-meta">Auto-refreshes every 5 s</span>
         </div>
         <RunningJobsPanel
@@ -113,12 +118,16 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
           </span>
         </div>
         {monitor.completedError && (
-          <div className="job-monitoring__error">
-            <span>{monitor.completedError}</span>
-            <Button variant="tertiary" size="small" onClick={monitor.refresh}>
-              Retry
-            </Button>
-          </div>
+          <Alert
+            variant="error"
+            actions={
+              <Button variant="tertiary" size="small" onClick={monitor.refresh}>
+                Retry
+              </Button>
+            }
+          >
+            {monitor.completedError}
+          </Alert>
         )}
         <CompletedJobsTable
           jobs={monitor.completedJobs}

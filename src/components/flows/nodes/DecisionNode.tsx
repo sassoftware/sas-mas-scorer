@@ -24,8 +24,6 @@ export default function DecisionNode({ data }: NodeProps<DecisionNodeType>) {
     badge = NODE_TYPE_LABELS[data.nodeType] ?? data.nodeType;
   }
 
-  const badgeColor = colors.border;
-
   return (
     <>
       <Handle type="target" position={Position.Top} />
@@ -46,9 +44,9 @@ export default function DecisionNode({ data }: NodeProps<DecisionNodeType>) {
               display: 'inline-block',
               padding: '2px 8px',
               borderRadius: '9999px',
-              color: '#ffffff',
+              color: 'var(--sas-white)',
               fontSize: '10px',
-              backgroundColor: badgeColor,
+              backgroundColor: colors.badge,
             }}
           >
             {badge}

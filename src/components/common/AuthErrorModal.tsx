@@ -1,9 +1,9 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Button } from './Button';
-import { Card, CardHeader, CardBody, CardFooter } from './Card';
+import { Modal } from './Modal';
 import { Alert } from './Alert';
 
 // TLS/certificate failures surfaced by Node in the Electron main process
@@ -33,72 +33,59 @@ export const AuthErrorModal: React.FC<AuthErrorModalProps> = ({
 }) => {
   const isCertError = CERT_ERROR_RE.test(error);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const title = isCertError
+    ? 'Could not connect securely'
+    : operation === 'login' ? 'Login failed' : 'Logout failed';
 
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ maxWidth: '560px', width: '100%', margin: '24px', color: 'var(--sas-gray-900, #1a1a1a)' }}>
-        <Card padding="none">
-          <CardHeader>
-            <h3>
-              {isCertError
-                ? 'Could not connect securely'
-                : operation === 'login' ? 'Login failed' : 'Logout failed'}
-            </h3>
-          </CardHeader>
-          <CardBody>
-            {isCertError ? (
-              <>
-                <p style={{ margin: '0 0 12px' }}>
-                  The connection to the server failed because it presents a self-signed or
-                  untrusted SSL certificate, and this connection profile requires certificate
-                  verification.
-                </p>
-                <p style={{ margin: '0 0 8px' }}>To connect anyway:</p>
-                <ol style={{ margin: '0 0 12px', paddingLeft: '20px', lineHeight: 1.7 }}>
-                  <li>Open <strong>Connection Settings</strong> (gear icon in the header)</li>
-                  <li>Click <strong>Edit</strong> on this connection</li>
-                  <li>Check <strong>Skip SSL certificate verification</strong></li>
-                  <li>Save the connection and log in again</li>
-                </ol>
-                <Alert variant="warning">
-                  Skipping certificate verification weakens the security of the connection —
-                  only do this for development or test environments you trust.
-                </Alert>
-              </>
-            ) : (
-              <p style={{ margin: '0 0 12px' }}>
-                {operation === 'login'
-                  ? 'The login attempt did not complete. Check that the server URL and client credentials in your connection profile are correct, then try again.'
-                  : 'The logout attempt did not complete. Your session may still be active — try again.'}
-              </p>
-            )}
-            <p style={{ margin: '12px 0 0', fontSize: '12px', color: 'var(--sas-gray-500, #888)', fontFamily: 'var(--font-family-mono, monospace)', wordBreak: 'break-word' }}>
-              {error}
-            </p>
-          </CardBody>
-          <CardFooter>
-            <Button variant="tertiary" onClick={onClose}>
-              Close
+    // elevated: this dialog can open while the connection-settings modal is up
+    <Modal
+      title={title}
+      onClose={onClose}
+      elevated
+      footer={
+        <>
+          <Button variant="tertiary" onClick={onClose}>
+            Close
+          </Button>
+          {onOpenSettings && (
+            <Button variant="primary" onClick={onOpenSettings}>
+              Open Connection Settings
             </Button>
-            {onOpenSettings && (
-              <Button variant="primary" onClick={onOpenSettings}>
-                Open Connection Settings
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
-      </div>
-    </div>
+          )}
+        </>
+      }
+    >
+      {isCertError ? (
+        <>
+          <p style={{ margin: '0 0 12px' }}>
+            The connection to the server failed because it presents a self-signed or
+            untrusted SSL certificate, and this connection profile requires certificate
+            verification.
+          </p>
+          <p style={{ margin: '0 0 8px' }}>To connect anyway:</p>
+          <ol style={{ margin: '0 0 12px', paddingLeft: '20px', lineHeight: 1.7 }}>
+            <li>Open <strong>Connection Settings</strong> (gear icon in the header)</li>
+            <li>Click <strong>Edit</strong> on this connection</li>
+            <li>Check <strong>Skip SSL certificate verification</strong></li>
+            <li>Save the connection and log in again</li>
+          </ol>
+          <Alert variant="warning">
+            Skipping certificate verification weakens the security of the connection —
+            only do this for development or test environments you trust.
+          </Alert>
+        </>
+      ) : (
+        <p style={{ margin: '0 0 12px' }}>
+          {operation === 'login'
+            ? 'The login attempt did not complete. Check that the server URL and client credentials in your connection profile are correct, then try again.'
+            : 'The logout attempt did not complete. Your session may still be active — try again.'}
+        </p>
+      )}
+      <p style={{ margin: '12px 0 0', fontSize: 'var(--font-size-sm)', color: 'var(--sas-text-muted)', fontFamily: 'var(--font-family-mono)', wordBreak: 'break-word' }}>
+        {error}
+      </p>
+    </Modal>
   );
 };
 

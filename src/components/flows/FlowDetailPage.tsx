@@ -5,8 +5,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDecision, getDecisionRevision } from '../../api/decisions';
 import { getRestApiDefinitionByUri, REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail } from '../../api/restApiDefinitions';
-import { collectCustomObjectUris } from '../../utils/classify';
+import { getRuleSetBundle, type RuleSetBundle } from '../../api/rulesets';
+import { collectCustomObjectUris, collectRuleSetIds } from '../../utils/classify';
 import type { DecisionFlow, SidNodeData, Step } from '../../types/sid';
+import { Alert, Button, Loading } from '../common';
 import FlowHeader from './FlowHeader';
 import FlowDiagram from './FlowDiagram';
 import FlowSidePanel from './FlowSidePanel';
@@ -17,6 +19,15 @@ interface FlowDetailPageProps {
   flowId: string;
 }
 
+/** Nesting levels of sub-decisions to fetch; the diagram expands the same depth. */
+const MAX_SUB_DECISION_DEPTH = 3;
+
+const BACK_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+  </svg>
+);
+
 export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   const navigate = useNavigate();
 
@@ -24,12 +35,16 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Sub-decision cache
+  // The three caches are mutable Maps with stable identity. They are filled
+  // in the background after the decision itself has rendered, and
+  // `cacheVersion` is bumped exactly once when all of them are complete, so
+  // the diagram converts and lays out the graph once per load rather than
+  // once per fetch phase.
   const [subDecisionCache] = useState<Map<string, DecisionFlow>>(new Map());
-  const [subDecisionsLoading, setSubDecisionsLoading] = useState(false);
-
-  // REST API definition cache (keyed by the step's revision URI)
   const [restApiCache] = useState<Map<string, RestApiDefinitionDetail>>(new Map());
+  const [ruleSetCache] = useState<Map<string, RuleSetBundle>>(new Map());
+  const [cacheVersion, setCacheVersion] = useState(0);
+  const [referencesLoading, setReferencesLoading] = useState(false);
 
   // Side panel
   const [selectedNode, setSelectedNode] = useState<SidNodeData | null>(null);
@@ -50,40 +65,54 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     getDecision(id)
       .then((data) => {
         setFlow(data);
-        fetchSubDecisions(data, subDecisionCache, 0).then(() => fetchRestApiDefinitions(data));
+        void loadReferences(data);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function fetchSubDecisions(
-    decision: DecisionFlow,
-    cache: Map<string, DecisionFlow>,
-    depth: number,
-  ) {
-    if (depth >= 3) return;
-    const steps = decision.flow?.steps ?? [];
-    const subDecisionUris = extractSubDecisionUris(steps);
-
-    const newUris = subDecisionUris.filter((uri) => !cache.has(uri));
-    if (newUris.length === 0) return;
-
-    setSubDecisionsLoading(true);
+  /**
+   * Sub-decisions first (the other two collect references from them), then
+   * REST API definitions and rule sets together; publish the caches once.
+   * The `finally` runs even if one tail rejects, so the other's cache still
+   * reaches the diagram.
+   */
+  async function loadReferences(decision: DecisionFlow) {
+    setReferencesLoading(true);
     try {
-      const results = await Promise.allSettled(
-        newUris.map((uri) => getDecisionRevision(uri)),
-      );
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result.status === 'fulfilled') {
-          cache.set(newUris[i], result.value);
-          await fetchSubDecisions(result.value, cache, depth + 1);
+      await fetchSubDecisions(decision);
+      await Promise.allSettled([fetchRestApiDefinitions(decision), fetchRuleSets(decision)]);
+    } finally {
+      setReferencesLoading(false);
+      setCacheVersion((v) => v + 1);
+    }
+  }
+
+  /**
+   * Breadth-first: one request burst per nesting level, deduplicated against
+   * the cache, so sibling subtrees load together and a grandchild shared by
+   * two children is fetched once.
+   */
+  async function fetchSubDecisions(decision: DecisionFlow) {
+    let frontier: DecisionFlow[] = [decision];
+    for (let depth = 0; depth < MAX_SUB_DECISION_DEPTH && frontier.length > 0; depth++) {
+      const uris = new Set<string>();
+      for (const f of frontier) {
+        for (const uri of extractSubDecisionUris(f.flow?.steps ?? [])) {
+          if (!subDecisionCache.has(uri)) uris.add(uri);
         }
       }
-      // Force re-render by updating flow
-      setFlow((prev) => (prev ? { ...prev } : prev));
-    } finally {
-      setSubDecisionsLoading(false);
+      const newUris = [...uris];
+      if (newUris.length === 0) return;
+
+      const results = await Promise.allSettled(newUris.map((uri) => getDecisionRevision(uri)));
+      frontier = [];
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          subDecisionCache.set(newUris[i], result.value);
+          frontier.push(result.value);
+        }
+      });
     }
   }
 
@@ -99,15 +128,24 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
     if (newUris.length === 0) return;
 
     const results = await Promise.allSettled(newUris.map((uri) => getRestApiDefinitionByUri(uri)));
-    let added = false;
     results.forEach((result, i) => {
-      if (result.status === 'fulfilled') {
-        restApiCache.set(newUris[i], result.value);
-        added = true;
-      }
+      if (result.status === 'fulfilled') restApiCache.set(newUris[i], result.value);
     });
-    // Force a re-render so the nodes pick up the method/host badges
-    if (added) setFlow((prev) => (prev ? { ...prev } : prev));
+  }
+
+  /** Fetch the rule sets used by the decision and its sub-decisions. */
+  async function fetchRuleSets(decision: DecisionFlow) {
+    const ids = new Set(collectRuleSetIds(decision.flow?.steps ?? []));
+    for (const sub of subDecisionCache.values()) {
+      for (const rsId of collectRuleSetIds(sub.flow?.steps ?? [])) ids.add(rsId);
+    }
+    const newIds = [...ids].filter((rsId) => !ruleSetCache.has(rsId));
+    if (newIds.length === 0) return;
+
+    const results = await Promise.allSettled(newIds.map((rsId) => getRuleSetBundle(rsId)));
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') ruleSetCache.set(newIds[i], result.value);
+    });
   }
 
   const handleNodeClick = useCallback((nodeData: SidNodeData) => {
@@ -119,20 +157,18 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flow-detail__loading">
-        Loading decision flow...
-      </div>
-    );
+    return <Loading message="Loading decision flow..." />;
   }
 
   if (error) {
     return (
-      <div>
-        <div className="flow-list__error">{error}</div>
-        <button className="flow-detail__back" onClick={() => navigate('/flows')}>
+      <div className="flow-detail">
+        <div className="flow-detail__alert">
+          <Alert variant="error">{error}</Alert>
+        </div>
+        <Button variant="tertiary" size="small" icon={BACK_ICON} onClick={() => navigate('/flows')}>
           Back to list
-        </button>
+        </Button>
       </div>
     );
   }
@@ -141,29 +177,36 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
 
   return (
     <div className={`flow-detail${selectedNode ? ' flow-detail--panel-open' : ''}`}>
-      <button className="flow-detail__back" onClick={() => navigate('/flows')}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+      <Button
+        variant="tertiary"
+        size="small"
+        icon={BACK_ICON}
+        className="flow-detail__back"
+        onClick={() => navigate('/flows')}
+      >
         Back to list
-      </button>
+      </Button>
 
       <FlowHeader
         flow={flow}
         subDecisionCache={subDecisionCache}
+        restApiCache={restApiCache}
+        ruleSetCache={ruleSetCache}
         onShowWorkflowHistory={() => setShowWorkflowHistory(true)}
       />
 
-      {subDecisionsLoading && (
-        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--sas-gray-400)', marginBottom: '8px' }}>
-          Loading sub-decisions...
-        </div>
+      {referencesLoading && (
+        <p className="flow-detail__loading-hint" role="status">
+          Loading sub-decisions and referenced objects...
+        </p>
       )}
 
       <FlowDiagram
         flow={flow}
         subDecisionCache={subDecisionCache}
         restApiCache={restApiCache}
+        ruleSetCache={ruleSetCache}
+        cacheVersion={cacheVersion}
         onNodeClick={handleNodeClick}
       />
 
@@ -171,6 +214,7 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
         <FlowSidePanel
           nodeData={selectedNode}
           restApiCache={restApiCache}
+          ruleSetCache={ruleSetCache}
           onClose={() => setSelectedNode(null)}
           onViewCode={handleViewCode}
         />

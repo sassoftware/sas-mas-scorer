@@ -1,14 +1,16 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, type ReactNode } from 'react';
-import type { SidNodeData, StepMapping, VariableAssignment } from '../../types/sid';
+import { useState, useEffect } from 'react';
+import type { SidNodeData, Step, StepMapping, VariableAssignment } from '../../types/sid';
 import { NODE_COLORS, NODE_TYPE_LABELS, CODE_TYPE_LABELS } from '../../flow/constants';
+import { ruleSetViewOf } from '../../flow/ruleSetViewCache';
 import { buildConditionExpression } from '../../utils/classify';
 import { directionLabel } from '../../utils/direction';
 import { buildDeepLink, buildRuleSetDeepLink, buildModelDeepLink, buildCustomObjectDeepLink } from '../../utils/deepLinks';
 import { getSasViyaUrl } from '../../config';
-import { getRuleSet, getRuleSetRules, type RuleSetDetail, type BusinessRule } from '../../api/rulesets';
+import { getRuleSetBundle, getRuleSet, type RuleSetDetail, type RuleSetBundle } from '../../api/rulesets';
+import type { RuleElementView } from '../../utils/ruleSetView';
 import { getSidModel, type SidModelDetail } from '../../api/sidModels';
 import { getCodeFileDetail, type CodeFileDetail } from '../../api/codeFiles';
 import { getTreatmentDefinitionByRevision, getTreatmentGroupByUri, type TreatmentDefinitionDetail, type TreatmentGroupDetail } from '../../api/treatments';
@@ -18,7 +20,9 @@ import {
   authTypeLabel, boundDecisionVariable, getRestApiDefinitionByUri,
   REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail, type RestApiParam,
 } from '../../api/restApiDefinitions';
+import { Alert, Button, Loading, isAnyModalOpen } from '../common';
 import FlowDeepLink from './FlowDeepLink';
+import CollapsibleSection from './CollapsibleSection';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -62,12 +66,18 @@ function displayLength(length?: number, dataType?: string): string {
   return '100';
 }
 
+/**
+ * The app-wide direction mapping (components.css): input = blue,
+ * output = green, in/out = neutral. A temporary variable has no direction,
+ * so it takes the plain default chip; its label ("temp") is what tells it
+ * apart from in/out, never the colour alone.
+ */
 function directionBadgeClass(direction?: string): string {
   switch (direction) {
-    case 'input': return 'flow-dir-badge flow-dir-badge--input';
-    case 'output': return 'flow-dir-badge flow-dir-badge--output';
-    case 'inOut': return 'flow-dir-badge flow-dir-badge--inout';
-    default: return 'flow-dir-badge flow-dir-badge--temp';
+    case 'input': return 'sas-badge sas-badge--direction-input';
+    case 'output': return 'sas-badge sas-badge--direction-output';
+    case 'inOut': return 'sas-badge sas-badge--direction-both';
+    default: return 'sas-badge sas-badge--default';
   }
 }
 
@@ -75,42 +85,37 @@ function directionBadgeClass(direction?: string): string {
 /*  Internal sub-components                                            */
 /* ------------------------------------------------------------------ */
 
-function Section({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="flow-side-panel__section">
-      <button className="flow-side-panel__section-toggle" onClick={() => setOpen(o => !o)}>
-        <span className="flow-side-panel__section-arrow">{open ? '▾' : '▸'}</span>
-        <h4 className="flow-side-panel__section-title">{title}</h4>
-      </button>
-      {open && children}
-    </div>
-  );
+/**
+ * Serialises the step only when its section is expanded — a branch step
+ * carries its whole onTrue/onFalse subtree, so this is not free.
+ */
+function RawStepJson({ step }: { step: Step }) {
+  return <pre className="flow-sp-code">{JSON.stringify(step, null, 2)}</pre>;
 }
 
 function VariableTable({ variables }: { variables: { name: string; direction?: string; dataType?: string; length?: number; description?: string }[] }) {
   if (!variables.length) return null;
   return (
-    <table className="flow-sp-var-table">
-      <thead>
+    <table className="sas-table sas-table--compact flow-table--fixed">
+      <thead className="sas-table__head">
         <tr>
-          <th>Name</th>
-          <th>Direction</th>
-          <th>Type</th>
-          <th>Length</th>
+          <th className="sas-table__th">Name</th>
+          <th className="sas-table__th">Direction</th>
+          <th className="sas-table__th">Type</th>
+          <th className="sas-table__th">Length</th>
         </tr>
       </thead>
       <tbody>
         {variables.map((v, i) => (
-          <tr key={i} title={v.description || undefined}>
-            <td>{v.name}</td>
-            <td>
+          <tr className="sas-table__row" key={i} title={v.description || undefined}>
+            <td className="sas-table__td">{v.name}</td>
+            <td className="sas-table__td">
               <span className={directionBadgeClass(v.direction)}>
                 {directionLabel(v.direction)}
               </span>
             </td>
-            <td>{v.dataType ?? ''}</td>
-            <td>{displayLength(v.length, v.dataType)}</td>
+            <td className="sas-table__td">{v.dataType ?? ''}</td>
+            <td className="sas-table__td">{displayLength(v.length, v.dataType)}</td>
           </tr>
         ))}
       </tbody>
@@ -137,27 +142,142 @@ function TemplateText({ text }: { text: string }) {
 function ParamTable({ params, mappings }: { params: RestApiParam[]; mappings?: StepMapping[] }) {
   if (!params.length) return null;
   return (
-    <table className="flow-sp-var-table">
-      <thead>
+    <table className="sas-table sas-table--compact flow-table--fixed">
+      <thead className="sas-table__head">
         <tr>
-          <th>Key</th>
-          <th>Value</th>
-          <th>Decision variable</th>
+          <th className="sas-table__th">Key</th>
+          <th className="sas-table__th">Value</th>
+          <th className="sas-table__th">Decision variable</th>
         </tr>
       </thead>
       <tbody>
         {params.map((p, i) => {
           const bound = boundDecisionVariable(p.value, mappings);
           return (
-            <tr key={i} title={p.description || undefined}>
-              <td>{p.key}</td>
-              <td><TemplateText text={p.value ?? ''} /></td>
-              <td>{bound ?? '\u2014'}</td>
+            <tr className="sas-table__row" key={i} title={p.description || undefined}>
+              <td className="sas-table__td">{p.key}</td>
+              <td className="sas-table__td"><TemplateText text={p.value ?? ''} /></td>
+              <td className="sas-table__td">{bound ?? '\u2014'}</td>
             </tr>
           );
         })}
       </tbody>
     </table>
+  );
+}
+
+/** One condition or action, with its kind and any lookup table or list it reads. */
+function RuleElement({ element, lead }: { element: RuleElementView; lead: string }) {
+  return (
+    <div className={`flow-sp-rule__line${element.invalid ? ' flow-sp-rule__line--invalid' : ''}`}>
+      <span className="flow-sp-rule__lead">{lead}</span>
+      <span className="flow-sp-rule__expr">{element.text || '—'}</span>
+      <span className="flow-sp-rule__kind">{element.kind}</span>
+      {element.reference && (
+        <span className="flow-sp-rule__ref" title={element.reference.id}>
+          {element.reference.kind === 'list' ? 'list' : 'lookup'} {element.reference.name}
+        </span>
+      )}
+      {element.invalid && element.message && (
+        <span className="flow-sp-rule__msg">{element.message}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A rule set is an ordered if / else if / else chain. Rules arrive in execution
+ * order and conditions within a rule are ANDed.
+ */
+function RuleChain({ bundle }: { bundle: RuleSetBundle }) {
+  const view = ruleSetViewOf(bundle);
+
+  return (
+    <>
+      {view.invalidCount > 0 && (
+        <div className="flow-sp-rule-alert">
+          <Alert
+            variant="error"
+            title={`${view.invalidCount} element${view.invalidCount === 1 ? '' : 's'} reported invalid`}
+          >
+            {view.issues.map((issue, i) => (
+              <div key={i} className="flow-sp-rule-alert__item">
+                {issue.message}
+                <span className="flow-sp-rule-alert__rules">
+                  {issue.rules.join(', ')}
+                </span>
+              </div>
+            ))}
+          </Alert>
+        </div>
+      )}
+
+      {(view.reads.length > 0 || view.writes.length > 0) && (
+        <>
+          <h5 className="flow-side-panel__section-title">Term usage</h5>
+          {view.reads.length > 0 && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Reads:</span>
+              <span className="flow-sp-detail__value">{view.reads.join(', ')}</span>
+            </div>
+          )}
+          {view.writes.length > 0 && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Writes:</span>
+              <span className="flow-sp-detail__value">{view.writes.join(', ')}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {view.references.length > 0 && (
+        <>
+          <h5 className="flow-side-panel__section-title">Lookup tables &amp; lists</h5>
+          {view.references.map((ref, i) => (
+            <div key={i} className="flow-sp-detail">
+              <span className="flow-sp-detail__label">
+                {ref.kind === 'list' ? 'List:' : 'Lookup:'}
+              </span>
+              <span className="flow-sp-detail__value">
+                {ref.name}
+                <span className="flow-sp-rule-alert__rules">{ref.usedBy.join(', ')}</span>
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+
+      <h5 className="flow-side-panel__section-title">Rules ({view.rules.length})</h5>
+      {view.rules.map((rule) => (
+        <div
+          key={rule.id ?? rule.sequence}
+          className={`flow-sp-card flow-sp-rule${rule.invalidCount > 0 ? ' flow-sp-rule--invalid' : ''}`}
+        >
+          <div className="flow-sp-card__title">
+            <span className="flow-sp-rule__seq">{rule.sequence}</span>
+            {rule.name}
+            {rule.tracked && <span className="flow-sp-rule__tracked">tracked</span>}
+          </div>
+          {rule.description && (
+            <div className="flow-sp-detail">
+              <span className="flow-sp-detail__label">Description:</span>
+              <span className="flow-sp-detail__value">{rule.description}</span>
+            </div>
+          )}
+          {rule.conditions.map((condition, i) => (
+            <RuleElement key={`c${i}`} element={condition} lead={i === 0 ? rule.keyword : 'AND'} />
+          ))}
+          {rule.conditions.length === 0 && rule.keyword === 'ELSE' && (
+            <div className="flow-sp-rule__line">
+              <span className="flow-sp-rule__lead">ELSE</span>
+            </div>
+          )}
+          {rule.actions.map((action, i) => (
+            <RuleElement key={`a${i}`} element={action} lead={i === 0 ? 'THEN' : 'AND'} />
+          ))}
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -202,13 +322,14 @@ interface FlowSidePanelProps {
   nodeData: SidNodeData;
   /** Definitions already fetched by the page, keyed by step revision URI. */
   restApiCache?: Map<string, RestApiDefinitionDetail>;
+  /** Rule sets already fetched by the page, keyed by rule set id. */
+  ruleSetCache?: Map<string, RuleSetBundle>;
   onClose: () => void;
   onViewCode?: (href: string, language: string) => void;
 }
 
-export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewCode }: FlowSidePanelProps) {
-  const [ruleSetDetail, setRuleSetDetail] = useState<RuleSetDetail | null>(null);
-  const [ruleSetRules, setRuleSetRules] = useState<BusinessRule[]>([]);
+export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, onClose, onViewCode }: FlowSidePanelProps) {
+  const [ruleSetBundle, setRuleSetBundle] = useState<RuleSetBundle | null>(null);
   const [modelDetail, setModelDetail] = useState<SidModelDetail | null>(null);
   const [codeFileDetail, setCodeFileDetail] = useState<CodeFileDetail | null>(null);
   const [codeFileHref, setCodeFileHref] = useState<string>('');
@@ -221,9 +342,13 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
+  // Escape closes the panel — unless a modal (code viewer) is open above it,
+  // in which case the modal owns the key and the panel must stay put.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (isAnyModalOpen()) return;
+      onClose();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -243,8 +368,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
     async function fetchAll() {
       setLoading(true);
       setErrors([]);
-      setRuleSetDetail(null);
-      setRuleSetRules([]);
+      setRuleSetBundle(null);
       setModelDetail(null);
       setCodeFileDetail(null);
       setCodeFileHref('');
@@ -259,14 +383,9 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
         // Rule Set
         if (currentStep.ruleset?.id) {
           try {
-            const [detail, rules] = await Promise.all([
-              getRuleSet(currentStep.ruleset.id),
-              getRuleSetRules(currentStep.ruleset.id),
-            ]);
-            if (!cancelled) {
-              setRuleSetDetail(detail);
-              setRuleSetRules(rules);
-            }
+            const bundle = ruleSetCache?.get(currentStep.ruleset.id)
+              ?? await getRuleSetBundle(currentStep.ruleset.id);
+            if (!cancelled) setRuleSetBundle(bundle);
           } catch (e) {
             errs.push(`Rule set: ${e instanceof Error ? e.message : String(e)}`);
           }
@@ -390,7 +509,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [step, restApiCache]);
+  }, [step, restApiCache, ruleSetCache]);
 
   /* ---- useEffect 2: Check for decisionNodeType after codeFileDetail loads ---- */
   useEffect(() => {
@@ -415,12 +534,13 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
   /* ---- Derived values ---- */
   const conditionExpr = step ? buildConditionExpression(step) : '';
   const codeLanguage = step?.customObject?.type ? (CODE_TYPE_LABELS[step.customObject.type] ?? '') : '';
+  const ruleSetDetail = ruleSetBundle?.detail ?? null;
 
   /* ---- JSX ---- */
   return (
     <div className="flow-side-panel">
-      <button className="flow-side-panel__close" onClick={onClose} title="Close panel">
-        &#x2715; Close
+      <button type="button" className="flow-side-panel__close" onClick={onClose} title="Close panel">
+        <span aria-hidden="true">&#x2715;</span> Close
       </button>
       {/* Header */}
       <div
@@ -429,7 +549,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
       >
         <span
           className="flow-side-panel__type-badge"
-          style={{ backgroundColor: colors.border, color: '#fff' }}
+          style={{ backgroundColor: colors.badge, color: 'var(--sas-white)' }}
         >
           {NODE_TYPE_LABELS[nodeData.nodeType] ?? nodeData.nodeType}
         </span>
@@ -441,20 +561,17 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
 
       {/* Scrollable content */}
       <div className="flow-side-panel__content">
-        {/* Loading spinner */}
-        {loading && (
-          <div className="flow-side-panel__loading">
-            <div className="flow-side-panel__spinner" />
-            Loading details...
-          </div>
-        )}
+        {loading && <Loading size="small" message="Loading details..." />}
 
-        {/* Errors */}
         {errors.length > 0 && (
-          <div className="flow-side-panel__errors">
-            {errors.map((err, i) => (
-              <div key={i}>{err}</div>
-            ))}
+          <div className="flow-side-panel__alert">
+            <Alert variant="error" title="Some details could not be loaded">
+              <ul className="flow-side-panel__error-list">
+                {errors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
+            </Alert>
           </div>
         )}
 
@@ -462,14 +579,14 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
 
         {/* Condition expression */}
         {(nodeData.nodeType === 'condition' || nodeData.nodeType === 'cond_expr') && conditionExpr && (
-          <Section title="Condition">
+          <CollapsibleSection title="Condition">
             <div className="flow-sp-code">{conditionExpr}</div>
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* A/B Test */}
         {step?.abTestCases && step.abTestCases.length > 0 && (
-          <Section title="A/B Test">
+          <CollapsibleSection title="A/B Test">
             {step.abTestType && (
               <div className="flow-sp-detail">
                 <span className="flow-sp-detail__label">Type:</span>
@@ -494,12 +611,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 )}
               </div>
             ))}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Parallel Process */}
         {step?.nodes && step.nodes.length > 0 && (
-          <Section title="Parallel Nodes">
+          <CollapsibleSection title="Parallel Nodes">
             {step.nodes.map((pn) => (
               <div key={pn.id} className="flow-sp-card">
                 <div className="flow-sp-card__title">{pn.name}</div>
@@ -511,12 +628,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 )}
               </div>
             ))}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Record Contact */}
         {step?.recordContact && (
-          <Section title="Record Contact">
+          <CollapsibleSection title="Record Contact">
             {step.recordContact.name && (
               <div className="flow-sp-detail">
                 <span className="flow-sp-detail__label">Name:</span>
@@ -553,12 +670,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
               <span className="flow-sp-detail__label">Exclude from Contact Aggregation:</span>
               <span className="flow-sp-detail__value">{step.recordContact.excludeFromContactAggregation ? 'Yes' : 'No'}</span>
             </div>
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Segmentation Tree */}
         {segTreeDetail && (
-          <Section title="Segmentation Tree">
+          <CollapsibleSection title="Segmentation Tree">
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Name:</span>
               <span className="flow-sp-detail__value">{segTreeDetail.name}</span>
@@ -606,19 +723,21 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <SegTreeNodeView node={segTreeDetail.node} />
               </>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Code File */}
         {codeFileDetail && (
-          <Section title="Code File">
+          <CollapsibleSection title="Code File">
             {onViewCode && codeFileHref && (
-              <button
+              <Button
+                variant="primary"
+                size="small"
                 className="flow-sp-view-code-btn"
                 onClick={() => onViewCode(codeFileHref, codeLanguage || 'text')}
               >
                 View Full Code
-              </button>
+              </Button>
             )}
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Name:</span>
@@ -654,12 +773,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <VariableTable variables={codeFileDetail.signature} />
               </>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* REST API definition */}
         {restApiDetail && (
-          <Section title="REST API">
+          <CollapsibleSection title="REST API">
             {(() => {
               // Deep-link from the step URI: its first UUID is the definition id.
               // restApiDetail.id is the revision id when fetched by revision URI.
@@ -741,12 +860,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <VariableTable variables={restApiDetail.signature} />
               </>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Sub-Decision */}
         {nodeData.subDecisionId && (
-          <Section title="Sub-Decision">
+          <CollapsibleSection title="Sub-Decision">
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Decision ID:</span>
               <span className="flow-sp-detail__value">{nodeData.subDecisionId}</span>
@@ -755,12 +874,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
               const link = buildDeepLink('decision', nodeData.subDecisionId);
               return link ? <FlowDeepLink url={link.url} label={link.label} /> : null;
             })()}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Rule Set */}
         {ruleSetDetail && (
-          <Section title="Rule Set">
+          <CollapsibleSection title="Rule Set">
             {(() => {
               const link = buildRuleSetDeepLink(ruleSetDetail.id);
               return link ? <FlowDeepLink url={link.url} label={link.label} /> : null;
@@ -773,6 +892,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
               <div className="flow-sp-detail">
                 <span className="flow-sp-detail__label">Description:</span>
                 <span className="flow-sp-detail__value">{ruleSetDetail.description}</span>
+              </div>
+            )}
+            {ruleSetDetail.ruleSetType && (
+              <div className="flow-sp-detail">
+                <span className="flow-sp-detail__label">Type:</span>
+                <span className="flow-sp-detail__value">{ruleSetDetail.ruleSetType}</span>
               </div>
             )}
             {ruleSetDetail.majorRevision !== undefined && (
@@ -793,50 +918,13 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <VariableTable variables={ruleSetDetail.signature} />
               </>
             )}
-            {ruleSetRules.length > 0 && (
-              <>
-                <h5 className="flow-side-panel__section-title">Rules ({ruleSetRules.length})</h5>
-                {ruleSetRules.map((rule: BusinessRule) => (
-                  <div key={rule.id} className="flow-sp-card">
-                    <div className="flow-sp-card__title">{rule.name}</div>
-                    {rule.description && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Description:</span>
-                        <span className="flow-sp-detail__value">{rule.description}</span>
-                      </div>
-                    )}
-                    {rule.conditional && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Conditional:</span>
-                        <span className="flow-sp-detail__value">{rule.conditional}</span>
-                      </div>
-                    )}
-                    {rule.conditions && rule.conditions.length > 0 && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Conditions:</span>
-                        <span className="flow-sp-detail__value">
-                          {rule.conditions.map((c) => c.expression ?? `${c.term?.name ?? '?'}`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                    {rule.actions && rule.actions.length > 0 && (
-                      <div className="flow-sp-detail">
-                        <span className="flow-sp-detail__label">Actions:</span>
-                        <span className="flow-sp-detail__value">
-                          {rule.actions.map((a) => a.expression ?? `${a.term?.name ?? '?'}`).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </Section>
+            {ruleSetBundle && ruleSetBundle.rules.length > 0 && <RuleChain bundle={ruleSetBundle} />}
+          </CollapsibleSection>
         )}
 
         {/* Model */}
         {modelDetail && (
-          <Section title="Model">
+          <CollapsibleSection title="Model">
             {(() => {
               const link = buildModelDeepLink(modelDetail.id);
               return link ? <FlowDeepLink url={link.url} label={link.label} /> : null;
@@ -898,22 +986,22 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
             {modelDetail.inputVariables && modelDetail.inputVariables.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Input Variables ({modelDetail.inputVariables.length})</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Type</th>
-                      <th>Length</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Role</th>
+                      <th className="sas-table__th">Type</th>
+                      <th className="sas-table__th">Length</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.inputVariables.map((v, i) => (
-                      <tr key={i} title={v.description || undefined}>
-                        <td>{v.name}</td>
-                        <td>{v.role ?? ''}</td>
-                        <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length, v.type)}</td>
+                      <tr className="sas-table__row" key={i} title={v.description || undefined}>
+                        <td className="sas-table__td">{v.name}</td>
+                        <td className="sas-table__td">{v.role ?? ''}</td>
+                        <td className="sas-table__td">{v.type ?? ''}</td>
+                        <td className="sas-table__td">{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -923,22 +1011,22 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
             {modelDetail.outputVariables && modelDetail.outputVariables.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Output Variables ({modelDetail.outputVariables.length})</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Role</th>
-                      <th>Type</th>
-                      <th>Length</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Role</th>
+                      <th className="sas-table__th">Type</th>
+                      <th className="sas-table__th">Length</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.outputVariables.map((v, i) => (
-                      <tr key={i} title={v.description || undefined}>
-                        <td>{v.name}</td>
-                        <td>{v.role ?? ''}</td>
-                        <td>{v.type ?? ''}</td>
-                        <td>{displayLength(v.length, v.type)}</td>
+                      <tr className="sas-table__row" key={i} title={v.description || undefined}>
+                        <td className="sas-table__td">{v.name}</td>
+                        <td className="sas-table__td">{v.role ?? ''}</td>
+                        <td className="sas-table__td">{v.type ?? ''}</td>
+                        <td className="sas-table__td">{displayLength(v.length, v.type)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -948,30 +1036,30 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
             {modelDetail.properties && modelDetail.properties.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Properties</h5>
-                <table className="flow-sp-table">
-                  <thead>
+                <table className="sas-table sas-table--compact">
+                  <thead className="sas-table__head">
                     <tr>
-                      <th>Name</th>
-                      <th>Value</th>
+                      <th className="sas-table__th">Name</th>
+                      <th className="sas-table__th">Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {modelDetail.properties.map((p, i) => (
-                      <tr key={i}>
-                        <td>{p.name}</td>
-                        <td>{p.value}</td>
+                      <tr className="sas-table__row" key={i}>
+                        <td className="sas-table__td">{p.name}</td>
+                        <td className="sas-table__td">{p.value}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Treatment Group */}
         {treatmentGroup && (
-          <Section title="Treatment Group">
+          <CollapsibleSection title="Treatment Group">
             {(() => {
               const link = step?.customObject
                 ? buildCustomObjectDeepLink(step.customObject.type, step.customObject.uri)
@@ -1023,20 +1111,20 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                     {def.attributes && def.attributes.length > 0 && (
                       <>
                         <h6 className="flow-side-panel__section-title">Attributes</h6>
-                        <table className="flow-sp-table">
-                          <thead>
+                        <table className="sas-table sas-table--compact">
+                          <thead className="sas-table__head">
                             <tr>
-                              <th>Name</th>
-                              <th>Default</th>
-                              <th>Type</th>
+                              <th className="sas-table__th">Name</th>
+                              <th className="sas-table__th">Default</th>
+                              <th className="sas-table__th">Type</th>
                             </tr>
                           </thead>
                           <tbody>
                             {def.attributes.map((attr, ai) => (
-                              <tr key={ai}>
-                                <td>{attr.name}</td>
-                                <td>{attr.defaultValue !== undefined ? String(attr.defaultValue) : '—'}</td>
-                                <td>{attr.valueConstraints?.dataType ?? ''}</td>
+                              <tr className="sas-table__row" key={ai}>
+                                <td className="sas-table__td">{attr.name}</td>
+                                <td className="sas-table__td">{attr.defaultValue !== undefined ? String(attr.defaultValue) : '—'}</td>
+                                <td className="sas-table__td">{attr.valueConstraints?.dataType ?? ''}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1067,12 +1155,12 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 ))}
               </>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* Decision Node Type */}
         {nodeTypeDetail && (
-          <Section title="Decision Node Type">
+          <CollapsibleSection title="Decision Node Type">
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Name:</span>
               <span className="flow-sp-detail__value">{nodeTypeDetail.name}</span>
@@ -1103,7 +1191,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
                 <span className="flow-sp-detail__value">Yes</span>
               </div>
             )}
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* API Links (merged into asset descriptions) */}
@@ -1137,70 +1225,67 @@ export default function FlowSidePanel({ nodeData, restApiCache, onClose, onViewC
 
         {/* ---- Mappings ---- */}
         {step?.mappings && step.mappings.length > 0 && (
-          <Section title="Mappings">
+          <CollapsibleSection title="Mappings">
             {step.mappingDataGridName && (
               <div className="flow-sp-detail">
                 <span className="flow-sp-detail__label">Data Grid:</span>
                 <span className="flow-sp-detail__value">{step.mappingDataGridName}</span>
               </div>
             )}
-            <table className="flow-sp-table">
-              <thead>
+            <table className="sas-table sas-table--compact">
+              <thead className="sas-table__head">
                 <tr>
-                  <th>Decision Term</th>
-                  <th>Direction</th>
-                  <th>Step Term</th>
+                  <th className="sas-table__th">Decision Term</th>
+                  <th className="sas-table__th">Direction</th>
+                  <th className="sas-table__th">Step Term</th>
                 </tr>
               </thead>
               <tbody>
                 {step.mappings.map((m: StepMapping, i: number) => (
-                  <tr key={m.id ?? i}>
-                    <td>{m.targetDecisionTermName}</td>
-                    <td>
+                  <tr className="sas-table__row" key={m.id ?? i}>
+                    <td className="sas-table__td">{m.targetDecisionTermName}</td>
+                    <td className="sas-table__td">
                       <span className={directionBadgeClass(m.direction)}>
                         {directionLabel(m.direction)}
                       </span>
                     </td>
-                    <td>{m.stepTermName}</td>
+                    <td className="sas-table__td">{m.stepTermName}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* ---- Variable Assignments ---- */}
         {step?.assignments && step.assignments.length > 0 && (
-          <Section title="Variable Assignments">
-            <table className="flow-sp-table">
-              <thead>
+          <CollapsibleSection title="Variable Assignments">
+            <table className="sas-table sas-table--compact">
+              <thead className="sas-table__head">
                 <tr>
-                  <th>Variable</th>
-                  <th>Value</th>
-                  <th>Type</th>
+                  <th className="sas-table__th">Variable</th>
+                  <th className="sas-table__th">Value</th>
+                  <th className="sas-table__th">Type</th>
                 </tr>
               </thead>
               <tbody>
                 {step.assignments.map((a: VariableAssignment) => (
-                  <tr key={a.id}>
-                    <td>{a.variableName}</td>
-                    <td className="flow-sp-code">{a.value ?? ''}</td>
-                    <td>{a.dataType ?? ''}</td>
+                  <tr className="sas-table__row" key={a.id}>
+                    <td className="sas-table__td">{a.variableName}</td>
+                    <td className="sas-table__td flow-sp-code">{a.value ?? ''}</td>
+                    <td className="sas-table__td">{a.dataType ?? ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Section>
+          </CollapsibleSection>
         )}
 
         {/* ---- Raw JSON ---- */}
         {step && (
-          <Section title="Raw JSON" defaultOpen={false}>
-            <details className="flow-sp-raw-json">
-              <summary>Show step JSON</summary>
-              <pre className="flow-sp-code">{JSON.stringify(step, null, 2)}</pre>
-            </details>
-          </Section>
+          <CollapsibleSection title="Raw JSON" defaultOpen={false}>
+            <RawStepJson step={step} />
+          </CollapsibleSection>
         )}
       </div>
     </div>

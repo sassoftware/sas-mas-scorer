@@ -4,6 +4,7 @@
 import React from 'react';
 import { Badge, BadgeVariant } from '../common/Badge';
 import { ExecutionJobState } from '../../types/jobExecution';
+import { formatJobState } from './utils';
 
 interface JobStateBadgeProps {
   state: ExecutionJobState;
@@ -28,7 +29,7 @@ export const JobStateBadge: React.FC<JobStateBadgeProps> = ({ state }) => {
   return (
     <span className={isLive ? 'job-monitoring__pulse' : undefined}>
       <Badge variant={variant} size="small">
-        {state}
+        {formatJobState(state)}
       </Badge>
     </span>
   );

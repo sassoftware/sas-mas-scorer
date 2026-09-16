@@ -121,10 +121,32 @@ export const useJobDetail = (
   const nextLogStartRef = useRef(0);
   const nextListingStartRef = useRef(0);
 
+  // Per-kind in-flight flags so a second drain of the same kind can never
+  // start while one is still running — two overlapping drains would both
+  // read the cursor before either advances it and append the same page
+  // twice. The epoch is bumped whenever the cursors are reset so a drain
+  // that was already in flight discards its (now stale) results.
+  const drainInFlightRef = useRef<{ log: boolean; listing: boolean }>({
+    log: false,
+    listing: false,
+  });
+  const drainEpochRef = useRef(0);
+
+  // Bumped by refresh() so the live-poll effect restarts (and drains at
+  // once) even though the job's id/state/compute ids are unchanged.
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
   // Whether we have already loaded the terminal-state files for this job, so
   // we don't re-fetch them every poll tick once the job has finished.
   const terminalLogFetchedRef = useRef(false);
   const terminalListingFetchedRef = useRef(false);
+
+  const resetDrainState = useCallback((): void => {
+    nextLogStartRef.current = 0;
+    nextListingStartRef.current = 0;
+    drainInFlightRef.current = { log: false, listing: false };
+    drainEpochRef.current += 1;
+  }, []);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -142,11 +164,10 @@ export const useJobDetail = (
     setLogError(null);
     setListingLines([]);
     setListingError(null);
-    nextLogStartRef.current = 0;
-    nextListingStartRef.current = 0;
+    resetDrainState();
     terminalLogFetchedRef.current = false;
     terminalListingFetchedRef.current = false;
-  }, [jobId]);
+  }, [jobId, resetDrainState]);
 
   const fetchJob = useCallback(
     async (silent = false): Promise<ExecutionJob | null> => {
@@ -173,12 +194,17 @@ export const useJobDetail = (
   // The compute API caps each call at 100 lines; if a job spits out a backlog
   // faster than our 3 s tick, we keep paging until we catch up. The cap (5
   // pages = 500 lines per tick) is a safety belt against runaway loops.
+  // Skipped entirely when a drain of the same kind is still in flight (a
+  // slow /compute call that outlasts the 3 s tick).
   const drainLive = useCallback(
     async (
       sessionId: string,
       computeJobId: string,
       kind: 'log' | 'listing'
     ): Promise<void> => {
+      if (drainInFlightRef.current[kind]) return;
+      drainInFlightRef.current[kind] = true;
+      const epoch = drainEpochRef.current;
       const cursorRef = kind === 'log' ? nextLogStartRef : nextListingStartRef;
       const setLines = kind === 'log' ? setLogLines : setListingLines;
       const setErr = kind === 'log' ? setLogError : setListingError;
@@ -187,7 +213,7 @@ export const useJobDetail = (
         for (let i = 0; i < 5; i++) {
           const start = cursorRef.current;
           const page = await fetcher(sessionId, computeJobId, start, LOG_PAGE_SIZE);
-          if (!mountedRef.current) return;
+          if (!mountedRef.current || epoch !== drainEpochRef.current) return;
           const items = page.items ?? [];
           if (items.length === 0) break;
           cursorRef.current = start + items.length;
@@ -196,8 +222,12 @@ export const useJobDetail = (
         }
         setErr(null);
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || epoch !== drainEpochRef.current) return;
         setErr(err instanceof Error ? err.message : `Failed to load ${kind}`);
+      } finally {
+        // A reset (new job / refresh) already cleared the flags for the new
+        // epoch; only a drain that is still current may release its own.
+        if (epoch === drainEpochRef.current) drainInFlightRef.current[kind] = false;
       }
     },
     []
@@ -247,21 +277,28 @@ export const useJobDetail = (
     fetchJob();
   }, [enabled, jobId, fetchJob]);
 
+  // The polling effects key on these primitives, never on `job` itself: the
+  // record is replaced by a fresh object on every 5 s poll, and keying on it
+  // would tear down and re-subscribe both intervals (with an extra immediate
+  // drain) each time. The compute ids are included because they only appear
+  // once the job record carries its log href.
+  const jobKey = job?.id ?? null;
+  const jobIsTerminal = job ? isTerminalState(job.state) : true;
+  const computeIds = job ? getComputeLogIds(job) : null;
+  const sessionId = computeIds?.sessionId ?? null;
+  const computeJobId = computeIds?.computeJobId ?? null;
+
   // Poll job record while running so we catch state transitions quickly.
   useEffect(() => {
-    if (!enabled || !visible || !job) return;
-    if (isTerminalState(job.state)) return;
+    if (!enabled || !visible || !jobKey || jobIsTerminal) return;
     const handle = setInterval(() => fetchJob(true), JOB_POLL_MS);
     return () => clearInterval(handle);
-  }, [enabled, visible, job, fetchJob]);
+  }, [enabled, visible, jobKey, jobIsTerminal, fetchJob]);
 
   // Live log/listing polling while running. Drain incrementally each tick.
   useEffect(() => {
-    if (!enabled || !visible || !job) return;
-    if (isTerminalState(job.state)) return;
-    const ids = getComputeLogIds(job);
-    if (!ids) return;
-    const { sessionId, computeJobId } = ids;
+    if (!enabled || !visible || !jobKey || jobIsTerminal) return;
+    if (!sessionId || !computeJobId) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
@@ -276,7 +313,16 @@ export const useJobDetail = (
       cancelled = true;
       clearInterval(handle);
     };
-  }, [enabled, visible, job, drainLive]);
+  }, [
+    enabled,
+    visible,
+    jobKey,
+    jobIsTerminal,
+    sessionId,
+    computeJobId,
+    refreshNonce,
+    drainLive,
+  ]);
 
   // Terminal-state files: fetch once per kind. The check on `*FetchedRef`
   // prevents re-fetching on every job-record refresh once we have the data.
@@ -290,12 +336,12 @@ export const useJobDetail = (
     if (!jobId) return;
     setLogLines([]);
     setListingLines([]);
-    nextLogStartRef.current = 0;
-    nextListingStartRef.current = 0;
+    resetDrainState();
     terminalLogFetchedRef.current = false;
     terminalListingFetchedRef.current = false;
+    setRefreshNonce((n) => n + 1);
     fetchJob();
-  }, [jobId, fetchJob]);
+  }, [jobId, fetchJob, resetDrainState]);
 
   return {
     job,

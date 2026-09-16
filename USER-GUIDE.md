@@ -20,10 +20,11 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 12. [UI Apps](#12-ui-apps)
 13. [View Flows](#13-view-flows)
 14. [Test Coverage Analysis](#14-test-coverage-analysis)
-15. [Job Monitoring](#15-job-monitoring)
-16. [Schema → Code](#16-schema--code)
-17. [Business Rules Import](#17-business-rules-import)
-18. [Keyboard and Interaction Tips](#18-keyboard-and-interaction-tips)
+15. [Publishing Overview](#15-publishing-overview)
+16. [Job Monitoring](#16-job-monitoring)
+17. [Schema → Code](#17-schema--code)
+18. [Business Rules Import](#18-business-rules-import)
+19. [Keyboard and Interaction Tips](#19-keyboard-and-interaction-tips)
 
 ---
 
@@ -86,7 +87,7 @@ When embedded in a SAS Visual Analytics report via a Job Definition, the applica
 
 ## 3. Navigating the Application
 
-The left sidebar is the primary navigation. It contains four main pages and a contextual section that appears when you have a module selected.
+The left sidebar is the primary navigation. It contains the main pages and a contextual section that appears when you have a module selected.
 
 ### Main Pages
 
@@ -96,6 +97,7 @@ The left sidebar is the primary navigation. It contains four main pages and a co
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
 | **Test Coverage** | Analyze test scenario coverage across all assets |
+| **Publishing Overview** | See every publishing destination and everything deployed to it |
 | **Rules Import** | Validate and import SAS Intelligent Decisioning rule sets from CSV files |
 | **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code |
 | **Schema → Code** | Generate a Python `execute()` function from a JSON/XML sample and save it to SAS Intelligent Decisioning |
@@ -110,6 +112,14 @@ When you select a module, two additional navigation items appear:
 ### Recent Items
 
 The sidebar also shows your most recently accessed **UI Apps** and **Modules** (up to 5 each) for quick navigation.
+
+### Collapsing the Sidebar
+
+The **Collapse** control at the bottom of the sidebar folds it to a narrow rail of icons, giving the page the extra width; click it again (**Expand navigation**) to restore the labels. Hover an icon to see its name. The choice is remembered on that computer, so the sidebar opens the way you left it. The recent-items lists are hidden while the sidebar is collapsed.
+
+### Narrow Windows and Embeds
+
+Below 768 pixels — a SAS Visual Analytics object, a Job Execution embed, or a small browser window — the sidebar becomes a drawer: the menu button at the left of the header opens it over the page, and **Escape**, a click outside it, or choosing a page closes it. Tables scroll inside their cards rather than pushing the page sideways, and toolbars wrap. The desktop app never goes narrower than 800 pixels, so it always shows the full sidebar (collapsible as above).
 
 ---
 
@@ -308,7 +318,9 @@ After the run completes (or is stopped), the results are displayed in a detailed
 
 Each row shows the row number, status badge, output values, and runtime. Click **Show** on any row to expand it and see the full input and output JSON.
 
-If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)** link instead of the raw structure — click it to open the grid in a modal viewer with sticky headers and a **Copy JSON** button.
+The table shows 100 rows per page (switch to 500 with the page-size selector); **Showing 1–100 of N** and the **Previous** / **Next** controls sit below it. Sorting, selection and export always apply to the whole result set, not just the visible page.
+
+If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)** link instead of the raw structure — click it to open the grid in a modal viewer with sticky headers, paging at 200 rows, and a **Copy JSON** button.
 
 **Actions:**
 
@@ -321,7 +333,7 @@ If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)**
 
 ### Selecting Rows
 
-Click the checkbox next to any successful row to select it. Use **Shift+Click** to select a range. Use the header checkbox to select or deselect all successful rows. Only successful rows can be selected.
+Click the checkbox next to any successful row to select it (or Tab to it and press **Space**). Use **Shift+Click** to select a range. Use the header checkbox to select or deselect all successful rows across every page — the **Save as Scenarios** button shows the full count. Only successful rows can be selected.
 
 ---
 
@@ -345,8 +357,10 @@ A 5-row preview of the table is shown so you can verify the data and column type
 
 ### Configuring the Run
 
-- **Score full table** — Check this to score every row in the table. When unchecked, a **Row Limit** field lets you cap how many rows to score (default: 1,000).
+- **Score full table** — Check this to score every row in the table. The rows are fetched from CAS page by page and the **Run All** button reports progress (*Fetching rows… 12,000 of 150,000*) before scoring starts, so the count you see in the results is the count that was actually scored. Tables over 50,000 rows show a warning but still run. When unchecked, a **Row Limit** field lets you cap how many rows to score (default: 1,000); exactly that many rows are fetched and scored.
 - **Parallel Requests** — Same concurrency control as the file upload mode.
+
+Switching table or caslib while data is still loading discards the earlier load — the mapping and preview always belong to the table currently selected.
 
 ### Save as Test
 
@@ -612,7 +626,7 @@ The diagram renders the full decision flow with all node types:
 |-----------|-------------|
 | **Start / End** | Entry and exit points of the flow |
 | **Sub-Decision** | A nested decision flow (expanded recursively up to 3 levels deep) |
-| **Rule Set** | Business rules with conditions and actions |
+| **Rule Set** | Business rules with conditions and actions. The node shows the rule count and the rule set type (*assignment* or *filtering*); a red **⚠** badge means SAS Intelligent Decisioning reports one or more of its rules as invalid — a missing lookup table, for example |
 | **Model** | A published model |
 | **Code File** | Custom code (DS2, Python, SQL) |
 | **Condition** | A branching point based on a condition |
@@ -636,7 +650,7 @@ The diagram renders the full decision flow with all node types:
 
 Click any node in the diagram to open a side panel with detailed information:
 
-- **Rule Sets** — Shows individual rules with their conditions and actions.
+- **Rule Sets** — Shows the rules as the chain they are: numbered in execution order, each starting with `IF`, `ELSE IF`, `ELSE` or `OR`, its conditions joined by `AND`, and its actions under `THEN`. Every condition and action is tagged with its kind — Comparison, Expression, Lookup, Assignment, Lookup value or Advanced list — and names the lookup table or advanced list it reads, so `JOB in HMEQ_job` tells you exactly which table the rule depends on. Above the rules the panel lists the decision variables the rule set **reads** and **writes**, the **lookup tables & lists** it depends on, and — if the service reports any rule as invalid — the message it gives, so a broken reference is visible before the decision is published. Rules that record rule-fired tracking are marked *tracked*.
 - **Models** — Shows the algorithm, input/output variables, and model properties.
 - **Code Files** — Shows a preview of the code with a button to open a full syntax-highlighted viewer.
 - **Treatment Groups** — Shows member definitions, attributes, and eligibility criteria.
@@ -655,7 +669,7 @@ If the decision has an associated workflow, the flow header shows the current wo
 
 ### Export
 
-Click **Export** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details. If the decision calls any REST API definitions, the document also contains an **External Endpoints** table listing every outbound call — the node, HTTP method, endpoint, authorization type and definition version — which is useful for review and governance.
+Click **Export** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details. Rule set sections show the same execution-order chain as the side panel, with the reads/writes lists and any validation messages. Two inventory tables precede the diagram: **Rule Sets** (every rule set the decision executes, with rule count, type, version and validation status) and **Lookup Tables & Lists** (every lookup table and advanced list those rule sets read, and which rules use them). If the decision calls any REST API definitions, the document also contains an **External Endpoints** table listing every outbound call — the node, HTTP method, endpoint, authorization type and definition version. Together these three tables are the decision's external dependencies, which is useful for review and governance. The export reuses everything the page has already loaded, so it does not re-request rule sets or REST definitions.
 
 ---
 
@@ -688,10 +702,11 @@ The **Test Coverage** page helps you understand which of your SAS Intelligent De
 
 The table lists every asset with columns for Name, Type, Coverage status, number of Tests, Created By, and Modified date.
 
-- **Search** — Filter by name or author.
+- **Search** — Filter by name or author; the table updates shortly after you stop typing.
 - **Type filter** — Show only a specific asset type.
 - **Coverage filter** — Show All, Covered only, or Uncovered only.
-- Click a column header to sort.
+- Click a column header (or Tab to it and press **Enter**) to sort.
+- The table is paginated; expanded rows stay expanded when you page away and back, and **Export CSV** always includes every filtered row.
 
 **Expanding a Row:**
 
@@ -708,7 +723,31 @@ Each asset row has a link icon that opens the asset in SAS Intelligent Decisioni
 
 ---
 
-## 15. Job Monitoring
+## 15. Publishing Overview
+
+The **Publishing Overview** page answers "what is deployed where?" for the whole environment: every publishing destination (MAS, CAS, container and other destinations) and every model and decision that has been published to it.
+
+### While It Loads
+
+The page reads the destinations and the complete list of deployed items. A progress card shows the two loads as they arrive — **Destinations (9)**, **Deployed models & decisions (424)** — so you can see it advancing; on a typical environment this takes a couple of seconds. The three summary figures show a dash until the data is in.
+
+### Summary and Destinations
+
+- **Stat cards** — the number of publishing destinations, deployed models and deployed decisions.
+- **Destinations** — one row per destination with its type and how many models and decisions it holds. Click the chevron (or Tab to it and press **Enter**) to expand a destination and see what is deployed there.
+
+### Deployed Models & Decisions
+
+The table lists every completed publish, deduplicated to the latest version of each item per destination, with the name, kind (model or decision), destination, code type, who published it and when.
+
+- **Search** filters by name; **Kind**, **Destination** and **Code Type** narrow the list. Any filter returns you to page 1, and **Showing X of Y** always counts the whole filtered list.
+- The table is paginated (25 rows per page) with **Previous** / **Page X of Y** / **Next**.
+- A deployed **model** links to its Module Details page in this app; a deployed **decision** links to the in-app flow viewer, so you can go from "it is deployed" to "what does it do" in one click.
+- **Refresh** in the page header re-reads everything; the data is otherwise cached for the session and cleared when you switch connections.
+
+---
+
+## 16. Job Monitoring
 
 The **Job Monitoring** page gives you a live view of every job executed by the SAS Viya Job Execution service. Use it to watch active runs as they happen, drill into a job's log or final output, and search the full history.
 
@@ -842,7 +881,7 @@ A table of every parameter declared on the job definition, paired with the value
 
 ---
 
-## 16. Schema → Code
+## 17. Schema → Code
 
 The **Schema → Code** page generates a Python `execute()` function for SAS Intelligent Decisioning (SID) from a sample data payload, then lets you save it to SAS Viya. It is useful when an incoming request arrives as a single JSON or XML string and you need SID code that parses it into individual, typed variables.
 
@@ -900,7 +939,7 @@ The **Save to SAS Viya** dialog has two modes:
 
 ---
 
-## 17. Business Rules Import
+## 18. Business Rules Import
 
 The **Rules Import** page imports SAS Intelligent Decisioning **rule sets** from CSV files — the same 15-column format used by the `%DCM_IMPORT_RULESET` macro and the rule export in SAS Intelligent Decisioning. Instead of importing blind and digging through a SAS log afterwards, you validate the file up front, fix problems directly in the grid, and see exactly what the server accepted or rejected.
 
@@ -908,7 +947,7 @@ The page is a four-step wizard. Click any enabled step in the step bar to move b
 
 ### Step 1 — Upload
 
-- Click **Choose a CSV file** or drag & drop the file onto the drop zone. Files must be UTF-8 CSV with the standard header row (`ruleset_id,ruleset_nm,folder_path,…`).
+- Click **Choose a CSV file** or drag & drop the file onto the drop zone — or Tab to the drop zone and press **Space** to open the file dialog. Files must be UTF-8 CSV with the standard header row (`ruleset_id,ruleset_nm,folder_path,…`).
 - **Download template** in the page header produces an empty CSV with the correct header row.
 - After loading, the page shows row, rule set, and rule counts and moves on to Review & Fix automatically. Files with a missing or wrong header are rejected here with an explanation of what was expected.
 - A previously downloaded rejection file (which carries an extra reason column) can be re-uploaded as-is — the extra column is recognized and ignored.
@@ -925,7 +964,7 @@ Two shapes that look wrong but are perfectly valid are accepted as they are: row
 
 Tools in this step:
 
-- Hover a highlighted cell (or the status dot in the row gutter) to read its messages.
+- Hover a highlighted cell (or the marker in the row gutter — a red **×** for errors, amber for warnings, with the messages read out to screen readers) to read its messages. Every cell announces its column name and row number.
 - **Only rows with issues** filters the grid down to problem rows.
 - **Next error →** jumps to the next error cell, scrolls it into view, and places the cursor in it ready to type the fix.
 - **Clear ID columns** blanks `ruleset_id` and `rule_id` on every row. A CSV exported from another environment carries that environment's ids; in the target they match nothing, so the service tries to *create* a rule set whose name and folder already exist and rejects the import. Without ids the import matches by name + folder and updates in place. The button shows how many rows still carry an id, and is disabled once both columns are empty.
@@ -955,11 +994,17 @@ Edits that change rule set names or folder paths mark the checks as stale — re
 
 ---
 
-## 18. Keyboard and Interaction Tips
+## 19. Keyboard and Interaction Tips
 
+The application meets **WCAG 2.1 AA**: every control can be reached and operated from the keyboard, has a visible focus ring, and has a name a screen reader can announce.
+
+- **Tab** / **Shift+Tab** move between controls everywhere — including table rows that open something (the row's name is the button), sort headers, file drop zones, the sidebar and the icon buttons. The focused control shows a blue ring.
+- **Enter** or **Space** activates the focused control; **Space** toggles a row checkbox.
+- In any dialog, **Escape** closes it, **Tab** stays inside it, and focus returns to the control that opened it when it closes. A click on the dark area outside the dialog also closes it.
+- **Escape** also closes the node details panel in View Flows and the navigation drawer on narrow layouts.
+- Severity and status are never conveyed by colour alone — error rows carry a **×** marker and a red bar, badges carry text, and log lines carry a glyph.
+- With the operating system's **reduce motion** setting on, nothing in the app animates or spins.
 - **Shift+Click** on batch result checkboxes to select a range of rows.
-- **Escape** closes the code viewer modal in the View Flows page.
-- **Tab** moves between input fields in the scoring form.
 - The scoring panel **remembers your last-used folder and CAS library** when saving scenarios and tests, so you do not need to re-select them each time.
 - Switching between Single Execution, Parallel (File Upload), and Parallel (CAS Table) modes **clears previous results** to avoid confusion.
 - In the folder browser dialogs, you must click the **"Select current folder"** link at the bottom to confirm your folder choice. Simply navigating into a folder does not select it.

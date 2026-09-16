@@ -1,13 +1,17 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
+import { SearchInput } from '../common/SearchInput';
+import { ProgressBar } from '../common/ProgressBar';
+import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { getSasViyaUrl } from '../../config';
+import { registerViewCache } from '../../utils/viewCaches';
 import {
   collectCoverage,
   generateCoverageCSV,
@@ -19,12 +23,23 @@ import { ContentType, CollectionProgress, CoverageResult } from '../../types/cov
 
 type FilterType = 'all' | ContentType;
 type CoverageFilter = 'all' | 'covered' | 'uncovered';
+type SortField = 'name' | 'contentType' | 'testScenarioCount' | 'modifiedTimestamp';
+
+/** Rows rendered per page; filtering, sorting and the exports still cover every asset. */
+const PAGE_SIZE = 50;
+
+/** One collator for every comparison — building Intl state per compare is what made sorting slow. */
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 let cachedResult: CoverageResult | null = null;
 
 export const clearCoverageAnalysisCache = (): void => {
   cachedResult = null;
 };
+
+// The shell clears this through the registry, so Header/App never import the
+// coverage view (which would pull it into the entry chunk).
+registerViewCache('coverage', clearCoverageAnalysisCache);
 
 export const CoverageAnalysis: React.FC = () => {
   const [result, setResult] = useState<CoverageResult | null>(() => cachedResult);
@@ -36,9 +51,22 @@ export const CoverageAnalysis: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<FilterType>('all');
   const [coverageFilter, setCoverageFilter] = useState<CoverageFilter>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<'name' | 'contentType' | 'testScenarioCount' | 'modifiedTimestamp'>('name');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(0);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Debounce the search box so a keystroke does not re-filter and re-sort the whole tenant.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 200);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // A changed filter, search term or sort order starts again from the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [typeFilter, coverageFilter, debouncedSearch, sortField, sortDir]);
 
   const toggleRow = useCallback((id: string) => {
     setExpandedRows(prev => {
@@ -80,28 +108,38 @@ export const CoverageAnalysis: React.FC = () => {
     } else if (coverageFilter === 'uncovered') {
       items = items.filter(i => !i.hasTestScenario);
     }
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
+    const term = debouncedSearch.trim().toLowerCase();
+    if (term) {
       items = items.filter(i =>
         i.name.toLowerCase().includes(term) ||
         i.createdBy.toLowerCase().includes(term)
       );
     }
+    return items;
+  }, [result, typeFilter, coverageFilter, debouncedSearch]);
 
-    // Sort
-    items = [...items].sort((a, b) => {
+  // Sorting is keyed separately so toggling a column does not re-filter.
+  const sortedItems = useMemo(() => {
+    const items = [...filteredItems].sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortField === 'contentType') cmp = a.contentType.localeCompare(b.contentType);
+      if (sortField === 'name') cmp = collator.compare(a.name, b.name);
+      else if (sortField === 'contentType') cmp = collator.compare(a.contentType, b.contentType);
       else if (sortField === 'testScenarioCount') cmp = a.testScenarioCount - b.testScenarioCount;
-      else if (sortField === 'modifiedTimestamp') cmp = (a.modifiedTimestamp ?? '').localeCompare(b.modifiedTimestamp ?? '');
+      else if (sortField === 'modifiedTimestamp') cmp = collator.compare(a.modifiedTimestamp ?? '', b.modifiedTimestamp ?? '');
       return sortDir === 'asc' ? cmp : -cmp;
     });
-
     return items;
-  }, [result, typeFilter, coverageFilter, searchTerm, sortField, sortDir]);
+  }, [filteredItems, sortField, sortDir]);
 
-  const handleSort = useCallback((field: typeof sortField) => {
+  // Clamp rather than only reset so a shrinking list never shows an empty page.
+  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = useMemo(
+    () => sortedItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [sortedItems, currentPage]
+  );
+
+  const handleSort = useCallback((field: SortField) => {
     if (sortField === field) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     } else {
@@ -112,9 +150,9 @@ export const CoverageAnalysis: React.FC = () => {
 
   const handleExportCSV = useCallback(() => {
     if (!result) return;
-    const csv = generateCoverageCSV(filteredItems);
+    const csv = generateCoverageCSV(sortedItems);
     downloadFile(csv, 'test-coverage.csv', 'text/csv');
-  }, [result, filteredItems]);
+  }, [result, sortedItems]);
 
   const handleExportMarkdown = useCallback(() => {
     if (!result) return;
@@ -130,7 +168,7 @@ export const CoverageAnalysis: React.FC = () => {
         title="Test Coverage Analysis"
         subtitle="Analyze test coverage across SAS Intelligent Decisioning &amp; Model Manager assets"
         actions={
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <>
             {result && (
               <>
                 <Button variant="secondary" size="small" onClick={handleExportMarkdown}>
@@ -144,7 +182,7 @@ export const CoverageAnalysis: React.FC = () => {
             <Button variant="primary" onClick={handleRunAnalysis} loading={loading}>
               {result ? 'Re-run Analysis' : 'Run Analysis'}
             </Button>
-          </div>
+          </>
         }
       />
 
@@ -156,28 +194,17 @@ export const CoverageAnalysis: React.FC = () => {
 
       {/* Progress indicator */}
       {loading && progress && (
-        <Card className="coverage-progress-card">
+        <Card>
           <CardBody>
-            <div className="coverage-progress">
-              <div className="coverage-progress__header">
-                <span className="coverage-progress__phase">
-                  {progress.phase === 'collecting' ? 'Collecting data' : 'Analyzing coverage'}
-                </span>
-                <span className="coverage-progress__count">
-                  {progress.itemsCollected} items collected
-                </span>
-              </div>
-              <div className="coverage-progress__bar-track">
-                <div
-                  className="coverage-progress__bar-fill"
-                  style={{ width: `${(progress.currentStep / progress.totalSteps) * 100}%` }}
-                />
-              </div>
-              <div className="coverage-progress__message">{progress.message}</div>
-              <div className="coverage-progress__step">
-                Step {progress.currentStep} of {progress.totalSteps}
-              </div>
-            </div>
+            <ProgressBar
+              label="Coverage collection progress"
+              value={progress.currentStep}
+              max={progress.totalSteps}
+              phase={progress.phase === 'collecting' ? 'Collecting data' : 'Analyzing coverage'}
+              count={`${progress.itemsCollected} items collected`}
+              message={progress.message}
+              steps={<span>Step {progress.currentStep} of {progress.totalSteps}</span>}
+            />
           </CardBody>
         </Card>
       )}
@@ -235,31 +262,27 @@ export const CoverageAnalysis: React.FC = () => {
               </CardBody>
             </Card>
 
-            {/* Stats cards */}
-            <Card className="coverage-stats-card">
-              <CardBody>
-                <div className="coverage-stats-grid">
-                  <div className="coverage-stat">
-                    <div className="coverage-stat__value">{result.stats.overall.totalItems}</div>
-                    <div className="coverage-stat__label">Total Assets</div>
-                  </div>
-                  <div className="coverage-stat coverage-stat--success">
-                    <div className="coverage-stat__value">{result.stats.overall.itemsWithTests}</div>
-                    <div className="coverage-stat__label">With Tests</div>
-                  </div>
-                  <div className="coverage-stat coverage-stat--error">
-                    <div className="coverage-stat__value">{result.stats.overall.itemsWithoutTests}</div>
-                    <div className="coverage-stat__label">Without Tests</div>
-                  </div>
-                  <div className="coverage-stat">
-                    <div className="coverage-stat__value">
-                      {new Date(result.collectionDate).toLocaleDateString()}
-                    </div>
-                    <div className="coverage-stat__label">Collected</div>
-                  </div>
+            {/* Stats cards — the shared .sas-stat-card tile */}
+            <div className="coverage-stats-grid">
+              <div className="sas-card sas-stat-card">
+                <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
+                <div className="sas-stat-label">Total Assets</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--success">
+                <div className="sas-stat-value">{result.stats.overall.itemsWithTests}</div>
+                <div className="sas-stat-label">With Tests</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--error">
+                <div className="sas-stat-value">{result.stats.overall.itemsWithoutTests}</div>
+                <div className="sas-stat-label">Without Tests</div>
+              </div>
+              <div className="sas-card sas-stat-card coverage-stat--date">
+                <div className="sas-stat-value">
+                  {new Date(result.collectionDate).toLocaleDateString()}
                 </div>
-              </CardBody>
-            </Card>
+                <div className="sas-stat-label">Collected</div>
+              </div>
+            </div>
           </div>
 
           {/* Coverage by Type Bars */}
@@ -298,39 +321,45 @@ export const CoverageAnalysis: React.FC = () => {
             <CardHeader
               actions={
                 <div className="coverage-detail__filters">
-                  <input
-                    type="text"
+                  <SearchInput
                     className="coverage-detail__search"
+                    aria-label="Search assets by name or author"
                     placeholder="Search by name or author..."
                     value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
+                    onChange={setSearchTerm}
                   />
-                  <select
-                    className="coverage-detail__select"
-                    value={typeFilter}
-                    onChange={e => setTypeFilter(e.target.value as FilterType)}
-                  >
-                    <option value="all">All Types</option>
-                    <option value="decision">Decisions</option>
-                    <option value="businessRule">Business Rules</option>
-                    <option value="codeFile">Code Files</option>
-                    <option value="model">Models</option>
-                    <option value="treatment">Treatments</option>
-                    <option value="segmentationTree">Segmentation Trees</option>
-                  </select>
-                  <select
-                    className="coverage-detail__select"
-                    value={coverageFilter}
-                    onChange={e => setCoverageFilter(e.target.value as CoverageFilter)}
-                  >
-                    <option value="all">All Coverage</option>
-                    <option value="covered">Covered</option>
-                    <option value="uncovered">Uncovered</option>
-                  </select>
+                  <label className="coverage-detail__filter">
+                    <span className="coverage-detail__filter-label">Type:</span>
+                    <select
+                      className="coverage-detail__select"
+                      value={typeFilter}
+                      onChange={e => setTypeFilter(e.target.value as FilterType)}
+                    >
+                      <option value="all">All Types</option>
+                      <option value="decision">Decisions</option>
+                      <option value="businessRule">Business Rules</option>
+                      <option value="codeFile">Code Files</option>
+                      <option value="model">Models</option>
+                      <option value="treatment">Treatments</option>
+                      <option value="segmentationTree">Segmentation Trees</option>
+                    </select>
+                  </label>
+                  <label className="coverage-detail__filter">
+                    <span className="coverage-detail__filter-label">Coverage:</span>
+                    <select
+                      className="coverage-detail__select"
+                      value={coverageFilter}
+                      onChange={e => setCoverageFilter(e.target.value as CoverageFilter)}
+                    >
+                      <option value="all">All Coverage</option>
+                      <option value="covered">Covered</option>
+                      <option value="uncovered">Uncovered</option>
+                    </select>
+                  </label>
                 </div>
               }
             >
-              <h3>All Assets ({filteredItems.length})</h3>
+              <h3>All Assets ({sortedItems.length})</h3>
             </CardHeader>
             <CardBody>
               <div className="sas-table__wrapper">
@@ -340,41 +369,56 @@ export const CoverageAnalysis: React.FC = () => {
                       <SortHeader field="name" label="Name" current={sortField} dir={sortDir} onSort={handleSort} />
                       <SortHeader field="contentType" label="Type" current={sortField} dir={sortDir} onSort={handleSort} width="140px" />
                       <th className="sas-table__th" style={{ width: '90px', textAlign: 'center' }}>Coverage</th>
-                      <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="center" />
+                      <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="right" />
                       <th className="sas-table__th" style={{ width: '120px' }}>Created By</th>
                       <SortHeader field="modifiedTimestamp" label="Modified" current={sortField} dir={sortDir} onSort={handleSort} width="110px" />
-                      <th className="sas-table__th" style={{ width: '60px', textAlign: 'center' }}>Link</th>
+                      <th className="sas-table__th" style={{ width: '100px', textAlign: 'center' }}>Link</th>
                     </tr>
                   </thead>
                   <tbody className="sas-table__body">
-                    {filteredItems.length === 0 ? (
+                    {pageItems.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="sas-table__td" style={{ textAlign: 'center', padding: '24px' }}>
+                        <td colSpan={7} className="sas-table__td coverage-detail__empty">
                           No assets match the current filters.
                         </td>
                       </tr>
                     ) : (
-                      filteredItems.map(item => {
+                      pageItems.map(item => {
                         const deepLink = getDeepLink(baseUrl, item);
                         const isExpanded = expandedRows.has(item.id);
                         const hasTests = item.testScenarios.length > 0;
                         return (
                           <React.Fragment key={item.id}>
                             <tr
-                              className={`sas-table__row ${hasTests ? 'coverage-row--expandable' : ''} ${isExpanded ? 'coverage-row--expanded' : ''}`}
+                              className={`sas-table__row coverage-row ${hasTests ? 'coverage-row--expandable' : ''} ${isExpanded ? 'coverage-row--expanded' : ''}`}
                               onClick={hasTests ? () => toggleRow(item.id) : undefined}
                             >
                               <td className="sas-table__td">
-                                <div className="coverage-row__name">
-                                  {hasTests && (
+                                {hasTests ? (
+                                  // Same shape as DataTable's clickable rows: the row reacts to
+                                  // the mouse, and a real button in the first cell carries the
+                                  // toggle for the keyboard.
+                                  <button
+                                    type="button"
+                                    className="sas-table__row-button coverage-row__name"
+                                    aria-expanded={isExpanded}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      toggleRow(item.id);
+                                    }}
+                                  >
                                     <span className={`coverage-row__chevron ${isExpanded ? 'coverage-row__chevron--open' : ''}`}>
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14" aria-hidden="true">
                                         <polyline points="9 18 15 12 9 6" />
                                       </svg>
                                     </span>
-                                  )}
-                                  <strong>{item.name}</strong>
-                                </div>
+                                    <strong>{item.name}</strong>
+                                  </button>
+                                ) : (
+                                  <span className="coverage-row__name">
+                                    <strong>{item.name}</strong>
+                                  </span>
+                                )}
                               </td>
                               <td className="sas-table__td">
                                 <Badge variant={getTypeBadgeVariant(item.contentType)} size="small">
@@ -383,12 +427,12 @@ export const CoverageAnalysis: React.FC = () => {
                               </td>
                               <td className="sas-table__td" style={{ textAlign: 'center' }}>
                                 {item.hasTestScenario ? (
-                                  <span className="coverage-badge coverage-badge--covered">Covered</span>
+                                  <Badge variant="success" size="small">Covered</Badge>
                                 ) : (
-                                  <span className="coverage-badge coverage-badge--uncovered">No tests</span>
+                                  <Badge variant="error" size="small">No tests</Badge>
                                 )}
                               </td>
-                              <td className="sas-table__td" style={{ textAlign: 'center' }}>
+                              <td className="sas-table__td" style={{ textAlign: 'right' }}>
                                 {item.testScenarioCount > 0 && (
                                   <Badge variant="info" size="small">{item.testScenarioCount}</Badge>
                                 )}
@@ -398,15 +442,16 @@ export const CoverageAnalysis: React.FC = () => {
                                 {item.modifiedTimestamp ? new Date(item.modifiedTimestamp).toLocaleDateString() : ''}
                               </td>
                               <td className="sas-table__td" style={{ textAlign: 'center' }}>
-                                <span style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                <span className="coverage-detail__links">
                                   {item.contentType === 'decision' && (
                                     <a
                                       href={`#/flows/${item.id}`}
-                                      className="coverage-deep-link"
+                                      className="sas-deep-link"
                                       title="View Flow Diagram"
+                                      aria-label={`View flow diagram for ${item.name}`}
                                       onClick={e => e.stopPropagation()}
                                     >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <circle cx="12" cy="5" r="2" />
                                         <circle cx="6" cy="19" r="2" />
                                         <circle cx="18" cy="19" r="2" />
@@ -419,11 +464,12 @@ export const CoverageAnalysis: React.FC = () => {
                                       href={deepLink.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="coverage-deep-link"
+                                      className="sas-deep-link"
                                       title={deepLink.label}
+                                      aria-label={`${deepLink.label}: ${item.name}`}
                                       onClick={e => e.stopPropagation()}
                                     >
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                                         <polyline points="15 3 21 3 21 9" />
                                         <line x1="10" y1="14" x2="21" y2="3" />
@@ -438,24 +484,24 @@ export const CoverageAnalysis: React.FC = () => {
                                 <td colSpan={7} className="coverage-expand-cell">
                                   <div className="coverage-scenarios">
                                     <div className="coverage-scenarios__header">Test Scenarios</div>
-                                    <table className="coverage-scenarios__table">
-                                      <thead>
+                                    <table className="coverage-scenarios__table sas-table sas-table--compact">
+                                      <thead className="sas-table__head">
                                         <tr>
-                                          <th>Name</th>
-                                          <th style={{ width: '140px' }}>Type</th>
-                                          <th>Description</th>
+                                          <th className="sas-table__th">Name</th>
+                                          <th className="sas-table__th" style={{ width: '140px' }}>Type</th>
+                                          <th className="sas-table__th">Description</th>
                                         </tr>
                                       </thead>
-                                      <tbody>
+                                      <tbody className="sas-table__body">
                                         {item.testScenarios.map(ts => (
-                                          <tr key={ts.scoreDefinitionId}>
-                                            <td>{ts.name}</td>
-                                            <td>
+                                          <tr key={ts.scoreDefinitionId} className="sas-table__row">
+                                            <td className="sas-table__td">{ts.name}</td>
+                                            <td className="sas-table__td">
                                               <Badge variant={getScenarioTypeBadgeVariant(ts.scenarioType)} size="small">
                                                 {ts.scenarioType}
                                               </Badge>
                                             </td>
-                                            <td className="coverage-scenarios__desc">
+                                            <td className="sas-table__td coverage-scenarios__desc">
                                               {ts.description || <span className="coverage-scenarios__none">No description</span>}
                                             </td>
                                           </tr>
@@ -473,6 +519,17 @@ export const CoverageAnalysis: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              {pageCount > 1 && (
+                <Pagination
+                  label="Asset pages"
+                  page={currentPage + 1}
+                  totalPages={pageCount}
+                  pageSize={PAGE_SIZE}
+                  totalItems={sortedItems.length}
+                  onPageChange={(p) => setPage(p - 1)}
+                />
+              )}
             </CardBody>
           </Card>
         </>
@@ -484,34 +541,47 @@ export const CoverageAnalysis: React.FC = () => {
 // Helper components
 
 interface SortHeaderProps {
-  field: string;
+  field: SortField;
   label: string;
-  current: string;
+  current: SortField;
   dir: 'asc' | 'desc';
-  onSort: (field: never) => void;
+  onSort: (field: SortField) => void;
   width?: string;
   align?: 'left' | 'center' | 'right';
 }
 
+// The shared .sas-table__sort-header: a real <button> filling the whole
+// header cell, with aria-sort on the cell. The button must stay a DIRECT
+// child of the <th>, and the <th> must not add padding of its own.
 const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onSort, width, align = 'left' }) => {
   const isActive = current === field;
-  const justify = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
+  const ariaSort = isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const classes = [
+    'sas-table__sort-header',
+    isActive ? 'sas-table__sort-header--active' : '',
+    // An inline text-align on the <th> no longer positions the button's flex
+    // content, so a trailing column asks for the modifier.
+    align === 'right' ? 'sas-table__sort-header--end' : '',
+  ].filter(Boolean).join(' ');
   return (
-    <th
-      className="sas-table__th sas-table__th--sortable"
-      style={{ width, textAlign: align, cursor: 'pointer' }}
-      onClick={() => onSort(field as never)}
-    >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: justify }}>
+    <th className="sas-table__th" style={{ width, textAlign: align }} aria-sort={ariaSort}>
+      <button
+        type="button"
+        className={classes}
+        onClick={() => onSort(field)}
+      >
         {label}
-        <svg
-          width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth={2}
-          opacity={isActive ? 1 : 0.3}
-        >
-          <path d={isActive && dir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-        </svg>
-      </span>
+        <span className="sas-table__sort-icon">
+          <svg
+            viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth={2}
+            opacity={isActive ? 1 : 0.3}
+            aria-hidden="true"
+          >
+            <path d={isActive && dir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
+          </svg>
+        </span>
+      </button>
     </th>
   );
 };

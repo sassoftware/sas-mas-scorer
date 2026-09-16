@@ -7,12 +7,51 @@ import { Step } from '../../types';
 import { FieldConfigPanel } from './FieldConfigPanel';
 import { widgetLabels } from './widgetMap';
 import { Button } from '../common/Button';
+import { IconButton } from '../common/IconButton';
+import { Badge } from '../common/Badge';
 
 interface Props {
   definition: UIDefinition;
   step: Step | null;
   onChange: (definition: UIDefinition) => void;
 }
+
+const ArrowUpIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 6l8 12H4z" />
+  </svg>
+);
+
+const ArrowDownIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 18L4 6h16z" />
+  </svg>
+);
+
+const CloseIcon: React.FC = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+    <path d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+/**
+ * The ONE app-wide input/output mapping lives in components.css as
+ * `.sas-badge--direction-*` (input = blue, output = green). A static text
+ * block is not a direction, so it keeps the amber "warning" tint it has
+ * always had. Rendered as a bare span because <Badge> takes a semantic
+ * variant, not a class.
+ */
+const directionBadgeClass: Record<UIField['direction'], string> = {
+  input: 'sas-badge--direction-input',
+  output: 'sas-badge--direction-output',
+  static: 'sas-badge--warning',
+};
+
+const directionBadgeText: Record<UIField['direction'], string> = {
+  input: 'IN',
+  output: 'OUT',
+  static: 'TXT',
+};
 
 export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) => {
   const [selectedField, setSelectedField] = useState<{ sectionId: string; fieldIdx: number } | null>(null);
@@ -163,18 +202,24 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
           <div key={section.id} className="ui-builder__section">
             <div className="ui-builder__section-header">
               <div className="ui-builder__section-move">
-                <button
-                  className="ui-builder__move-btn"
+                <IconButton
+                  size="small"
                   onClick={() => handleMoveSection(sIdx, -1)}
                   disabled={sIdx === 0}
-                  title="Move up"
-                >&#9650;</button>
-                <button
-                  className="ui-builder__move-btn"
+                  title="Move section up"
+                  aria-label="Move section up"
+                >
+                  <ArrowUpIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => handleMoveSection(sIdx, 1)}
                   disabled={sIdx === definition.layout.sections.length - 1}
-                  title="Move down"
-                >&#9660;</button>
+                  title="Move section down"
+                  aria-label="Move section down"
+                >
+                  <ArrowDownIcon />
+                </IconButton>
               </div>
               <input
                 type="text"
@@ -182,62 +227,91 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                 value={section.title ?? ''}
                 onChange={(e) => handleSectionTitleChange(section.id, e.target.value)}
                 placeholder="Section title"
+                aria-label="Section title"
               />
-              <button
-                className="ui-builder__section-remove"
+              <IconButton
+                size="medium"
+                variant="danger"
                 onClick={() => handleRemoveSection(section.id)}
                 title="Remove section"
-              >&times;</button>
+                aria-label="Remove section"
+              >
+                <CloseIcon />
+              </IconButton>
             </div>
 
             <div className="ui-builder__field-list">
-              {section.fields.map((field, fIdx) => (
-                <div
-                  key={field.parameterId}
-                  className={`ui-builder__field-row ${
-                    selectedField?.sectionId === section.id && selectedField?.fieldIdx === fIdx
-                      ? 'ui-builder__field-row--selected' : ''
-                  } ${!field.visible ? 'ui-builder__field-row--hidden' : ''}`}
-                  onClick={() => setSelectedField({ sectionId: section.id, fieldIdx: fIdx })}
-                >
-                  <div className="ui-builder__field-move">
+              {section.fields.map((field, fIdx) => {
+                const isSelected =
+                  selectedField?.sectionId === section.id && selectedField?.fieldIdx === fIdx;
+                return (
+                  <div
+                    key={field.parameterId}
+                    className={`ui-builder__field-row ${
+                      isSelected ? 'ui-builder__field-row--selected' : ''
+                    } ${!field.visible ? 'ui-builder__field-row--hidden' : ''}`}
+                  >
+                    <div className="ui-builder__field-move">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleMoveField(section.id, fIdx, -1)}
+                        disabled={fIdx === 0}
+                        title="Move field up"
+                        aria-label="Move field up"
+                      >
+                        <ArrowUpIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleMoveField(section.id, fIdx, 1)}
+                        disabled={fIdx === section.fields.length - 1}
+                        title="Move field down"
+                        aria-label="Move field down"
+                      >
+                        <ArrowDownIcon />
+                      </IconButton>
+                    </div>
+                    {/* The selectable surface is a real button so the config
+                        panel can be opened from the keyboard; the move/remove
+                        controls are its siblings, not its children. */}
                     <button
-                      className="ui-builder__move-btn"
-                      onClick={(e) => { e.stopPropagation(); handleMoveField(section.id, fIdx, -1); }}
-                      disabled={fIdx === 0}
-                    >&#9650;</button>
-                    <button
-                      className="ui-builder__move-btn"
-                      onClick={(e) => { e.stopPropagation(); handleMoveField(section.id, fIdx, 1); }}
-                      disabled={fIdx === section.fields.length - 1}
-                    >&#9660;</button>
-                  </div>
-                  <div className="ui-builder__field-info">
-                    <span className="ui-builder__field-label">{field.label}</span>
-                    <span className="ui-builder__field-meta">
-                      <span className={`ui-builder__direction-badge ui-builder__direction-badge--${field.direction}`}>
-                        {field.direction === 'input' ? 'IN' : field.direction === 'output' ? 'OUT' : 'TXT'}
+                      type="button"
+                      className="ui-builder__field-info"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedField({ sectionId: section.id, fieldIdx: fIdx })}
+                    >
+                      <span className="ui-builder__field-label">{field.label}</span>
+                      <span className="ui-builder__field-meta">
+                        <span
+                          className={`sas-badge sas-badge--small ${directionBadgeClass[field.direction]}`}
+                        >
+                          {directionBadgeText[field.direction]}
+                        </span>
+                        {' '}
+                        {field.direction !== 'static' ? field.parameterId : 'Static content'}
+                        {' / '}
+                        {widgetLabels[field.widget]}
+                        {' / '}
+                        {field.width}
                       </span>
-                      {' '}
-                      {field.direction !== 'static' ? field.parameterId : 'Static content'}
-                      {' / '}
-                      {widgetLabels[field.widget]}
-                      {' / '}
-                      {field.width}
-                    </span>
+                    </button>
+                    <div className="ui-builder__field-badges">
+                      {!field.visible && <Badge size="small" variant="default">Hidden</Badge>}
+                      {field.direction === 'static' && (
+                        <IconButton
+                          size="small"
+                          variant="danger"
+                          onClick={() => handleRemoveField(section.id, fIdx)}
+                          title="Remove text block"
+                          aria-label="Remove text block"
+                        >
+                          <CloseIcon />
+                        </IconButton>
+                      )}
+                    </div>
                   </div>
-                  <div className="ui-builder__field-badges">
-                    {!field.visible && <span className="ui-builder__hidden-badge">Hidden</span>}
-                    {field.direction === 'static' && (
-                      <button
-                        className="ui-builder__option-remove"
-                        onClick={(e) => { e.stopPropagation(); handleRemoveField(section.id, fIdx); }}
-                        title="Remove text block"
-                      >&times;</button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {section.fields.length === 0 && (
                 <div className="ui-builder__field-empty">
                   No fields in this section

@@ -53,10 +53,10 @@ export default function ConditionNode({ data }: NodeProps<ConditionNodeType>) {
           {data.nodeType === 'abtest' && (
             <div
               style={{
-                fontSize: '9px',
+                fontSize: '10px',
                 fontWeight: 600,
                 marginBottom: '2px',
-                color: colors.border,
+                color: colors.text,
               }}
             >
               A/B Test

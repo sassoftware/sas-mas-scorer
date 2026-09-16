@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import type { WorkflowHistoryItem } from '../../types/sid';
 import { getWorkflowHistory } from '../../api/decisions';
+import { Alert, EmptyState, Loading, Modal } from '../common';
 
 interface WorkflowHistoryModalProps {
   decisionId: string;
@@ -29,56 +30,38 @@ export default function WorkflowHistoryModal({ decisionId, onClose }: WorkflowHi
       .finally(() => setLoading(false));
   }, [decisionId]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const title = `Workflow History${items.length > 0 ? `: ${items[0].workflowName}` : ''}`;
 
   return (
-    <div className="flow-code-modal__backdrop" onClick={onClose}>
-      <div className="flow-wf-history__dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="flow-code-modal__header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h3 className="flow-code-modal__title">
-              Workflow History{items.length > 0 ? `: ${items[0].workflowName}` : ''}
-            </h3>
-          </div>
-          <button onClick={onClose} className="flow-code-modal__close-btn">&times;</button>
-        </div>
-        <div className="flow-wf-history__body">
-          {loading && <div style={{ color: '#9ca3af', fontSize: '14px' }}>Loading workflow history...</div>}
-          {error && <div style={{ color: '#f87171', fontSize: '14px' }}>Error: {error}</div>}
-          {!loading && !error && items.length === 0 && (
-            <div style={{ color: '#9ca3af', fontSize: '14px' }}>No workflow history available.</div>
-          )}
-          {!loading && !error && items.length > 0 && (
-            <div className="flow-wf-history__timeline">
-              {items.map((item, i) => (
-                <div key={i} className="flow-wf-history__entry">
-                  <div className="flow-wf-history__dot" />
-                  <div className="flow-wf-history__content">
-                    <div className="flow-wf-history__transition">
-                      <span className="flow-wf-history__state">{item.statusChangedFrom}</span>
-                      <span className="flow-wf-history__arrow">&rarr;</span>
-                      <span className="flow-wf-history__state">{item.statusChangedTo}</span>
-                    </div>
-                    <div className="flow-wf-history__meta">
-                      {item.modifiedBy} &middot; {formatTs(item.modifiedTimeStamp)}
-                      {item.version && <> &middot; v{item.version}</>}
-                    </div>
-                    {item.comments && (
-                      <div className="flow-wf-history__comment">{item.comments}</div>
-                    )}
-                  </div>
+    <Modal title={title} onClose={onClose} size="medium">
+      {loading && <Loading size="small" message="Loading workflow history..." />}
+      {error && <Alert variant="error">Could not load the workflow history: {error}</Alert>}
+      {!loading && !error && items.length === 0 && (
+        <EmptyState title="No workflow history available." />
+      )}
+      {!loading && !error && items.length > 0 && (
+        <ol className="flow-wf-history__timeline">
+          {items.map((item, i) => (
+            <li key={i} className="flow-wf-history__entry">
+              <div className="flow-wf-history__dot" aria-hidden="true" />
+              <div className="flow-wf-history__content">
+                <div className="flow-wf-history__transition">
+                  <span className="flow-wf-history__state">{item.statusChangedFrom}</span>
+                  <span className="flow-wf-history__arrow" aria-hidden="true">&rarr;</span>
+                  <span className="flow-wf-history__state">{item.statusChangedTo}</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+                <div className="flow-wf-history__meta">
+                  {item.modifiedBy} &middot; {formatTs(item.modifiedTimeStamp)}
+                  {item.version && <> &middot; v{item.version}</>}
+                </div>
+                {item.comments && (
+                  <div className="flow-wf-history__comment">{item.comments}</div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Modal>
   );
 }

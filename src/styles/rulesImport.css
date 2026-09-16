@@ -9,39 +9,7 @@
   gap: var(--space-4);
 }
 
-/* --- Step navigation --- */
-
-.rules-import__steps {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.rules-import__step {
-  padding: var(--space-3) var(--space-4);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-600);
-  cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.rules-import__step:hover:not(:disabled) {
-  color: var(--sas-blue-primary);
-}
-
-.rules-import__step--active {
-  color: var(--sas-blue-primary);
-  border-bottom-color: var(--sas-blue-primary);
-}
-
-.rules-import__step:disabled {
-  color: var(--sas-gray-400);
-  cursor: not-allowed;
-}
+/* Step navigation is <StepNav> / .sas-steps (components.css) */
 
 /* --- Panels --- */
 
@@ -86,7 +54,10 @@
 
 /* --- Upload / drop zone --- */
 
+/* Positioned so the .sr-only file input is clipped against the drop zone and
+   not against whatever positioned ancestor happens to be above it. */
 .rules-import__dropzone {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -98,33 +69,27 @@
 }
 
 .rules-import__dropzone--active {
-  border-color: var(--sas-blue-brand);
+  border-color: var(--sas-blue-primary);
   background: var(--sas-blue-lighter);
-}
-
-.rules-import__file-input {
-  display: none;
-}
-
-.rules-import__file-label {
-  display: inline-block;
-  padding: var(--space-2) var(--space-4);
-  background: var(--sas-blue-brand);
-  color: var(--sas-white);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.rules-import__file-label:hover {
-  background: var(--sas-blue-primary);
 }
 
 .rules-import__dropzone-hint {
   color: var(--sas-gray-500);
   font-size: var(--font-size-sm);
+}
+
+/* The visible half of the file picker: a <label> wearing the .sas-button
+   classes, so it only needs the pointer cursor the element rule gives a
+   real <button>, plus the ring its .sr-only input cannot show itself. */
+.rules-import__file-label {
+  cursor: pointer;
+  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
+  line-height: normal;
+}
+
+.rules-import__file-input:focus-visible + .rules-import__file-label {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .rules-import__file-summary {
@@ -185,13 +150,15 @@
   z-index: 1;
 }
 
+/* Header greys/rule match .sas-table__head; the mono/xs face is the deliberate
+   exception because the headers are the literal CSV column names. */
 .rules-import__grid th {
-  background: var(--sas-gray-100);
+  background: var(--sas-gray-50);
   color: var(--sas-gray-700);
   font-weight: var(--font-weight-semibold);
   text-align: left;
   padding: var(--space-2) var(--space-2);
-  border-bottom: 2px solid var(--sas-gray-300);
+  border-bottom: 2px solid var(--sas-gray-200);
   white-space: nowrap;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
@@ -213,7 +180,7 @@
 }
 
 .rules-import__col-status {
-  width: 18px;
+  width: 24px;
   text-align: center;
 }
 
@@ -222,28 +189,49 @@ td.rules-import__col-wide .rules-import__cell-input {
   min-width: 220px;
 }
 
+/* Row severity marker: a glyph (× ! i) in a tinted disc so severity is not
+   colour alone; focusable so the title/aria-label is reachable by keyboard. */
 .rules-import__status-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid;
   border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
   cursor: help;
 }
 
 .rules-import__status-dot--error {
-  background: var(--sas-error);
+  background: var(--sas-error-light);
+  border-color: var(--sas-error);
+  color: var(--sas-error-dark);
 }
 
 .rules-import__status-dot--warning {
-  background: var(--sas-warning);
+  background: var(--sas-warning-light);
+  border-color: var(--sas-warning);
+  color: var(--sas-warning-dark);
 }
 
 .rules-import__status-dot--info {
-  background: var(--sas-info);
+  background: var(--sas-info-light);
+  border-color: var(--sas-info);
+  color: var(--sas-info-dark);
 }
 
 .rules-import__row--rejected td {
   background: var(--sas-error-light);
+}
+
+/* Row-level cue for a row with at least one error: a bar on the leading edge,
+   so the row reads as faulty before the eye reaches the marker or the cell.
+   A bar (not a tint) so it never collides with the --rejected/--focus fills */
+.rules-import__row--error .rules-import__col-line {
+  box-shadow: inset 3px 0 0 var(--sas-error);
 }
 
 /* Row targeted by "Next error" — declared after the other row rules so the
@@ -263,7 +251,9 @@ td.rules-import__col-wide .rules-import__cell-input {
     background: var(--sas-info-light);
   }
   50% {
-    background: #bcd9f7;
+    /* Peak of the flash: a deeper blue than any light token; if color-mix is
+       unsupported this stop is dropped and the tween runs 0% -> 100% */
+    background: color-mix(in srgb, var(--sas-blue-primary) 25%, var(--sas-white));
   }
   100% {
     background: var(--sas-blue-light);
@@ -286,7 +276,7 @@ td.rules-import__col-wide .rules-import__cell-input {
 .rules-import__cell-input:focus {
   outline: none;
   border-color: var(--sas-blue-primary);
-  box-shadow: 0 0 0 2px var(--sas-blue-light);
+  box-shadow: var(--focus-ring);
 }
 
 .rules-import__cell-input--error {
@@ -321,26 +311,11 @@ td.rules-import__col-wide .rules-import__cell-input {
 
 /* --- Server checks --- */
 
-.rules-import__preflight-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.rules-import__preflight-table th {
-  text-align: left;
-  padding: var(--space-2);
-  border-bottom: 2px solid var(--sas-gray-200);
-  color: var(--sas-gray-600);
-  font-weight: var(--font-weight-semibold);
-}
-
-.rules-import__preflight-table td {
-  padding: var(--space-2);
-  border-bottom: 1px solid var(--sas-gray-100);
-}
-
-.rules-import__preflight-folder {
+/* The pre-flight table is .sas-table .sas-table--compact; only the two cell
+   treatments below are specific to it. */
+/* Doubled up with .sas-table__td so the font-size beats the (0,2,0)
+   `.sas-table--compact .sas-table__td` rule in components.css. */
+.sas-table__td.rules-import__preflight-folder {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
   word-break: break-all;
@@ -381,6 +356,11 @@ td.rules-import__col-wide .rules-import__cell-input {
   cursor: pointer;
   font-size: inherit;
   text-decoration: underline;
+  transition: color var(--transition-fast);
+}
+
+.rules-import__link-button:hover {
+  color: var(--sas-blue-dark);
 }
 
 .rules-import__result {
@@ -415,60 +395,9 @@ td.rules-import__col-wide .rules-import__cell-input {
   flex-wrap: wrap;
 }
 
-/* --- Confirm dialog --- */
+/* --- Confirm dialog (chrome comes from <Modal>) --- */
 
-.rules-import__overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal-backdrop);
-}
-
-.rules-import__dialog {
-  background: var(--sas-white);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xl);
-  width: 640px;
-  max-width: calc(100vw - 48px);
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  z-index: var(--z-modal);
-}
-
-.rules-import__dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--sas-gray-200);
-}
-
-.rules-import__dialog-header h3 {
-  margin: 0;
-  font-size: var(--font-size-md);
-}
-
-.rules-import__dialog-close {
-  background: none;
-  border: none;
-  font-size: var(--font-size-xl);
-  color: var(--sas-gray-500);
-  cursor: pointer;
-  line-height: 1;
-  padding: var(--space-1);
-}
-
-.rules-import__dialog-close:hover {
-  color: var(--sas-gray-800);
-}
-
-.rules-import__dialog-body {
-  padding: var(--space-4) var(--space-5);
-  overflow-y: auto;
+.rules-import__confirm-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -521,14 +450,6 @@ td.rules-import__col-wide .rules-import__cell-input {
 
 .rules-import__confirm-ack input {
   margin-top: 3px;
-}
-
-.rules-import__dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--sas-gray-200);
 }
 
 /* Expression cells: 14% of real exports carry multi-line expressions */

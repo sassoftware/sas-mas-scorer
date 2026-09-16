@@ -1,10 +1,12 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
+import { IconButton } from '../common/IconButton';
+import { Modal } from '../common/Modal';
 import {
   DatagridColumn,
   buildDatagridValue,
@@ -50,6 +52,12 @@ const toTypedCell = (raw: string, dataType: string): unknown => {
   if (t === 'datetime' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return `${raw}:00`;
   return raw;
 };
+
+const RemoveIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
 
 export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
   paramName,
@@ -100,14 +108,6 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
   const [cells, setCells] = useState<string[][]>(initial.cells);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const handleAddRow = () => {
     if (schema.maxRows !== null && cells.length >= schema.maxRows) {
@@ -180,9 +180,11 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
 
   const renderCellInput = (rowIdx: number, colIdx: number, raw: string, dataType: string) => {
     const t = dataType.toLowerCase();
+    const column = columns[colIdx];
     const common = {
-      className: 'sas-input datagrid-editor__cell-input',
+      className: 'sas-input datagrid__cell-input',
       value: raw,
+      'aria-label': `${column?.name ?? `Column ${colIdx + 1}`}, row ${rowIdx + 1}`,
       onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         handleCellChange(rowIdx, colIdx, e.target.value),
     };
@@ -203,139 +205,139 @@ export const DataGridInputModal: React.FC<DataGridInputModalProps> = ({
   };
 
   return (
-    <div className="cas-upload-overlay" onClick={onClose}>
-      <div className="datagrid-modal" onClick={e => e.stopPropagation()}>
-        <div className="datagrid-modal__header">
-          <div className="datagrid-modal__title">
-            <h3>Edit DataGrid — {paramName}</h3>
-            {locked && <Badge variant="info">columns from decision signature</Badge>}
-            {schema.maxRows !== null && (
-              <Badge variant="warning">max {schema.maxRows} rows</Badge>
-            )}
-          </div>
-          <div className="datagrid-modal__actions">
-            <button className="cas-upload-dialog__close" onClick={onClose} aria-label="Close">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div className="datagrid-modal__body datagrid-modal__body--editor">
-          {notice && (
-            <Alert variant="warning" dismissible onClose={() => setNotice(null)}>
-              {notice}
-            </Alert>
+    <Modal
+      size="wide"
+      onClose={onClose}
+      closeOnBackdropClick={false}
+      title={
+        <span className="datagrid__modal-title">
+          <span>Edit DataGrid — {paramName}</span>
+          {locked && <Badge variant="info">columns from decision signature</Badge>}
+          {schema.maxRows !== null && (
+            <Badge variant="warning">max {schema.maxRows} rows</Badge>
           )}
-          {error && (
-            <Alert variant="error" dismissible onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
+        </span>
+      }
+      footer={
+        <>
+          <Button variant="tertiary" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleApply}>Apply grid</Button>
+        </>
+      }
+    >
+      <div className="datagrid__editor">
+        {notice && (
+          <Alert variant="warning" dismissible onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="error" dismissible onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
 
-          {columns.length === 0 ? (
-            <p className="datagrid-editor__empty">
-              No columns defined yet — add a column to begin building the grid.
-            </p>
-          ) : (
-            <div className="output-display__datagrid-wrapper datagrid-editor__table-wrapper">
-              <table className="output-display__datagrid datagrid-editor__table">
-                <thead>
-                  <tr>
-                    <th className="datagrid-editor__row-number">#</th>
-                    {columns.map((col, colIdx) => (
-                      <th key={colIdx}>
-                        {locked ? (
-                          <div className="datagrid-editor__column-header">
-                            <span>{col.name}</span>
-                            <span className="datagrid-editor__column-type">{col.dataType}</span>
-                          </div>
-                        ) : (
-                          <div className="datagrid-editor__column-header">
-                            <input
-                              type="text"
-                              className="sas-input datagrid-editor__column-name"
-                              value={col.name}
-                              onChange={e => handleColumnNameChange(colIdx, e.target.value)}
-                              placeholder="Column name"
-                            />
-                            <select
-                              className="sas-input datagrid-editor__column-select"
-                              value={col.dataType}
-                              onChange={e => handleColumnTypeChange(colIdx, e.target.value)}
-                            >
-                              {FLEXIBLE_COLUMN_TYPES.map(t => (
-                                <option key={t} value={t}>{t}</option>
-                              ))}
-                            </select>
-                            <button
-                              className="datagrid-editor__remove-btn"
-                              onClick={() => handleRemoveColumn(colIdx)}
-                              title="Remove column"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )}
-                      </th>
-                    ))}
-                    <th className="datagrid-editor__row-actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {cells.map((row, rowIdx) => (
-                    <tr key={rowIdx}>
-                      <td className="datagrid-editor__row-number">{rowIdx + 1}</td>
-                      {columns.map((col, colIdx) => (
-                        <td key={colIdx}>
-                          {renderCellInput(rowIdx, colIdx, row[colIdx] ?? '', col.dataType)}
-                        </td>
-                      ))}
-                      <td className="datagrid-editor__row-actions">
-                        <button
-                          className="datagrid-editor__remove-btn"
-                          onClick={() => handleRemoveRow(rowIdx)}
-                          title="Remove row"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
+        {columns.length === 0 ? (
+          <p className="datagrid__empty">
+            No columns defined yet — add a column to begin building the grid.
+          </p>
+        ) : (
+          <div className="datagrid__wrapper datagrid__wrapper--modal">
+            <table className="sas-table sas-table--compact datagrid__table datagrid__editor-table">
+              <thead className="sas-table__head">
+                <tr>
+                  <th className="sas-table__th datagrid__row-number">#</th>
+                  {columns.map((col, colIdx) => (
+                    <th className="sas-table__th" key={colIdx}>
+                      {locked ? (
+                        <div className="datagrid__column-header">
+                          <span>{col.name}</span>
+                          <span className="datagrid__column-type">{col.dataType}</span>
+                        </div>
+                      ) : (
+                        <div className="datagrid__column-header">
+                          <input
+                            type="text"
+                            className="sas-input datagrid__column-name"
+                            value={col.name}
+                            onChange={e => handleColumnNameChange(colIdx, e.target.value)}
+                            placeholder="Column name"
+                            aria-label={`Column ${colIdx + 1} name`}
+                          />
+                          <select
+                            className="sas-input datagrid__column-select"
+                            value={col.dataType}
+                            onChange={e => handleColumnTypeChange(colIdx, e.target.value)}
+                            aria-label={`Column ${colIdx + 1} type`}
+                          >
+                            {FLEXIBLE_COLUMN_TYPES.map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                          <IconButton
+                            size="small"
+                            variant="danger"
+                            aria-label={`Remove column ${col.name || colIdx + 1}`}
+                            onClick={() => handleRemoveColumn(colIdx)}
+                          >
+                            {RemoveIcon}
+                          </IconButton>
+                        </div>
+                      )}
+                    </th>
                   ))}
-                  {cells.length === 0 && (
-                    <tr>
-                      <td colSpan={columns.length + 2} className="output-display__empty">
-                        No rows yet — use “Add row” below.
+                  <th className="sas-table__th datagrid__row-actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {cells.map((row, rowIdx) => (
+                  <tr className="sas-table__row" key={rowIdx}>
+                    <td className="sas-table__td datagrid__row-number">{rowIdx + 1}</td>
+                    {columns.map((col, colIdx) => (
+                      <td className="sas-table__td" key={colIdx}>
+                        {renderCellInput(rowIdx, colIdx, row[colIdx] ?? '', col.dataType)}
                       </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    ))}
+                    <td className="sas-table__td datagrid__row-actions">
+                      <IconButton
+                        size="small"
+                        variant="danger"
+                        aria-label={`Remove row ${rowIdx + 1}`}
+                        onClick={() => handleRemoveRow(rowIdx)}
+                      >
+                        {RemoveIcon}
+                      </IconButton>
+                    </td>
+                  </tr>
+                ))}
+                {cells.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length + 2} className="sas-table__td output-display__empty">
+                      No rows yet — use “Add row” below.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          <div className="datagrid-editor__toolbar">
-            <Button variant="secondary" size="small" onClick={handleAddRow} disabled={columns.length === 0}>
-              Add row
+        <div className="datagrid__toolbar">
+          <Button variant="secondary" size="small" onClick={handleAddRow} disabled={columns.length === 0}>
+            Add row
+          </Button>
+          {!locked && (
+            <Button variant="secondary" size="small" onClick={handleAddColumn}>
+              Add column
             </Button>
-            {!locked && (
-              <Button variant="secondary" size="small" onClick={handleAddColumn}>
-                Add column
-              </Button>
-            )}
-            <span className="datagrid-editor__count">
-              {cells.length} row{cells.length === 1 ? '' : 's'}
-              {schema.maxRows !== null ? ` of max ${schema.maxRows}` : ''}
-            </span>
-          </div>
-
-          <div className="datagrid-editor__footer">
-            <Button variant="tertiary" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={handleApply}>Apply grid</Button>
-          </div>
+          )}
+          <span className="datagrid__count">
+            {cells.length} row{cells.length === 1 ? '' : 's'}
+            {schema.maxRows !== null ? ` of max ${schema.maxRows}` : ''}
+          </span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

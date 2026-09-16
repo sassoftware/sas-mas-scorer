@@ -2,6 +2,43 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.8.0] - 2026-09-15
+
+This release folds in the results of a full performance and accessibility review of the app — 232 verified findings across every page — and makes **WCAG 2.1 AA** a shipping requirement. Every screen was reworked for keyboard use, screen readers and contrast; the data layer was audited for silently truncated lists; and the shared design system now owns the components each page had been re-implementing on its own.
+
+### Added
+
+- **Rule sets in View Flows show the rule chain** — a rule set is an ordered *if / else if / else* chain, and the diagram, side panel and Markdown export now show it that way instead of a flat list. Rules appear in execution order with `IF` / `ELSE IF` / `ELSE` / `OR` leads, conditions joined by `AND`, actions under `THEN`, and each condition or action carries its kind (Comparison, Expression, Lookup, Assignment, Lookup value, Advanced list) and the lookup table or advanced list it reads. The rule set node shows its rule count and type (`assignment` / `filtering`); a rule set the service reports as invalid — a missing lookup table, for example — gets a warning badge on the node and the service's message in the panel and export. Each rule set also lists the decision variables it reads and writes. The export gains **Rule Sets** and **Lookup Tables & Lists** tables alongside the External Endpoints table from 2.7.0
+- **Publishing Overview shows progress while it loads** — a live count of destinations and deployed items as they arrive, instead of a bare spinner and three zeros
+- **Collapsible sidebar** — a control at the bottom of the sidebar folds it to an icon rail and back; default expanded, remembered per browser. Labels stay available as tooltips and to screen readers
+- **Narrow layouts** — below 768px (Visual Analytics objects, Job Execution embeds, small windows) the sidebar becomes a drawer behind a header toggle, tables scroll inside their cards, and toolbars wrap
+- **Keyboard and screen-reader support across the app** — file pickers (Parallel › File Upload, Rules Import) reachable by keyboard; clickable table rows, sort headers and UI Builder field rows are real buttons; every dialog closes on Escape, traps Tab and returns focus to what opened it; every form control, grid cell and icon button has an accessible name; focus is visible on every control; rule and log severities are no longer conveyed by colour alone; animation stops under the OS "reduce motion" setting
+- **Recoverable page loads** — if a page's code fails to download (web build), a message with **Try again** replaces the blank screen
+
+### Fixed
+
+- **Lists were silently cut short.** SAS Viya collections default to ten items, and several calls never asked for more or stopped paging when a service capped the page below what was requested. Rule sets with more than ten rules showed "Rules (10)" in View Flows; reference-data modules showed ten entries as the total; modules with more than twenty steps hid the rest; the coverage, job history, decision, scenario and CAS lists had the same latent bug. One shared paginator now walks every collection to the end, using the page size the service echoes back
+- **View Flows dropped the operand from every condition and action** — `DEBTINC < 43`, `DELINQ = 0` rendered as `<43, 0`; `loan_bin = 1` as `1`; a lookup condition showed only the term with no sign of the table it reads
+- **"Score full table" could score a subset while reporting the full count** — CAS rows were requested in one un-paged call; they are now fetched page by page with progress on the button
+- **Publishing Overview took ~16 seconds to load** — five sequential requests at ~3.5 s each; the service accepts a larger page, and all deployed items now arrive in one request of about 2 s
+- **Batch scoring rebuilt and re-sorted the whole results array after every row**, and kept sending requests after you navigated away; the results are assembled once, and leaving the page aborts the batch
+- **Rules Import revalidated the entire file on every keystroke** — unchanged rows are now cached, so editing a 2,000-row file has no lag and the import gate updates instantly
+- **Job logs grew the page without limit** — the viewer windows what it renders; Copy and Download still return the full log
+- **Coverage and Publishing rendered every row at once and re-sorted on every keystroke** — both paginate, and search is debounced
+- **Styles were silently dropped** — 83 references to 24 CSS variables that were never defined; the folder you picked in the Save dialogs had no highlight, one control had no padding, and several screens rendered an off-brand palette through fallbacks. All rewritten onto real tokens
+- **Stale responses could win** — switching CAS tables, folders, modules or jobs quickly could apply the earlier response to the later selection; guarded everywhere
+- **Input/output direction badges were colour-inverted** between View Flows and the UI Builder
+- **Modules were fetched twice on login**, and opening a module by deep link loaded its steps only after the module arrived; both fixed
+- **Contrast** — badge text, secondary text, boolean outputs, the decision badge in UI Runner, the schema type chips and the header status line on light environment colours all failed AA; the palette's status and gray tokens were darkened to verified values, so every badge and alert passes in one place
+
+### Changed
+
+- **Design system** — Modal, IconButton, EmptyState, SearchInput, StepNav, Pagination, ProgressBar, stat cards, a compact table variant, direction badges and deep links are shared components now; the per-page copies (17 badge styles, 13 hand-styled tables, 9 modal implementations, 16 empty states) are gone
+- **Batch Results** page sizes are 100 / 500 (the "All" option is gone), and the datagrid viewer pages at 200 rows instead of "Show all"
+- **Web build loads faster** — route-level code splitting takes the entry bundle from 944 kB to 370 kB; View Flows, Job Monitoring and Schema → Code load on first use. The Job Execution build is unchanged (one inlined file)
+- **Type sizes** in Job Monitoring, Publishing and the UI Builder moved from `rem` values (which landed off the 14px base) onto the token scale
+- The Electron connection dialog uses the shared Modal, its delete confirmation is the red **danger** button, and environment colour swatches are native radio buttons
+
 ## [2.7.0] - 2026-08-31
 
 ### Added
