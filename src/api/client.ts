@@ -59,7 +59,20 @@ const addErrorInterceptor = (client: AxiosInstance): void => {
   client.interceptors.response.use(
     (response) => response,
     async (error: AxiosError<ApiError>) => {
-      const originalRequest = error.config as InternalAxiosRequestConfig & { _csrfRetry?: boolean };
+      const originalRequest = error.config as InternalAxiosRequestConfig & { _csrfRetry?: boolean; _authRetry?: boolean };
+
+      // The first cookie-authenticated call to a service the browser session
+      // has not used yet can come back as "Authentication success, retry
+      // original request." once the service has set up its session. Retry it
+      // once; seen in jobdef mode on the first POST to /scoreDefinitions.
+      if (
+        originalRequest &&
+        !originalRequest._authRetry &&
+        /retry original request/i.test(error.response?.data?.message ?? '')
+      ) {
+        originalRequest._authRetry = true;
+        return client(originalRequest);
+      }
 
       // CSRF error (403) — extract token and retry once
       if (

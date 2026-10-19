@@ -19,12 +19,13 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 11. [View Source Code](#11-view-source-code)
 12. [UI Apps](#12-ui-apps)
 13. [View Flows](#13-view-flows)
-14. [Test Coverage Analysis](#14-test-coverage-analysis)
-15. [Publishing Overview](#15-publishing-overview)
-16. [Job Monitoring](#16-job-monitoring)
-17. [Schema → Code](#17-schema--code)
-18. [Business Rules Import](#18-business-rules-import)
-19. [Keyboard and Interaction Tips](#19-keyboard-and-interaction-tips)
+14. [Segmentation Tree Explorer](#14-segmentation-tree-explorer)
+15. [Test Coverage Analysis](#15-test-coverage-analysis)
+16. [Publishing Overview](#16-publishing-overview)
+17. [Job Monitoring](#17-job-monitoring)
+18. [Schema → Code](#18-schema--code)
+19. [Business Rules Import](#19-business-rules-import)
+20. [Keyboard and Interaction Tips](#20-keyboard-and-interaction-tips)
 
 ---
 
@@ -96,6 +97,7 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 | **All Modules** | Browse, search, and filter all published modules |
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
+| **Segmentation Trees** | Navigate large segmentation trees path by path, copy any path, and turn paths into SID scenarios or tests |
 | **Test Coverage** | Analyze test scenario coverage across all assets |
 | **Publishing Overview** | See every publishing destination and everything deployed to it |
 | **Rules Import** | Validate and import SAS Intelligent Decisioning rule sets from CSV files |
@@ -654,7 +656,7 @@ Click any node in the diagram to open a side panel with detailed information:
 - **Models** — Shows the algorithm, input/output variables, and model properties.
 - **Code Files** — Shows a preview of the code with a button to open a full syntax-highlighted viewer.
 - **Treatment Groups** — Shows member definitions, attributes, and eligibility criteria.
-- **Segmentation Trees** — Shows split conditions and outcomes.
+- **Segmentation Trees** — Shows the tree's size (splits, paths, outcomes), its signature and an **Open in Segmentation Tree Explorer** button; the explorer is where the tree itself is navigated (see [Segmentation Tree Explorer](#14-segmentation-tree-explorer)).
 - **REST API definitions** — Shows the HTTP method and the endpoint with its `{placeholders}` highlighted, the authorization type, query parameters, request and response headers, the request body and the definition's signature. Each parameter and header row also names the decision variable its placeholder is bound to, so you can see what actually gets sent.
 
 Where applicable, the side panel includes deep links to open the asset directly in SAS Intelligent Decisioning or SAS Model Manager.
@@ -673,7 +675,80 @@ Click **Export** to generate a Markdown document with a Mermaid diagram of the f
 
 ---
 
-## 14. Test Coverage Analysis
+## 14. Segmentation Tree Explorer
+
+The **Segmentation Trees** page is built for trees too large to read in SAS Intelligent Decisioning's canvas — thousands of paths, hundreds of outcomes. Instead of drawing the whole tree it shows one split at a time, the path that leads to it, and an index of every outcome, so you can go from "which records end up in Scenario_75?" to the exact conditions in a click.
+
+### Tree List
+
+Lists every segmentation tree in the environment; search by name or description and click a tree to open it.
+
+### Reading the Page
+
+- **Header** — name, description, version and counts (splits, paths, outcomes), a link that opens the tree in SAS Intelligent Decisioning, **Test whole tree…** and **Export paths (CSV)**.
+- **Breadcrumb** — the path from the top of the tree to where you are. Click any step to jump back to that level. The **▾** beside a step lists the other branches at that level (with how many paths sit below each, or the outcome it assigns) and switches to one of them, so you can move sideways without climbing back up.
+- **Centre: Split, Outline or Diagram** — three ways to look at the tree (see below). All three follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
+- **Left: Outcomes** — every outcome with its output values and how many paths reach it. Search by name or value, group by an output variable (e.g. `ScenarioGroup`), or filter to outcomes with failed or unreachable paths. Clicking an outcome reached by one path jumps straight to it; an outcome reached by several paths expands to list them, showing the conditions **every** path shares once and only what differs under each path.
+- **Right: the path panel** — the conditions that lead to the selected point, the outcome and the values it assigns, and — after a test run — whether that path passed.
+
+The page address carries your position (`?at=…`), so the browser's Back button walks back through your jumps and a copied link opens the same node.
+
+### Split, Outline and Diagram
+
+- **Split** shows one split at a time: the variable being tested and its branches *in the order SID tests them*. The first branch whose condition matches wins, which is why order matters. Each branch shows where it leads (another split, or an outcome) and how many paths and distinct outcomes lie below it. Click a branch to go into it.
+- **Outline** shows the whole tree as an indented list, like a file explorer. Each row is a branch — `variable: condition → next split or outcome` — with its path count and any unreachable, failed or passed counts. Click the arrow to open or close a branch and the row to select it. From the keyboard: **↑/↓** move, **→** opens a branch or steps into it, **←** closes it or steps out to its parent, **Enter** selects.
+- **Diagram** draws the tree left to right as boxes and lines: blue boxes are splits, teal boxes outcomes, and a dashed box is a collapsed part of the tree marked **+ N paths**. The path to the selected node is drawn in blue. Click a node to select it; click a collapsed node to open it, and click the selected node again to close it. Pan by dragging, zoom with the wheel or the +/− buttons, and use the minimap for the overview.
+
+Large trees are not opened all at once. On load the Outline opens the top levels until about 150 branches are showing and the Diagram until about 40; everything deeper stays collapsed until you open it. Selecting a node anywhere opens the tree up to it. **Open one more level**, **Collapse all** and **Reset** (back to the starting view) apply to the tab you are on, the Outline also has **Expand all**, and while either tab is open the outcome list moves below the tree to give it the width.
+
+### Merged and Raw Conditions
+
+Strategy trees often test the same variable several times on one path. **Merged** (the default) folds those into one condition per variable — `17 ≤ SCScore01Risk < 600`, `CQWorstCycleDelqProd < 21 or missing` — taking into account that a branch only receives what its earlier siblings did not catch. **Raw steps** lists every split exactly as SID labels it. The choice is remembered.
+
+Missing values follow SAS rules: a missing number is lower than any number, so a branch such as `< 1` also catches missing values, and the *Other* branch catches everything the branches above it did not.
+
+### Copying a Path
+
+**Copy ▾** in the path panel copies the selected path as:
+
+| Format | Use |
+|--------|-----|
+| **Path as text** | One line, breadcrumb style, ending in the outcome and its values — for chat and tickets |
+| **SAS condition** | A `WHERE` / DS2 expression selecting exactly the records that take the path — paste it into a query or a rule |
+| **Markdown table** | The numbered conditions plus the outcome |
+| **Sample input (JSON)** | A record that takes the path |
+| **Link to this node** | A link that opens the explorer on this node |
+
+### Unreachable Paths
+
+A branch is a **dead end** when no record can ever reach it. Usually the same variable is tested twice on one path with ranges that contradict each other — for example `CQWorstCycleDelqProd < 22 or missing` at step 5 and `CQWorstCycleDelqProd >= 22` at step 16 — which typically happens when a strategy table is turned into a tree. Less often, a branch sits below siblings that already catch every value it accepts.
+
+Dead ends do not break scoring: every record still gets an outcome from another branch. But the outcome at a dead end never fires from there, which is almost always not what the strategy intended.
+
+The page finds them when the tree loads. A banner says how many there are, with a real example from the tree; **Show** lists every dead end with the steps that conflict. Opening one shows, in the path panel, **why** no record can reach it — the conflicting steps, each a link that shows that split — and **how to fix it** in SAS Intelligent Decisioning: delete the dead branch if it should not exist (nothing changes for scoring), or correct the range at the earlier step if it should. Dead ends are marked *Unreachable* in every view, in the outcome index and in the CSV export, and are left out of generated tests.
+
+### Exporting All Paths
+
+**Export paths (CSV)** writes one row per path: its number, one column per variable with the merged condition, the outcome, its output values and whether the path is reachable — effectively the strategy table rebuilt from the tree, which makes it easy to compare against the spreadsheet a tree was built from.
+
+### Testing Paths
+
+**Test this path…** (path panel), **Test N paths…** (any point in the tree), **Test all N paths…** (an outcome) and **Test whole tree…** (header) open the same dialog for that set of paths.
+
+**1. Review rows.** One record is generated per path: inputs that take the path (the lower bound of each range where possible) and, as expected values, the outputs the path's outcome assigns. Unreachable paths are left out and named. Every cell can be edited; **Add row** adds a record of your own, the trash icon or **Delete selected** removes rows, and **Reset to generated** starts over. A blank input is a missing value; a blank expected value is not checked.
+
+**2. Save to SID.** Choose what to create:
+
+- **One table test with all rows** — the rows are uploaded to a CAS table in the caslib you pick (and saved there, so the test still works after a CAS restart) and a test is created on the tree in the folder you pick. The table also carries a `_pathId` column and one `expected_<output>` column per output, which SID copies into the test's output table. If a table of that name already exists, tick **Replace it** or choose another name. With **Run the test now** ticked, the app runs the test, reads the output table and compares every row with its expected values.
+- **One scenario per selected row** — each selected row becomes a SID scenario with its inputs and expected outputs (a single row keeps the name you type; several are suffixed `_Path_<n>`). Run them from the tree's **Scenarios** tab in SAS Intelligent Decisioning.
+
+The folder and caslib you pick are remembered for next time.
+
+**3. Result.** For a test run, the dialog reports how many rows passed and failed. **Show results on the tree** overlays them on the page: branches show passed and failed counts for everything below them, the outcome index can filter to outcomes with failures, a banner offers **Next failed path**, and the path panel of a failed path lists each output with its expected and actual value.
+
+---
+
+## 15. Test Coverage Analysis
 
 The **Test Coverage** page helps you understand which of your SAS Intelligent Decisioning and Model Manager assets have test scenarios defined.
 
@@ -723,7 +798,7 @@ Each asset row has a link icon that opens the asset in SAS Intelligent Decisioni
 
 ---
 
-## 15. Publishing Overview
+## 16. Publishing Overview
 
 The **Publishing Overview** page answers "what is deployed where?" for the whole environment: every publishing destination (MAS, CAS, container and other destinations) and every model and decision that has been published to it.
 
@@ -747,7 +822,7 @@ The table lists every completed publish, deduplicated to the latest version of e
 
 ---
 
-## 16. Job Monitoring
+## 17. Job Monitoring
 
 The **Job Monitoring** page gives you a live view of every job executed by the SAS Viya Job Execution service. Use it to watch active runs as they happen, drill into a job's log or final output, and search the full history.
 
@@ -881,7 +956,7 @@ A table of every parameter declared on the job definition, paired with the value
 
 ---
 
-## 17. Schema → Code
+## 18. Schema → Code
 
 The **Schema → Code** page generates a Python `execute()` function for SAS Intelligent Decisioning (SID) from a sample data payload, then lets you save it to SAS Viya. It is useful when an incoming request arrives as a single JSON or XML string and you need SID code that parses it into individual, typed variables.
 
@@ -939,7 +1014,7 @@ The **Save to SAS Viya** dialog has two modes:
 
 ---
 
-## 18. Business Rules Import
+## 19. Business Rules Import
 
 The **Rules Import** page imports SAS Intelligent Decisioning **rule sets** from CSV files — the same 15-column format used by the `%DCM_IMPORT_RULESET` macro and the rule export in SAS Intelligent Decisioning. Instead of importing blind and digging through a SAS log afterwards, you validate the file up front, fix problems directly in the grid, and see exactly what the server accepted or rejected.
 
@@ -994,7 +1069,7 @@ Edits that change rule set names or folder paths mark the checks as stale — re
 
 ---
 
-## 19. Keyboard and Interaction Tips
+## 20. Keyboard and Interaction Tips
 
 The application meets **WCAG 2.1 AA**: every control can be reached and operated from the keyboard, has a visible focus ring, and has a name a screen reader can announce.
 
@@ -1002,6 +1077,7 @@ The application meets **WCAG 2.1 AA**: every control can be reached and operated
 - **Enter** or **Space** activates the focused control; **Space** toggles a row checkbox.
 - In any dialog, **Escape** closes it, **Tab** stays inside it, and focus returns to the control that opened it when it closes. A click on the dark area outside the dialog also closes it.
 - **Escape** also closes the node details panel in View Flows and the navigation drawer on narrow layouts.
+- Menus (**Copy ▾**, the breadcrumb's **▾** branch lists) open with **Enter**, **Space** or **↓**; **↑**/**↓**, **Home** and **End** move between items, **Enter** picks one and **Escape** closes the menu.
 - Severity and status are never conveyed by colour alone — error rows carry a **×** marker and a red bar, badges carry text, and log lines carry a glyph.
 - With the operating system's **reduce motion** setting on, nothing in the app animates or spins.
 - **Shift+Click** on batch result checkboxes to select a range of rows.
