@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import {
   ReactFlow, ReactFlowProvider, Controls, MiniMap, Background, BackgroundVariant,
-  Handle, Position, useReactFlow, MarkerType, type Edge, type Node, type NodeProps,
+  Handle, Position, useReactFlow, type Edge, type Node, type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { pathBranchIds, type TreeIndex } from '../../utils/segTree/treeIndex';
@@ -117,6 +117,8 @@ const nodeTypes = { split: SplitNode, collapsed: SplitNode, outcome: OutcomeNode
 const CANVAS_DOT_COLOR = '#E5E5E5';
 const EDGE_COLOR = '#767676';
 const PATH_COLOR = '#0066B2';
+/** Width added to a line that carries every path (the thinnest line is 1px). */
+const MAX_EXTRA_WIDTH = 17;
 
 function Canvas({ index, expanded, onToggle, focusId, shadowedPrefix, results, onNavigate }: SegTreeDiagramProps) {
   const { setCenter, getZoom } = useReactFlow();
@@ -140,6 +142,11 @@ function Canvas({ index, expanded, onToggle, focusId, shadowedPrefix, results, o
   const edges = useMemo<Edge[]>(
     () => layout.edges.map((e) => {
       const hot = onPath.has(e.branchId);
+      // Line width grows with the share of all paths that run through the
+      // branch, as in Visual Analytics' tree: the busy routes stand out. No
+      // arrowheads: they scale with the line, and the tree only reads left to right.
+      const b = index.branches.get(e.branchId)!;
+      const weight = 1 + MAX_EXTRA_WIDTH * ((b.leafEnd - b.leafStart) / Math.max(1, index.leafIds.length));
       return {
         id: e.id,
         source: e.source,
@@ -149,12 +156,11 @@ function Canvas({ index, expanded, onToggle, focusId, shadowedPrefix, results, o
         labelStyle: { fontSize: 11, fill: hot ? PATH_COLOR : '#333333', fontWeight: hot ? 600 : 400 },
         labelBgStyle: { fill: '#FFFFFF' },
         labelBgPadding: [4, 2] as [number, number],
-        style: { stroke: hot ? PATH_COLOR : EDGE_COLOR, strokeWidth: hot ? 2.5 : 1 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: hot ? PATH_COLOR : EDGE_COLOR },
+        style: { stroke: hot ? PATH_COLOR : EDGE_COLOR, strokeWidth: hot ? Math.max(2.5, weight) : weight, strokeOpacity: hot ? 1 : 0.7 },
         focusable: false,
       };
     }),
-    [layout, onPath]
+    [layout, onPath, index]
   );
 
   // The node to look at: the selected one, else the root. Fitting a large

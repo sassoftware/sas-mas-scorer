@@ -687,17 +687,22 @@ Lists every segmentation tree in the environment; search by name or description 
 
 - **Header** — name, description, version and counts (splits, paths, outcomes), a link that opens the tree in SAS Intelligent Decisioning, **Test whole tree…** and **Export paths (CSV)**.
 - **Breadcrumb** — the path from the top of the tree to where you are. Click any step to jump back to that level. The **▾** beside a step lists the other branches at that level (with how many paths sit below each, or the outcome it assigns) and switches to one of them, so you can move sideways without climbing back up.
-- **Centre: Split, Outline or Diagram** — three ways to look at the tree (see below). All three follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
+- **Centre: Split, Outline, Diagram or Icicle** — four ways to look at the tree (see below). All three follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
 - **Left: Outcomes** — every outcome with its output values and how many paths reach it. Search by name or value, group by an output variable (e.g. `ScenarioGroup`), or filter to outcomes with failed or unreachable paths. Clicking an outcome reached by one path jumps straight to it; an outcome reached by several paths expands to list them, showing the conditions **every** path shares once and only what differs under each path.
 - **Right: the path panel** — the conditions that lead to the selected point, the outcome and the values it assigns, and — after a test run — whether that path passed.
 
 The page address carries your position (`?at=…`), so the browser's Back button walks back through your jumps and a copied link opens the same node.
 
-### Split, Outline and Diagram
+### Split, Outline, Diagram and Icicle
 
 - **Split** shows one split at a time: the variable being tested and its branches *in the order SID tests them*. The first branch whose condition matches wins, which is why order matters. Each branch shows where it leads (another split, or an outcome) and how many paths and distinct outcomes lie below it. Click a branch to go into it.
 - **Outline** shows the whole tree as an indented list, like a file explorer. Each row is a branch — `variable: condition → next split or outcome` — with its path count and any unreachable, failed or passed counts. Click the arrow to open or close a branch and the row to select it. From the keyboard: **↑/↓** move, **→** opens a branch or steps into it, **←** closes it or steps out to its parent, **Enter** selects.
-- **Diagram** draws the tree left to right as boxes and lines: blue boxes are splits, teal boxes outcomes, and a dashed box is a collapsed part of the tree marked **+ N paths**. The path to the selected node is drawn in blue. Click a node to select it; click a collapsed node to open it, and click the selected node again to close it. Pan by dragging, zoom with the wheel or the +/− buttons, and use the minimap for the overview.
+- **Diagram** draws the tree left to right as boxes and lines: blue boxes are splits, teal boxes outcomes, and a dashed box is a collapsed part of the tree marked **+ N paths**. The path to the selected node is drawn in blue, and a line's thickness shows how many paths run through it, so the busy routes stand out. Click a node to select it; click a collapsed node to open it, and click the selected node again to close it. Pan by dragging, zoom with the wheel or the +/− buttons, and use the minimap for the overview.
+
+- **Icicle** shows the whole tree's shape at once: one row per level, and each block's width is its share of the paths, as in Visual Analytics' decision tree. Hover a block for its condition, path and outcome counts; click it to select it and zoom in so that it fills the width (**Zoom out one level** goes back). From the keyboard, focus the chart and use **↑** (parent), **↓** (first branch) and **←/→** (siblings). **Shade by** colours the blocks:
+  - **Splits and outcomes** — the structure.
+  - **Share of an output value** — pick an output and a value (e.g. `ScenarioGroup = 14`); each block is shaded light to dark by the share of its paths that assign that value, so you can see where in the tree a group comes from. The output with the fewest distinct values is picked first.
+  - **Dead ends** (and **test results** after a test run) — the dead-end or failed paths in a strong colour, the blocks leading to them in a light tint.
 
 Large trees are not opened all at once. On load the Outline opens the top levels until about 150 branches are showing and the Diagram until about 40; everything deeper stays collapsed until you open it. Selecting a node anywhere opens the tree up to it. **Open one more level**, **Collapse all** and **Reset** (back to the starting view) apply to the tab you are on, the Outline also has **Expand all**, and while either tab is open the outcome list moves below the tree to give it the width.
 

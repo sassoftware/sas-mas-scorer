@@ -23,6 +23,7 @@ import { UnreachableBanner } from './SegTreeUnreachable';
 
 // The diagram brings in the canvas library; load it only when its tab is opened.
 const SegTreeDiagram = lazy(() => import('./SegTreeDiagram'));
+const SegTreeIcicle = lazy(() => import('./SegTreeIcicle'));
 
 interface SegTreeExplorerPageProps {
   treeId: string;
@@ -31,14 +32,16 @@ interface SegTreeExplorerPageProps {
 const VIEW_PREF = 'segtree:pathView';
 const CENTRE_PREF = 'segtree:centreView';
 
-type CentreView = 'split' | 'outline' | 'diagram';
-type TreeTab = Exclude<CentreView, 'split'>;
+type CentreView = 'split' | 'outline' | 'diagram' | 'icicle';
+/** The views that open and close branches. */
+type TreeTab = 'outline' | 'diagram';
 /** Rows each tree view opens to on load before it starts leaving subtrees collapsed. */
 const DEFAULT_OPEN: Record<TreeTab, number> = { outline: 150, diagram: 40 };
 const CENTRE_VIEWS: { id: CentreView; label: string }[] = [
   { id: 'split', label: 'Split' },
   { id: 'outline', label: 'Outline' },
   { id: 'diagram', label: 'Diagram' },
+  { id: 'icicle', label: 'Icicle' },
 ];
 
 const BACK_ICON = (
@@ -50,7 +53,7 @@ const BACK_ICON = (
 function loadCentre(): CentreView {
   try {
     const v = localStorage.getItem(CENTRE_PREF);
-    return v === 'outline' || v === 'diagram' ? v : 'split';
+    return v === 'outline' || v === 'diagram' || v === 'icicle' ? v : 'split';
   } catch {
     return 'split';
   }
@@ -285,7 +288,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           </div>
 
           <div id="segtree-centre-panel" role="tabpanel" aria-labelledby={`segtree-tab-${centre}`}>
-            {centre !== 'split' && splitId && (
+            {(centre === 'outline' || centre === 'diagram') && splitId && (
               <div className="segtree-treebar">
                 <span className="segtree-treebar__count" role="status">
                   Showing {visibleRows(index, expanded).length.toLocaleString()} of {index.branches.size.toLocaleString()} branches
@@ -322,6 +325,21 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
                 results={resultPrefixes}
                 onNavigate={goTo}
               />
+            )}
+
+            {splitId && centre === 'icicle' && (
+              <Suspense fallback={<Loading message="Loading icicle..." />}>
+                <p className="segtree-treebar__hint">
+                  Each row is one level of the tree; a block's width is its share of the paths. Click a block to select it and zoom in, or use the arrow keys.
+                </p>
+                <SegTreeIcicle
+                  index={index}
+                  focusId={focusId}
+                  shadowedPrefix={shadowedPrefix}
+                  results={resultPrefixes}
+                  onNavigate={goTo}
+                />
+              </Suspense>
             )}
 
             {splitId && centre === 'diagram' && (
