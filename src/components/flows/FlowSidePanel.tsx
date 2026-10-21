@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import type { SidNodeData, Step, StepMapping, VariableAssignment } from '../../types/sid';
 import { NODE_COLORS, NODE_TYPE_LABELS, CODE_TYPE_LABELS } from '../../flow/constants';
 import { ruleSetViewOf } from '../../flow/ruleSetViewCache';
@@ -281,37 +282,18 @@ function RuleChain({ bundle }: { bundle: RuleSetBundle }) {
   );
 }
 
-function SegTreeNodeView({ node, depth = 0 }: { node: SegTreeNode; depth?: number }) {
-  return (
-    <div className="flow-sp-card" style={{ marginLeft: depth * 16 }}>
-      <div className="flow-sp-card__title">{node.label}</div>
-      <div className="flow-sp-detail">
-        <span className="flow-sp-detail__label">Type:</span>
-        <span className="flow-sp-detail__value">{node.type}</span>
-      </div>
-      {node.booleanExpressionName && (
-        <div className="flow-sp-detail">
-          <span className="flow-sp-detail__label">Expression:</span>
-          <span className="flow-sp-detail__value">{node.booleanExpressionName}</span>
-        </div>
-      )}
-      {node.valueNodes?.map((vn) => (
-        <div key={vn.id} className="flow-sp-card" style={{ marginLeft: 16 }}>
-          <div className="flow-sp-detail">
-            <span className="flow-sp-detail__label">{vn.label}:</span>
-            <span className="flow-sp-detail__value">{vn.value}</span>
-          </div>
-          {vn.outcomeName && (
-            <div className="flow-sp-detail">
-              <span className="flow-sp-detail__label">Outcome:</span>
-              <span className="flow-sp-detail__value">{vn.outcomeName}</span>
-            </div>
-          )}
-          {vn.next && <SegTreeNodeView node={vn.next} depth={depth + 2} />}
-        </div>
-      ))}
-    </div>
-  );
+/** Splits and leaves below a tree node, counted without rendering them. */
+function countTree(node: SegTreeNode | undefined): { splits: number; leaves: number } {
+  const counts = { splits: 0, leaves: 0 };
+  const visit = (n: SegTreeNode) => {
+    counts.splits += 1;
+    for (const vn of n.valueNodes ?? []) {
+      if (vn.next) visit(vn.next);
+      else counts.leaves += 1;
+    }
+  };
+  if (node) visit(node);
+  return counts;
 }
 
 /* ------------------------------------------------------------------ */
@@ -692,14 +674,27 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
                 <span className="flow-sp-detail__value">{segTreeDetail.majorRevision}.{segTreeDetail.minorRevision ?? 0}</span>
               </div>
             )}
-            {segTreeDetail.outcomes && segTreeDetail.outcomes.length > 0 && (
-              <div className="flow-sp-detail">
-                <span className="flow-sp-detail__label">Outcomes:</span>
-                <span className="flow-sp-detail__value">
-                  {segTreeDetail.outcomes.map((o) => o.name).join(', ')}
-                </span>
-              </div>
-            )}
+            {(() => {
+              // A large tree has thousands of nodes; the explorer page is
+              // where it is navigated, so the panel only counts them.
+              const counts = countTree(segTreeDetail.node);
+              const treeId = step?.customObject?.uri.match(/segmentationTrees\/([0-9a-f-]{36})/i)?.[1];
+              return (
+                <>
+                  <div className="flow-sp-detail">
+                    <span className="flow-sp-detail__label">Size:</span>
+                    <span className="flow-sp-detail__value">
+                      {counts.splits.toLocaleString()} splits · {counts.leaves.toLocaleString()} paths · {(segTreeDetail.outcomes?.length ?? 0).toLocaleString()} outcomes
+                    </span>
+                  </div>
+                  {treeId && (
+                    <Link className="sas-button sas-button--secondary sas-button--small flow-sp-explore" to={`/segmentation-trees/${treeId}`}>
+                      Open in Segmentation Tree Explorer
+                    </Link>
+                  )}
+                </>
+              );
+            })()}
             {segTreeDetail.booleanExpressions && segTreeDetail.booleanExpressions.length > 0 && (
               <>
                 <h5 className="flow-side-panel__section-title">Boolean Expressions</h5>
@@ -715,12 +710,6 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
               <>
                 <h5 className="flow-side-panel__section-title">Signature</h5>
                 <VariableTable variables={segTreeDetail.signature} />
-              </>
-            )}
-            {segTreeDetail.node && (
-              <>
-                <h5 className="flow-side-panel__section-title">Decision Tree</h5>
-                <SegTreeNodeView node={segTreeDetail.node} />
               </>
             )}
           </CollapsibleSection>

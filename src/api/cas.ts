@@ -279,6 +279,38 @@ export const uploadToCas = async (
   }
 };
 
+const tableUrl = (serverName: string, caslibName: string, tableName: string) =>
+  `/casManagement/servers/${encodeURIComponent(serverName)}/caslibs/${encodeURIComponent(caslibName)}/tables/${encodeURIComponent(tableName)}`;
+
+/**
+ * Whether a table name is taken in a caslib: `loaded` in memory, present only
+ * as a saved source file (`saved`), or `none`. A 404 is an answer here, not an
+ * error.
+ */
+export const casTableState = async (
+  serverName: string,
+  caslibName: string,
+  tableName: string
+): Promise<'loaded' | 'saved' | 'none'> => {
+  const response = await sasViyaClient.get<{ state?: string }>(tableUrl(serverName, caslibName, tableName), {
+    headers: { Accept: 'application/json' },
+    validateStatus: (status) => status === 200 || status === 404,
+  });
+  if (response.status === 404) return 'none';
+  return response.data?.state === 'loaded' ? 'loaded' : 'saved';
+};
+
+/** Unload a table from memory; its saved source file, if any, stays. */
+export const unloadCasTable = async (
+  serverName: string,
+  caslibName: string,
+  tableName: string
+): Promise<void> => {
+  await sasViyaClient.put(`${tableUrl(serverName, caslibName, tableName)}/state`, null, {
+    params: { value: 'unloaded' },
+  });
+};
+
 // --- Save (persist) a CAS table to its caslib data source ---
 
 export const saveTable = async (

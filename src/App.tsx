@@ -37,6 +37,8 @@ import './styles/index.css';
 // its single HTML file (inlineDynamicImports in vite.config.ts).
 const FlowListPage = lazy(() => import('./components/flows/FlowListPage'));
 const FlowDetailPage = lazy(() => import('./components/flows/FlowDetailPage'));
+const SegTreeListPage = lazy(() => import('./components/segTrees/SegTreeListPage'));
+const SegTreeExplorerPage = lazy(() => import('./components/segTrees/SegTreeExplorerPage'));
 const JobMonitoringPage = lazy(() =>
   import('./components/jobMonitoring').then((m) => ({ default: m.JobMonitoringPage }))
 );
@@ -110,6 +112,7 @@ function App() {
     const uiAppNewMatch = hash.match(/^\/ui-apps\/new\/([^/]+)$/);
     const flowDetailMatch = hash.match(/^\/flows\/([^/]+)$/);
     const jobDetailMatch = hash.match(/^\/jobs\/([^/]+)$/);
+    const segTreeDetailMatch = hash.match(/^\/segmentation-trees\/([^/]+)$/);
     return {
       moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
       stepId: stepMatch ? decodeURIComponent(stepMatch[1]) : null,
@@ -119,12 +122,14 @@ function App() {
       isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
       isFlowsListView: hash === '/flows' || hash === '/flows/',
+      isSegTreesListView: hash === '/segmentation-trees' || hash === '/segmentation-trees/',
       isPublishingView: hash === '/publishing' || hash === '/publishing/',
       isJobMonitoringView: hash === '/jobs' || hash === '/jobs/',
       isSchemaBuilderView: hash === '/schema-builder' || hash === '/schema-builder/',
       isRulesImportView: hash === '/rules-import' || hash === '/rules-import/',
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
       jobDetailId: jobDetailMatch ? decodeURIComponent(jobDetailMatch[1]) : null,
+      segTreeId: segTreeDetailMatch ? decodeURIComponent(segTreeDetailMatch[1]) : null,
       isStandalone: searchParams.get('standalone') === 'true',
       // Self-contained share token: the full UI definition encoded into the URL
       // so a shared link works without the definition existing in localStorage.
@@ -132,7 +137,7 @@ function App() {
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, flowDetailId, jobDetailId, isStandalone, uiAppDef } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isSegTreesListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, flowDetailId, jobDetailId, segTreeId, isStandalone, uiAppDef } = getRouteParams();
 
   // Data hooks - only fetch when authenticated
   const {
@@ -198,7 +203,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !isRulesImportView && !flowDetailId && !jobDetailId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isSegTreesListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !isRulesImportView && !flowDetailId && !jobDetailId && !segTreeId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -248,6 +253,8 @@ function App() {
     if (isRulesImportView) return 'rules-import';
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
+    if (segTreeId) return 'segtree-detail';
+    if (isSegTreesListView) return 'segtrees';
     if (isCoverageView) return 'coverage';
     if (isPublishingView) return 'publishing-overview';
     if (isUIAppsListView) return 'ui-apps';
@@ -274,6 +281,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/flows');
+    } else if (view === 'segtrees') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/segmentation-trees');
     } else if (view === 'coverage') {
       setSelectedModule(null);
       setSelectedStep(null);
@@ -429,6 +440,14 @@ function App() {
     }
     if (activeView === 'flow-detail' && flowDetailId) {
       return <FlowDetailPage flowId={flowDetailId} />;
+    }
+
+    // Segmentation Tree Views
+    if (activeView === 'segtrees') {
+      return <SegTreeListPage />;
+    }
+    if (activeView === 'segtree-detail' && segTreeId) {
+      return <SegTreeExplorerPage treeId={segTreeId} />;
     }
 
     // Coverage Analysis View

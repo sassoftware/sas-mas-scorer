@@ -5,7 +5,7 @@ import React from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder' | 'rules-import';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'segtrees' | 'segtree-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder' | 'rules-import';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -99,6 +99,21 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   <path d="M12 7v4M12 11l-6 6M12 11l6 6" />
                 </svg>
                 <span>View Flows</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={`sas-sidebar__menu-item ${
+                  activeView === 'segtrees' || activeView === 'segtree-detail' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('segtrees')}
+              title={collapsed ? 'Segmentation Trees' : undefined}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4h6v4H4zM14 10h6v4h-6zM14 18h6v3h-6z" />
+                  <path d="M7 8v8h7M7 12h7" />
+                </svg>
+                <span>Segmentation Trees</span>
               </button>
             </li>
             <li>

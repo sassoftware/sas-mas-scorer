@@ -21,7 +21,8 @@ export interface ScoreDefinitionPayload {
     outputServerName: string;
     tableBaseName: string;
     version: string;
-    outputTableName: string;
+    /** Sent for decision scenarios; SID omits it for segmentation-tree scenarios. */
+    outputTableName?: string;
   };
   objectDescriptor: {
     name: string;
@@ -45,6 +46,8 @@ export interface TestScoreDefinitionPayload {
     outputServerName: string;
     tableBaseName: string;
     test: 'true';
+    /** Copy the input columns that are not mapped (ids, expected values) into the output table. */
+    variableCarried?: 'true';
     version: string;
   };
   objectDescriptor: {

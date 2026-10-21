@@ -1,6 +1,6 @@
 {
   "name": "mas-scorer",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "SAS Micro Analytic Score Module Scorer Application",
   "type": "module",
   "main": "electron/dist/main.js",
@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build && npm run zip",
     "build:jobdef": "tsc && cross-env BUILD_MODE=jobdef vite build",
-    "zip": "cd dist && bestzip ../dist.zip *",
+    "zip": "node -e \"require('fs').rmSync('dist.zip',{force:true})\" && cd dist && bestzip ../dist.zip *",
     "preview": "vite preview",
     "preview:jobdef": "vite preview --outDir dist-jobdef",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",

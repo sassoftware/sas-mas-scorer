@@ -2,6 +2,29 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.9.0] - 2026-10-19
+
+### Added
+
+- **Segmentation Tree Explorer** — a new **Segmentation Trees** page for navigating trees too large for SAS Intelligent Decisioning's canvas. It was built against a 2,687-path, 801-outcome strategy tree, which it indexes in under a quarter of a second
+  - **Four views of the tree** — **Split** shows one split at a time, its branches in the order SID tests them (first match wins), each with where it leads and how many paths and distinct outcomes lie below it; **Outline** shows the whole tree as an expandable, keyboard-navigable list; **Diagram** draws it left to right with the selected path highlighted and line width showing how many paths run through each branch; **Icicle** shows the whole tree's shape (one row per level, block width = share of paths), zooms on click, and can shade by the share of paths assigning an output value (e.g. `ScenarioGroup`) or by dead ends and test results. Large trees open collapsed — the top levels until about 150 (Outline) or 40 (Diagram) branches show, deeper parts behind **+ N paths** handles — and selecting anything opens the tree up to it
+  - **Breadcrumb navigation** — the path from the top of the tree to the current node; click a step to jump back to it, or use its **▾** menu to switch to a sibling branch at that level. The position is part of the address (`?at=…`), so links open the same node and Back walks back through the jumps
+  - **Outcome index** — every outcome with its output values and path count; search, group by an output variable, and filter to outcomes with failed or unreachable paths. An outcome reached by several paths lists them, with the conditions all paths share shown once and only the differences under each path
+  - **Path panel** — the conditions that lead to the selected node, **merged** into one condition per variable (`17 ≤ SCScore01Risk < 600`) or as **raw** SID steps, plus the outcome and the values it assigns
+  - **Copy** a path as one line of text, a SAS `WHERE`/DS2 condition, a Markdown table, a sample input record (JSON) or a link to the node
+  - **Dead-end branches explained** — branches no record can reach (typically a variable tested twice on one path with contradictory ranges, e.g. `< 22` at step 5 and `>= 22` at step 16) are found on load. A banner explains them with an example from the tree and lists each one with the conflicting steps; the path panel says why the path is unreachable, links to the conflicting splits, and says how to fix it in SAS Intelligent Decisioning
+  - **Export paths (CSV)** — one row per path with one column per variable, the outcome, its outputs and reachability: the strategy table rebuilt from the tree
+- **Test segmentation tree paths in SID** — for one path, an outcome, any subtree or the whole tree, a dialog generates one record per path (inputs that take the path, the outcome's outputs as expected values). Rows can be edited, added and deleted, then saved as **one SID scenario per selected row** or as **one table-based test**: the rows are uploaded to a CAS table in a caslib you pick and a test is created on the tree. The table test can run straight away; the app reads its output table, compares every row with its expected values, and overlays the result on the tree — passed/failed counts on every branch, a **Next failed path** banner, and expected vs actual values in the path panel. Verified against the 2,687-path tree: all 2,683 reachable paths' generated records produced their expected outcome in SID
+- **Menu button** — a shared, keyboard-operable menu (arrow keys, Home/End, Escape) used by the explorer's Copy and branch menus
+
+### Changed
+
+- **View Flows** — the segmentation tree side panel no longer renders the whole tree as nested cards (thousands of them for a large tree); it shows the tree's size and an **Open in Segmentation Tree Explorer** button
+
+### Fixed
+
+- **First call to a service could fail with "Authentication success, retry original request."** — Viya answers the first cookie-authenticated request a browser session makes to some services this way; the API client now retries such a request once instead of surfacing it as an error (seen in the Job Execution build when creating a test)
+
 ## [2.8.0] - 2026-09-15
 
 This release folds in the results of a full performance and accessibility review of the app — 232 verified findings across every page — and makes **WCAG 2.1 AA** a shipping requirement. Every screen was reworked for keyboard use, screen readers and contrast; the data layer was audited for silently truncated lists; and the shared design system now owns the components each page had been re-implementing on its own.
