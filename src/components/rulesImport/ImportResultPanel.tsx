@@ -1,17 +1,33 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
+import DeepLink from '../flows/FlowDeepLink';
+import { ImportedRuleChain } from './ImportedRuleChain';
+import { buildRuleSetDeepLink } from '../../utils/deepLinks';
 import { ImportOutcome, RuleSetGroup } from '../../types/rulesImport';
+
+/** Where an accepted rule set now lives on the server. */
+export interface ImportedRuleSetLink {
+  id?: string;
+  /** "major.minor" after the import, when known. */
+  revision?: string;
+  /** Set when several rule sets share the name and the link may pick the wrong one. */
+  ambiguity?: string;
+}
 
 interface ImportResultPanelProps {
   outcome: ImportOutcome;
   groups: RuleSetGroup[];
   /** Rows edited since the import — shows "edited" chips on rejected sets. */
   editedRows: Set<number>;
+  /** Link target per accepted rule-set key. */
+  links: Map<string, ImportedRuleSetLink>;
+  /** True while the ids / revisions are still being looked up. */
+  resolvingLinks: boolean;
   onRetryRejected: () => void;
   onDownloadRejected: () => void;
   onDownloadResponse: () => void;
@@ -27,6 +43,8 @@ export const ImportResultPanel: React.FC<ImportResultPanelProps> = ({
   outcome,
   groups,
   editedRows,
+  links,
+  resolvingLinks,
   onRetryRejected,
   onDownloadRejected,
   onDownloadResponse,
@@ -34,6 +52,10 @@ export const ImportResultPanel: React.FC<ImportResultPanelProps> = ({
 }) => {
   const rejectedCount = outcome.rejectedKeys.length;
   const acceptedCount = outcome.acceptedKeys.length;
+  // The accepted rule set whose rule chain is shown below the list.
+  const [chainKey, setChainKey] = useState<string | null>(null);
+  const chainLink = chainKey !== null ? links.get(chainKey) : undefined;
+  const chainGroup = chainKey !== null ? groups.find((g) => g.key === chainKey) : undefined;
 
   const groupEdited = (key: string): boolean => {
     const group = groups.find((g) => g.key === key);
@@ -55,14 +77,50 @@ export const ImportResultPanel: React.FC<ImportResultPanelProps> = ({
       {acceptedCount > 0 && (
         <Alert variant="success" title={`${acceptedCount} rule set${acceptedCount === 1 ? '' : 's'} imported successfully`}>
           <ul className="rules-import__result-list">
-            {outcome.acceptedKeys.map((key) => (
-              <li key={key}>
-                <Badge variant="success" size="small">imported</Badge>{' '}
-                {displayName(groups, key)}
-              </li>
-            ))}
+            {outcome.acceptedKeys.map((key) => {
+              const link = links.get(key);
+              const deepLink = link?.id ? buildRuleSetDeepLink(link.id) : null;
+              const label = displayName(groups, key);
+              const showing = chainKey === key;
+              return (
+                <li key={key}>
+                  <Badge variant="success" size="small">imported</Badge>{' '}
+                  {label}
+                  {link?.revision && <span className="rules-import__result-meta">revision {link.revision}</span>}
+                  {link?.id ? (
+                    <>
+                      {deepLink && <DeepLink url={deepLink.url} label={deepLink.label} showLabel />}
+                      <button
+                        type="button"
+                        className="rules-import__link-button"
+                        aria-expanded={showing}
+                        aria-controls={showing ? 'rules-import-chain' : undefined}
+                        onClick={() => setChainKey(showing ? null : key)}
+                      >
+                        {showing ? 'Hide rules' : 'Show rules'}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="rules-import__result-meta">
+                      {resolvingLinks ? 'Looking up the rule set…' : 'Not found by name and folder; open it from SAS Intelligent Decisioning.'}
+                    </span>
+                  )}
+                  {link?.ambiguity && (
+                    <span className="rules-import__result-meta rules-import__result-meta--warning">
+                      {link.ambiguity}; the link opens the first match.
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Alert>
+      )}
+
+      {chainKey !== null && chainLink?.id && (
+        <div id="rules-import-chain">
+          <ImportedRuleChain ruleSetId={chainLink.id} name={chainGroup?.name ?? chainKey} />
+        </div>
       )}
 
       {rejectedCount > 0 && (

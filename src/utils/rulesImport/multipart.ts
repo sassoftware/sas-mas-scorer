@@ -9,7 +9,7 @@
  */
 
 import { CellIssue, ImportOutcome, MultipartPart, RULE_CSV_COLUMNS } from '../../types/rulesImport';
-import { COL, FALLBACK_BOUNDARY } from './constants';
+import { COL, FALLBACK_BOUNDARY, GUID_RE } from './constants';
 import { parseCsv, stripBom } from '../csv';
 import { ruleSetKey } from './validate';
 
@@ -79,6 +79,25 @@ const keysFromCsvBody = (body: string): { keys: string[]; rows: string[][] } => 
   });
   return { keys: Array.from(keys), rows };
 };
+
+/**
+ * ruleset_id per accepted rule set, read from the Accepted-csv part of a raw
+ * import response. The service fills ruleset_id on the rows it returns, so
+ * newly created sets can be linked without a lookup; sets whose rows carry no
+ * valid id are simply absent from the map (the caller looks them up by name).
+ */
+export function acceptedRuleSetIds(raw: string, contentTypeHeader?: string): Map<string, string> {
+  const ids = new Map<string, string>();
+  const acceptedPart = findPart(parseMultipartMixed(raw, contentTypeHeader), 'Accepted-csv');
+  if (!acceptedPart || acceptedPart.body.trim() === '') return ids;
+  keysFromCsvBody(acceptedPart.body).rows.forEach((row) => {
+    if (row.length <= COL.FOLDER_PATH) return;
+    const id = row[COL.RULESET_ID].trim();
+    const key = ruleSetKey(row[COL.FOLDER_PATH], row[COL.RULESET_NM]);
+    if (GUID_RE.test(id) && !ids.has(key)) ids.set(key, id);
+  });
+  return ids;
+}
 
 /**
  * Interpret the import response against the grid.

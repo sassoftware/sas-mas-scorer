@@ -12,10 +12,10 @@ import {
 } from '../api/jobs';
 import { ExecutionJob, ExecutionJobState, isTerminalState } from '../types/jobExecution';
 import { useDocumentVisibility } from './useDocumentVisibility';
+import { registerViewCache } from '../utils/viewCaches';
 
 const RUNNING_POLL_MS = 5_000;
 const COMPLETED_POLL_MS = 30_000;
-const SEARCH_DEBOUNCE_MS = 300;
 
 // Stats walk: page size and safety cap. 100 × 100 = 10 000 most-recent jobs
 // on a cold start. Refresh is incremental — see fetchStats below.
@@ -25,7 +25,7 @@ const STATS_MAX_PAGES = 100;
 // Up to 200 active jobs in one fetch — most tenants will have far fewer.
 const RUNNING_LIMIT = 200;
 
-const DEFAULT_SORT = 'creationTimeStamp:descending';
+export const DEFAULT_JOB_SORT = 'creationTimeStamp:descending';
 
 export type CompletedStateFilter =
   | 'all'
@@ -46,6 +46,14 @@ export interface JobMonitoringStats {
 export interface UseJobMonitoringOptions {
   enabled?: boolean;
   pageSize?: number;
+  // The history query is owned by the caller (the page keeps it in the URL).
+  // `search` is applied as given, so the caller debounces typing; changing
+  // the query does not move `page`, the caller resets it.
+  search?: string;
+  stateFilter?: CompletedStateFilter;
+  sortBy?: string;
+  /** 0-based history page. */
+  page?: number;
 }
 
 export interface UseJobMonitoringReturn {
@@ -65,17 +73,8 @@ export interface UseJobMonitoringReturn {
   // True when the most recent page came back full. Used by the table to
   // decide whether to enable the "Next" button — never the envelope `count`.
   completedHasMore: boolean;
-  page: number;
+  // Page size the service actually applied to the history.
   pageSize: number;
-
-  search: string;
-  stateFilter: CompletedStateFilter;
-  sortBy: string;
-
-  setPage: (page: number) => void;
-  setSearch: (search: string) => void;
-  setStateFilter: (state: CompletedStateFilter) => void;
-  setSortBy: (sortBy: string) => void;
 
   refresh: () => void;
   refreshing: boolean;
@@ -101,9 +100,20 @@ interface JobMonitoringCache {
 
 let cachedData: JobMonitoringCache | null = null;
 
+// Bumped on every clear. A page that is mounted while the session changes
+// (logout and log in as someone else without leaving Job Monitoring) holds the
+// old server's map in its refs; it compares this against the generation it
+// started from and starts over instead of walking the new server into it.
+let cacheGeneration = 0;
+
 export const clearJobMonitoringCache = (): void => {
   cachedData = null;
+  cacheGeneration += 1;
 };
+
+// The shell clears this through the registry (logout, Electron connection
+// switch), so Header/App never import the job monitoring hook.
+registerViewCache('jobMonitoring', clearJobMonitoringCache);
 
 // Build a fresh stats snapshot from the cached counters. Used by the
 // targeted cache mutators below so the monitoring page picks up changes
@@ -202,7 +212,14 @@ const bucketOf = (state: ExecutionJobState): CountedBucket => {
 export const useJobMonitoring = (
   options: UseJobMonitoringOptions = {}
 ): UseJobMonitoringReturn => {
-  const { enabled = true, pageSize = 50 } = options;
+  const {
+    enabled = true,
+    pageSize = 50,
+    search = '',
+    stateFilter = 'all',
+    sortBy = DEFAULT_JOB_SORT,
+    page = 0,
+  } = options;
   const visible = useDocumentVisibility();
 
   // --- Stats state (visible) ---
@@ -225,6 +242,8 @@ export const useJobMonitoring = (
   const elapsedSumRef = useRef<number>(cachedData?.elapsedSum ?? 0);
   const elapsedCountRef = useRef<number>(cachedData?.elapsedCount ?? 0);
   const truncatedRef = useRef<boolean>(cachedData?.truncated ?? false);
+  // The cache generation these refs belong to; see cacheGeneration.
+  const generationRef = useRef<number>(cacheGeneration);
 
   // --- Running ---
   const [runningJobs, setRunningJobs] = useState<ExecutionJob[]>(
@@ -245,11 +264,6 @@ export const useJobMonitoring = (
   // fetchCompleted; the state feeds the table's range labels.
   const effectivePageSizeRef = useRef<number>(pageSize);
   const [effectivePageSize, setEffectivePageSize] = useState<number>(pageSize);
-  const [page, setPageState] = useState<number>(0);
-  const [search, setSearchState] = useState<string>('');
-  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
-  const [stateFilter, setStateFilterState] = useState<CompletedStateFilter>('all');
-  const [sortBy, setSortByState] = useState<string>(DEFAULT_SORT);
 
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
@@ -266,20 +280,31 @@ export const useJobMonitoring = (
     };
   }, []);
 
-  useEffect(() => {
-    const handle = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(handle);
-  }, [search]);
-
-  useEffect(() => {
-    setPageState(0);
-  }, [debouncedSearch, stateFilter, sortBy]);
-
   // --- Stats walk ---
 
   // Token bumped on every walk start; older walks abort when they observe a
   // newer token (e.g. user clicked Refresh again mid-walk).
   const statsTokenRef = useRef(0);
+
+  // The cache was cleared while this page stayed mounted (logout, then a
+  // login as another user or against another server): drop the previous
+  // session's map, counters and running list so the next walk starts cold.
+  // Bumping the token aborts a walk still running for the old session.
+  // Only refs and state setters are touched, so the callback is stable.
+  const resetIfCacheCleared = useCallback((): void => {
+    if (generationRef.current === cacheGeneration) return;
+    generationRef.current = cacheGeneration;
+    statsTokenRef.current += 1;
+    jobsByIdRef.current = new Map();
+    completedCountRef.current = 0;
+    failedCountRef.current = 0;
+    otherCountRef.current = 0;
+    elapsedSumRef.current = 0;
+    elapsedCountRef.current = 0;
+    truncatedRef.current = false;
+    setStats(null);
+    setRunningJobs([]);
+  }, []);
 
   // Apply +1/-1 to the counter for a given state. Active states have no
   // counter — they're derived from runningJobs.length on read.
@@ -339,6 +364,8 @@ export const useJobMonitoring = (
   // exits after page 1 — the user gets near-instant feedback.
   const fetchStats = useCallback(async (silent = false) => {
     if (!enabled) return;
+    resetIfCacheCleared();
+    const generation = cacheGeneration;
     const token = ++statsTokenRef.current;
     if (!silent) setStatsLoading(true);
     setStatsScanning(true);
@@ -347,7 +374,13 @@ export const useJobMonitoring = (
     try {
       await walkJobs(
         async (page) => {
-          if (token !== statsTokenRef.current || !mountedRef.current) return false;
+          if (
+            token !== statsTokenRef.current ||
+            !mountedRef.current ||
+            generation !== cacheGeneration
+          ) {
+            return false;
+          }
 
           let changesInPage = 0;
           for (const job of page.items) {
@@ -424,11 +457,16 @@ export const useJobMonitoring = (
 
   const fetchRunning = useCallback(async (silent = false) => {
     if (!enabled) return;
+    resetIfCacheCleared();
+    const generation = cacheGeneration;
     if (!silent) setRunningLoading(true);
     setRunningError(null);
     try {
       const result = await getRunningJobs(RUNNING_LIMIT);
       if (!mountedRef.current) return;
+      // The session changed while the request was out: the answer is the
+      // previous server's, and the next poll fetches the new one.
+      if (generation !== cacheGeneration) return;
       setRunningJobs(result.items);
       setRunningBackoff(false);
       cachedData = {
@@ -449,13 +487,13 @@ export const useJobMonitoring = (
         truncated: cachedData?.truncated ?? truncatedRef.current,
       };
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || generation !== cacheGeneration) return;
       setRunningError(err instanceof Error ? err.message : 'Failed to load running jobs');
       setRunningBackoff(true);
     } finally {
       if (mountedRef.current && !silent) setRunningLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, resetIfCacheCleared]);
 
   // --- Completed (server-side paginated) ---
 
@@ -470,7 +508,7 @@ export const useJobMonitoring = (
       const result = await getCompletedJobs({
         start: page * effectivePageSizeRef.current,
         limit: pageSize,
-        filter: buildCompletedFilter(debouncedSearch, stateFilter),
+        filter: buildCompletedFilter(search, stateFilter),
         sortBy,
       });
       if (!mountedRef.current) return;
@@ -497,7 +535,7 @@ export const useJobMonitoring = (
         setCompletedLoading(false);
       }
     }
-  }, [enabled, page, pageSize, debouncedSearch, stateFilter, sortBy]);
+  }, [enabled, page, pageSize, search, stateFilter, sortBy]);
 
   // --- Initial load ---
 
@@ -523,7 +561,7 @@ export const useJobMonitoring = (
   }, [enabled, visible, runningBackoff, fetchRunning]);
 
   const completedPollEligible =
-    page === 0 && debouncedSearch === '' && stateFilter === 'all';
+    page === 0 && search === '' && stateFilter === 'all';
 
   useEffect(() => {
     if (!enabled || !visible || !completedPollEligible || completedBackoff) return;
@@ -548,14 +586,6 @@ export const useJobMonitoring = (
   }, [enabled, fetchStats, fetchRunning, fetchCompleted]);
 
   const pollingPaused = statsBackoff || runningBackoff || completedBackoff;
-
-  const setPage = useCallback((next: number) => setPageState(next), []);
-  const setSearch = useCallback((next: string) => setSearchState(next), []);
-  const setStateFilter = useCallback(
-    (next: CompletedStateFilter) => setStateFilterState(next),
-    []
-  );
-  const setSortBy = useCallback((next: string) => setSortByState(next), []);
 
   // Splice runningJobs.length into the stats so the Active card always
   // matches what the running panel is showing. The running panel polls every
@@ -604,15 +634,7 @@ export const useJobMonitoring = (
       completedLoading,
       completedError,
       completedHasMore,
-      page,
       pageSize: effectivePageSize,
-      search,
-      stateFilter,
-      sortBy,
-      setPage,
-      setSearch,
-      setStateFilter,
-      setSortBy,
       refresh,
       refreshing,
       pollingPaused,
@@ -629,15 +651,7 @@ export const useJobMonitoring = (
       completedLoading,
       completedError,
       completedHasMore,
-      page,
       effectivePageSize,
-      search,
-      stateFilter,
-      sortBy,
-      setPage,
-      setSearch,
-      setStateFilter,
-      setSortBy,
       refresh,
       refreshing,
       pollingPaused,

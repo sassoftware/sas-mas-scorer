@@ -1012,6 +1012,74 @@
   font-size: var(--font-size-sm);
 }
 
+/* ─── Failed run: what its log says ─── */
+.segtree-test__failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.segtree-test__failure-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-800);
+}
+
+.segtree-test__failure-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+/* Log text keeps its own line breaks; long lines scroll inside the block
+   (focusable, so the keyboard can scroll it too). */
+.segtree-test__log {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+  background: var(--sas-gray-50);
+  color: var(--sas-gray-800);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  white-space: pre;
+}
+
+.segtree-test__log:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.segtree-test__log--full {
+  max-height: 360px;
+  margin-top: var(--space-2);
+}
+
+.segtree-test__failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.segtree-test__failure-link {
+  font-size: var(--font-size-sm);
+  color: var(--sas-blue-primary);
+}
+
+.segtree-test__full-log summary {
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.segtree-test__full-log summary:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
 /* ─── Flow side panel link ─── */
 
 .flow-sp-explore {

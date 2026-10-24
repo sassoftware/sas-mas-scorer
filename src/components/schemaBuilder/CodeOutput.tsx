@@ -9,14 +9,17 @@ import 'prismjs/plugins/line-numbers/prism-line-numbers';
 import 'prismjs/plugins/line-numbers/prism-line-numbers.css';
 import { Button } from '../common/Button';
 import { SaveToSidDialog } from './SaveToSidDialog';
+import { saveTextFile } from '../../utils/download';
 
 interface Props {
   code: string;
   signature?: unknown[];
   exampleInput?: string;
+  /** Why saving is not possible right now (invalid variable names), or null. */
+  saveBlockedReason?: string | null;
 }
 
-export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput }) => {
+export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput, saveBlockedReason }) => {
   const [copied, setCopied] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const codeRef = useRef<HTMLElement>(null);
@@ -39,13 +42,7 @@ export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput }) =
   };
 
   const handleDownload = () => {
-    const blob = new Blob([code], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sas_id_execute.py';
-    a.click();
-    URL.revokeObjectURL(url);
+    saveTextFile(code, 'sas_id_execute.py', 'text/x-python');
   };
 
   return (
@@ -57,10 +54,21 @@ export const CodeOutput: React.FC<Props> = ({ code, signature, exampleInput }) =
         <Button variant="tertiary" size="small" onClick={handleDownload}>
           Download .py
         </Button>
-        <Button variant="primary" size="small" onClick={() => setSaveOpen(true)} disabled={!code}>
+        <Button
+          variant="primary"
+          size="small"
+          onClick={() => setSaveOpen(true)}
+          disabled={!code || !!saveBlockedReason}
+          aria-describedby={saveBlockedReason ? 'sb-save-blocked' : undefined}
+        >
           Save to SAS Viya
         </Button>
       </div>
+      {saveBlockedReason && (
+        <p id="sb-save-blocked" className="schema-builder__blocked-reason" role="status">
+          {saveBlockedReason}
+        </p>
+      )}
       <pre className="schema-builder__code-pre line-numbers language-python">
         <code ref={codeRef} className="language-python">{code}</code>
       </pre>

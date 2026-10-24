@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ExecutionJobState } from '../../types/jobExecution';
+import { saveTextFile } from '../../utils/download';
 
 // Display labels for job states. The API values are camelCase ('timedOut')
 // and US-spelled ('canceled'); the badge, the filter chips and the stats
@@ -59,16 +60,7 @@ export const sanitizeFilename = (name: string): string => {
   return (cleaned || 'job').slice(0, 80);
 };
 
-// Trigger a browser download of a string as a file. We Blob → object URL →
-// click → revoke; defer the revoke so the download has time to start.
+// Download a string as a file (with the copy fallback inside VA embeds).
 export const downloadText = (text: string, filename: string): void => {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveTextFile(text, filename);
 };

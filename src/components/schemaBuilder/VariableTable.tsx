@@ -4,6 +4,7 @@
 import React from 'react';
 import { IconButton } from '../common/IconButton';
 import type { VariableMapping, SasDataType } from '../../types/schemaBuilder';
+import type { NameCheck } from './variableNames';
 
 const SAS_TYPES: SasDataType[] = [
   'Character',
@@ -17,7 +18,9 @@ const SAS_TYPES: SasDataType[] = [
 
 interface Props {
   mappings: VariableMapping[];
-  onChange: (index: number, field: 'variableName' | 'dataType' | 'length', value: string) => void;
+  /** Per-row name check, in mapping order (see checkVariableNames). */
+  checks: NameCheck[];
+  onChange:(index: number, field: 'variableName' | 'dataType' | 'length', value: string) => void;
   onDelete: (index: number) => void;
 }
 
@@ -28,7 +31,7 @@ function truncate(s: string, max: number): string {
 // Only string-like types carry an editable storage length.
 const STRING_LIKE: SasDataType[] = ['Character', 'Date', 'Datetime'];
 
-export const VariableTable: React.FC<Props> = ({ mappings, onChange, onDelete }) => {
+export const VariableTable: React.FC<Props> = ({ mappings, checks, onChange, onDelete }) => {
   return (
     <div className="schema-builder__table-wrapper">
       <table className="sas-table sas-table--compact schema-builder__table">
@@ -46,8 +49,8 @@ export const VariableTable: React.FC<Props> = ({ mappings, onChange, onDelete })
         <tbody>
           {mappings.map((m, i) => {
             const nameLen = m.variableName.length;
-            const nameTooLong = nameLen > 32;
-            const nameInvalid = !/^[A-Za-z_][A-Za-z0-9_]*$/.test(m.variableName);
+            const check = checks[i] ?? {};
+            const msgId = `sb-var-msg-${i}`;
             const supportsLength = STRING_LIKE.includes(m.dataType);
             const rowLabel = `row ${i + 1}`;
 
@@ -62,16 +65,18 @@ export const VariableTable: React.FC<Props> = ({ mappings, onChange, onDelete })
                     type="text"
                     value={m.variableName}
                     onChange={e => onChange(i, 'variableName', e.target.value)}
-                    className={`schema-builder__var-input${nameTooLong || nameInvalid ? ' schema-builder__var-input--error' : ''}`}
+                    className={`schema-builder__var-input${check.error ? ' schema-builder__var-input--error' : ''}${check.warning ? ' schema-builder__var-input--warning' : ''}`}
                     maxLength={32}
                     aria-label={`Variable Name, ${rowLabel}`}
+                    aria-invalid={check.error ? true : undefined}
+                    aria-describedby={msgId}
                   />
-                  {nameTooLong && <span className="schema-builder__field-error">Max 32 chars</span>}
-                  {nameInvalid && !nameTooLong && (
-                    <span className="schema-builder__field-error">Invalid SAS name</span>
-                  )}
-                  {!nameTooLong && !nameInvalid && (
-                    <span className="schema-builder__field-hint">{nameLen}/32</span>
+                  {check.error ? (
+                    <span id={msgId} className="schema-builder__field-error">{check.error}</span>
+                  ) : check.warning ? (
+                    <span id={msgId} className="schema-builder__field-warning">{check.warning}</span>
+                  ) : (
+                    <span id={msgId} className="schema-builder__field-hint">{nameLen}/32</span>
                   )}
                 </td>
                 <td className="sas-table__td">

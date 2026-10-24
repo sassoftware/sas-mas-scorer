@@ -192,8 +192,28 @@
 .schema-builder__field-error {
   display: block;
   font-size: var(--font-size-xs);
-  color: var(--sas-error);
+  /* -dark: the base error red is under 4.5:1 for small text */
+  color: var(--sas-error-dark);
   margin-top: 2px;
+}
+
+/* A DS2 reserved word: allowed, but flagged (border + text, not colour alone) */
+.schema-builder__var-input--warning {
+  border-color: var(--sas-warning-dark);
+}
+
+.schema-builder__field-warning {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--sas-warning-dark);
+  margin-top: 2px;
+}
+
+/* Why Generate / Save are disabled (a disabled button can't show a tooltip) */
+.schema-builder__blocked-reason {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-error-dark);
 }
 
 .schema-builder__field-hint {

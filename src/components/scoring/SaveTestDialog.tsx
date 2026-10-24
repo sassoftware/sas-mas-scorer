@@ -15,16 +15,7 @@ import {
 import { DecisionSignatureVariable } from '../../api/modules';
 import { Module, StepParameter } from '../../types';
 import { CasTableTestInfo } from './CasTableScore';
-
-// --- localStorage helpers ---
-
-const STORAGE_PREFIX = 'mas-scenario:';
-
-const loadPref = (key: string): string | null =>
-  localStorage.getItem(`${STORAGE_PREFIX}${key}`);
-
-const savePref = (key: string, value: string): void =>
-  localStorage.setItem(`${STORAGE_PREFIX}${key}`, value);
+import { buildNameLookup, loadPref, savePref, validateName } from './scoreDefinitionHelpers';
 
 // --- Types ---
 
@@ -36,37 +27,6 @@ interface SaveTestDialogProps {
   /** Decision signature, resolved once by ScorePanel and passed down. */
   decisionSignature: DecisionSignatureVariable[];
   onClose: () => void;
-}
-
-// --- Name resolution helper (same as SaveScenarioDialog) ---
-
-function buildNameLookup(signature: DecisionSignatureVariable[]): (masName: string) => string {
-  const lowerToOriginal = new Map<string, string>();
-  for (const v of signature) {
-    lowerToOriginal.set(v.name.toLowerCase(), v.name);
-  }
-
-  return (masName: string): string => {
-    const direct = lowerToOriginal.get(masName.toLowerCase());
-    if (direct) return direct;
-    if (masName.endsWith('_')) {
-      const stripped = masName.slice(0, -1);
-      const matched = lowerToOriginal.get(stripped.toLowerCase());
-      if (matched) return matched;
-    }
-    return masName.endsWith('_') ? masName.slice(0, -1) : masName;
-  };
-}
-
-// --- Name validation ---
-
-const NAME_INVALID_CHARS = /[/{}]/;
-
-function validateName(name: string): string | null {
-  if (!name.trim()) return 'Name is required';
-  if (name.length > 100) return 'Name must be 100 characters or less';
-  if (NAME_INVALID_CHARS.test(name)) return 'Name cannot contain /, {, or } characters';
-  return null;
 }
 
 // --- Component ---
@@ -389,6 +349,11 @@ export const SaveTestDialog: React.FC<SaveTestDialogProps> = ({
             <div className="save-scenario-dialog__mapping-summary">
               {inputParameters.map(param => {
                 const col = casTableInfo.columnMappings[param.name];
+                // Inputs chosen as "Send as missing" get no mapping, which is
+                // how a test leaves them missing; they are labelled as such.
+                const unmappedLabel = casTableInfo.missingInputs?.includes(param.name)
+                  ? '(missing)'
+                  : '(unmapped)';
                 return (
                   <div
                     key={param.name}
@@ -397,7 +362,7 @@ export const SaveTestDialog: React.FC<SaveTestDialogProps> = ({
                     <span className="save-scenario-dialog__mapping-var">{param.name}</span>
                     <span className="save-scenario-dialog__mapping-arrow" aria-hidden="true">&rarr;</span>
                     <span className="save-scenario-dialog__mapping-col">
-                      {col ?? '(unmapped)'}
+                      {col ?? unmappedLabel}
                     </span>
                   </div>
                 );

@@ -9,6 +9,7 @@ import { Alert } from '../common/Alert';
 import { Loading } from '../common/Loading';
 import { EmptyState } from '../common/EmptyState';
 import { UIAppCard } from './UIAppCard';
+import { saveTextFile } from '../../utils/download';
 import {
   listUIDefinitions,
   deleteUIDefinition,
@@ -29,7 +30,6 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadApps = useCallback(async () => {
     setLoading(true);
@@ -66,27 +66,8 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
     const json = await exportUIDefinition(id);
     if (!json) return;
 
-    // In a sandboxed iframe, programmatic downloads are silently blocked.
-    // Detect sandbox: if we're in an iframe without allow-downloads, use clipboard.
-    const isSandboxed = window !== window.top;
-
-    if (!isSandboxed) {
-      const blob = new Blob([json], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `ui-app-${id}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(link.href);
-    } else {
-      try {
-        await navigator.clipboard.writeText(json);
-        setSuccessMessage('JSON copied to clipboard (download not available in sandboxed mode).');
-      } catch {
-        setError('Export failed — clipboard access is blocked. Try running the app outside of SAS Visual Analytics.');
-      }
-    }
+    // Where an embed blocks downloads, the shared fallback offers a copy.
+    saveTextFile(json, `ui-app-${id}.json`, 'application/json');
   };
 
   const handleImport = async () => {
@@ -130,12 +111,6 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
       {error && (
         <Alert variant="error" title="Error" dismissible onClose={() => setError(null)}>
           {error}
-        </Alert>
-      )}
-
-      {successMessage && (
-        <Alert variant="success" title="Success" dismissible onClose={() => setSuccessMessage(null)}>
-          {successMessage}
         </Alert>
       )}
 

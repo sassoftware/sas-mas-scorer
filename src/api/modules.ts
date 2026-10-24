@@ -271,22 +271,47 @@ export interface PublishedModelInfo {
   modelId: string;
 }
 
+// Page size for the case-insensitive fallback below: enough to reach the one
+// record whose name matches exactly among the substring hits.
+const PUBLISH_FALLBACK_LIMIT = 50;
+
+// The newest MAS publish record whose publishName is exactly the module name.
+//
+// contains() on modelPublish is a substring AND case-insensitive match, so a
+// module "credit" used to pick up "credit_v2" when that was published later,
+// and the wrong version showed in Module Details, the Model Manager link and
+// every batch CSV. eq() is tried first; when it finds nothing (eq may be case
+// sensitive while MAS module names are lowercased), the contains() hits are
+// narrowed to the one whose name matches ignoring case — never a substring.
+// Single quotes are doubled for the filter language: an unescaped "o'brien"
+// is a 400, not an empty result.
 export const getPublishedModelInfo = async (publishName: string): Promise<PublishedModelInfo | null> => {
-  const response = await sasViyaClient.get('/modelPublish/models', {
-    params: {
-      filter: `and(contains(publishName,'${publishName}'),eq(publishType,'mas'))`,
-      sortBy: 'creationTimeStamp:descending',
-      limit: 1,
-    },
-    headers: {
-      Accept: 'application/json',
-    },
-  });
-  const items = response.data.items ?? [];
-  if (items.length === 0) return null;
+  const quoted = `'${publishName.replace(/'/g, "''")}'`;
+  const fetchRecords = async (nameFilter: string, limit: number) => {
+    const response = await sasViyaClient.get('/modelPublish/models', {
+      params: {
+        filter: `and(${nameFilter},eq(publishType,'mas'))`,
+        sortBy: 'creationTimeStamp:descending',
+        limit,
+      },
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (response.data.items ?? []) as any[];
+  };
+
+  let match = (await fetchRecords(`eq(publishName,${quoted})`, 1))[0];
+  if (!match) {
+    const wanted = publishName.toLowerCase();
+    const candidates = await fetchRecords(`contains(publishName,${quoted})`, PUBLISH_FALLBACK_LIMIT);
+    match = candidates.find(item => String(item.publishName ?? '').toLowerCase() === wanted);
+  }
+  if (!match) return null;
   return {
-    modelVersionId: items[0].modelVersionId,
-    modelId: items[0].modelId,
+    modelVersionId: match.modelVersionId,
+    modelId: match.modelId,
   };
 };
 

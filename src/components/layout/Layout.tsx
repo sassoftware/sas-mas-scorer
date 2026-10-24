@@ -8,7 +8,9 @@ import { Sidebar, ViewType } from './Sidebar';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-const NAV_COLLAPSED_KEY = 'mas-scorer:nav-collapsed';
+// v2: up to 2.9 the state was written on every load, so a stored value does
+// not mean the user chose it; the new key starts everyone on the new default.
+const NAV_COLLAPSED_KEY = 'mas-scorer:nav-collapsed:v2';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -40,23 +42,24 @@ export const Layout: React.FC<LayoutProps> = ({
   const [navOpen, setNavOpen] = useState(false);
 
   // Above the breakpoint the user can fold the sidebar to an icon rail. Default
-  // expanded; the choice persists per browser and survives a republish.
+  // collapsed; only an explicit toggle is stored, so the default can change
+  // later without overriding a choice nobody made.
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(NAV_COLLAPSED_KEY) === '1';
+      return localStorage.getItem(NAV_COLLAPSED_KEY) !== '0';
     } catch {
-      return false;
+      return true;
     }
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem(NAV_COLLAPSED_KEY, navCollapsed ? '1' : '0');
-    } catch {
-      // Storage unavailable (private window, embed): the choice lasts the session.
-    }
-  }, [navCollapsed]);
   const toggleCollapsed = useCallback(() => {
-    setNavCollapsed((collapsed) => !collapsed);
+    setNavCollapsed((collapsed) => {
+      try {
+        localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? '0' : '1');
+      } catch {
+        // Storage unavailable (private window, embed): the choice lasts the session.
+      }
+      return !collapsed;
+    });
   }, []);
   const sidebarId = useId();
   const sidebarRef = useRef<HTMLElement>(null);

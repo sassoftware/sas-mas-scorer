@@ -1,12 +1,11 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { StepParameter } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { Badge, TypeBadge } from '../common/Badge';
 import {
   getCasTables,
   getTableColumns,
@@ -16,12 +15,36 @@ import {
   CasColumnInfo,
 } from '../../api/cas';
 import { useCasCatalog } from '../../hooks/useCasCatalog';
+import {
+  ConversionReport,
+  MappedColumn,
+  convertMappedRows,
+  scanMappedRows,
+} from '../../utils/fileFormats';
+import { ColumnMappingGrid } from './ColumnMappingGrid';
+import {
+  InputSource,
+  InputSources,
+  MappingNote,
+  autoMapColumns,
+  columnMappingsOf,
+  describeIssue,
+  fixedInputValues,
+  mergeNotes,
+  notesFromReport,
+  sourceOf,
+  summarizeSources,
+  unsetToMissing,
+} from './inputMapping';
 
 export interface CasTableTestInfo {
   serverName: string;
   libraryName: string;
   tableName: string;
+  /** Input → CAS column; null for every input not read from a column. */
   columnMappings: Record<string, string | null>;
+  /** Inputs the user chose to send as missing (shown as such in the dialog). */
+  missingInputs?: string[];
 }
 
 interface CasTableScoreProps {
@@ -29,10 +52,6 @@ interface CasTableScoreProps {
   onExecuteBatch: (rows: Record<string, unknown>[], concurrency: number) => void;
   executing: boolean;
   onSaveAsTest?: (info: CasTableTestInfo) => void;
-}
-
-interface ColumnMapping {
-  [paramName: string]: string | null;
 }
 
 interface FetchProgress {
@@ -52,59 +71,6 @@ const LARGE_RUN_WARNING = 50_000;
 const LIMITED_FETCH_PAGE = 5000;
 const LIMITED_FETCH_MAX_PAGES = 1000;
 
-// Convert CAS cell value to appropriate type based on parameter type
-const convertValue = (value: unknown, type: string): unknown => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const str = String(value);
-
-  switch (type) {
-    case 'decimal':
-      return parseFloat(str) || 0;
-    case 'integer':
-    case 'bigint':
-      return parseInt(str, 10) || 0;
-    case 'string':
-      return str;
-    case 'decimalArray':
-      return str.split(';').map(v => parseFloat(v.trim()) || 0);
-    case 'integerArray':
-    case 'bigintArray':
-      return str.split(';').map(v => parseInt(v.trim(), 10) || 0);
-    case 'stringArray':
-      return str.split(';').map(v => v.trim());
-    default:
-      return str;
-  }
-};
-
-// Auto-match CAS column names to step parameters
-const autoMapColumns = (
-  columnNames: string[],
-  parameters: StepParameter[]
-): ColumnMapping => {
-  const mapping: ColumnMapping = {};
-  const normalizedColumns = columnNames.map(h => h.toLowerCase().replace(/[_\s-]/g, ''));
-
-  parameters.forEach(param => {
-    const normalizedParam = param.name.toLowerCase().replace(/[_\s-]/g, '');
-
-    let matchIndex = normalizedColumns.findIndex(h => h === normalizedParam);
-
-    if (matchIndex === -1) {
-      matchIndex = normalizedColumns.findIndex(h =>
-        h.includes(normalizedParam) || normalizedParam.includes(h)
-      );
-    }
-
-    mapping[param.name] = matchIndex !== -1 ? columnNames[matchIndex] : null;
-  });
-
-  return mapping;
-};
-
 // Extract a cell value from a row, handling both array and object row formats
 const getCellValue = (row: unknown, colName: string, colIndex: number): unknown => {
   if (Array.isArray(row)) {
@@ -114,6 +80,44 @@ const getCellValue = (row: unknown, colName: string, colIndex: number): unknown 
     return (row as Record<string, unknown>)[colName];
   }
   return undefined;
+};
+
+// CAS column types that hold numbers, and those that hold text.
+const NUMERIC_CAS_TYPES = new Set(['double', 'int32', 'int64', 'decimal', 'decquad', 'decsect']);
+const CHAR_CAS_TYPES = new Set(['char', 'varchar']);
+const NUMERIC_PARAM_TYPES = new Set(['decimal', 'integer', 'bigint', 'decimalArray', 'integerArray', 'bigintArray']);
+
+const isNumericCasColumn = (col: CasColumnInfo | undefined): boolean =>
+  !!col && NUMERIC_CAS_TYPES.has(col.type.toLowerCase());
+
+// Converter columns for the column-mapped inputs (first column wins on a
+// duplicate name, as indexOf always did).
+const mappedCasColumns = (
+  columns: CasColumnInfo[],
+  parameters: StepParameter[],
+  sources: InputSources
+): MappedColumn<unknown>[] => {
+  const indexByName = new Map<string, number>();
+  columns.forEach((c, i) => {
+    if (!indexByName.has(c.name)) indexByName.set(c.name, i);
+  });
+  const mapped: MappedColumn<unknown>[] = [];
+  for (const param of parameters) {
+    const source = sourceOf(sources, param.name);
+    if (source.kind !== 'column') continue;
+    const colIndex = indexByName.get(source.column);
+    if (colIndex === undefined) continue;
+    const colName = source.column;
+    mapped.push({
+      name: param.name,
+      type: param.type,
+      column: colName,
+      read: row => getCellValue(row, colName, colIndex),
+      // A numeric column sent to a string input: its SAS missing '.' is null
+      options: { numericSource: isNumericCasColumn(columns[colIndex]) },
+    });
+  }
+  return mapped;
 };
 
 /**
@@ -176,13 +180,19 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   const [totalRowCount, setTotalRowCount] = useState<number>(0);
 
   // Mapping & execution config
-  const [mapping, setMapping] = useState<ColumnMapping>({});
+  const [sources, setSources] = useState<InputSources>({});
   const [scoreFullTable, setScoreFullTable] = useState(false);
   const [rowLimit, setRowLimit] = useState<number>(DEFAULT_ROW_LIMIT);
   const [concurrency, setConcurrency] = useState<number>(2);
 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Rows fetched for a run whose values include some that cannot be read;
+  // held until the user confirms sending them as missing (or cancels).
+  const [pendingRun, setPendingRun] = useState<{
+    rows: Record<string, unknown>[];
+    report: ConversionReport;
+  } | null>(null);
 
   // Generation of the current table selection. handleSelectTable captures it
   // at entry and the caslib/table cascades bump it, so a slow column or
@@ -221,6 +231,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setPreviewRows([]);
     setLoadingRows(false);
     setError(null);
+    setPendingRun(null);
   }, []);
 
   // Load tables when caslib changes (getCasTables walks every page)
@@ -239,6 +250,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       setPreviewRows([]);
       setLoadingRows(false);
       setError(null);
+      setPendingRun(null);
       try {
         const result = await getCasTables(selectedServer, selectedCaslib, 0, 500);
         if (cancelled) return;
@@ -265,9 +277,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setSelectedTable(tableName);
     setColumns([]);
     setPreviewRows([]);
-    setMapping({});
+    setSources({});
     setError(null);
     setNotice(null);
+    setPendingRun(null);
 
     if (!tableName) return;
 
@@ -284,7 +297,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
       // Auto-map columns to parameters
       const colNames = cols.map(c => c.name);
-      setMapping(autoMapColumns(colNames, parameters));
+      setSources(autoMapColumns(colNames, parameters));
 
       // Fetch a small row preview (best-effort — don't fail if this errors)
       try {
@@ -308,9 +321,17 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     }
   }, [selectedServer, selectedCaslib, parameters, tables]);
 
-  const handleMappingChange = useCallback((paramName: string, colName: string | null) => {
-    setMapping(prev => ({ ...prev, [paramName]: colName }));
+  const handleSourceChange = useCallback((paramName: string, source: InputSource) => {
+    setPendingRun(null);
+    setSources(prev => ({ ...prev, [paramName]: source }));
   }, []);
+
+  const handleUnsetToMissing = useCallback(() => {
+    setPendingRun(null);
+    setSources(prev => unsetToMissing(parameters, prev));
+  }, [parameters]);
+
+  const summary = useMemo(() => summarizeSources(parameters, sources), [parameters, sources]);
 
   const [fetchingForScore, setFetchingForScore] = useState(false);
   const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
@@ -320,6 +341,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
     setError(null);
     setNotice(null);
+    setPendingRun(null);
     setFetchingForScore(true);
 
     const effectiveLimit = scoreFullTable ? totalRowCount : Math.min(rowLimit, totalRowCount);
@@ -361,28 +383,17 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         return;
       }
 
-      // Resolve each parameter's column once (first-wins on duplicate names,
-      // matching indexOf) instead of a linear search per row × parameter.
-      const colIndexByName = new Map<string, number>();
-      columns.forEach((c, i) => {
-        if (!colIndexByName.has(c.name)) colIndexByName.set(c.name, i);
-      });
-      const mapped: { name: string; type: string; colName: string; colIndex: number }[] = [];
-      for (const param of parameters) {
-        const colName = mapping[param.name];
-        const colIndex = colName ? colIndexByName.get(colName) : undefined;
-        if (colName && colIndex !== undefined) {
-          mapped.push({ name: param.name, type: param.type, colName, colIndex });
-        }
+      // Convert once; unreadable values (not SAS missing — those are null by
+      // design) stop here for a confirmation instead of being scored as 0.
+      const { rows, report } = convertMappedRows(
+        fetched,
+        mappedCasColumns(columns, parameters, sources),
+        fixedInputValues(parameters, sources)
+      );
+      if (report.issueCount > 0) {
+        setPendingRun({ rows, report });
+        return;
       }
-
-      const rows: Record<string, unknown>[] = fetched.map(row => {
-        const rowData: Record<string, unknown> = {};
-        for (const m of mapped) {
-          rowData[m.name] = convertValue(getCellValue(row, m.colName, m.colIndex), m.type);
-        }
-        return rowData;
-      });
 
       onExecuteBatch(rows, concurrency);
     } catch (err: unknown) {
@@ -392,11 +403,52 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       setFetchingForScore(false);
       setFetchProgress(null);
     }
-  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, mapping, parameters, concurrency, onExecuteBatch]);
+  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, sources, parameters, concurrency, onExecuteBatch]);
 
-  const unmappedParams = parameters.filter(p => !mapping[p.name]);
-  const allMapped = unmappedParams.length === 0;
-  const mappedCount = parameters.length - unmappedParams.length;
+  const handleConfirmPendingRun = useCallback(() => {
+    if (!pendingRun) return;
+    setPendingRun(null);
+    onExecuteBatch(pendingRun.rows, concurrency);
+  }, [pendingRun, concurrency, onExecuteBatch]);
+
+  // Mapping notes: a column whose CAS type conflicts with the input's type,
+  // and values in the preview rows that cannot be read. The full table is only
+  // fetched at run time, where the same check runs on every row.
+  const notes = useMemo(() => {
+    const byName = new Map(columns.map(c => [c.name, c] as const));
+    const typeNotes: Record<string, MappingNote[]> = {};
+    for (const param of parameters) {
+      const source = sourceOf(sources, param.name);
+      if (source.kind !== 'column') continue;
+      const col = byName.get(source.column);
+      if (!col) continue;
+      const colType = col.type.toLowerCase();
+      if (NUMERIC_PARAM_TYPES.has(param.type) && CHAR_CAS_TYPES.has(colType)) {
+        typeNotes[param.name] = [{
+          tone: 'warning',
+          text: `${col.name} is a character column (${col.type}) mapped to a numeric input; values that are not numbers are sent as missing (null).`,
+        }];
+      } else if (param.type === 'string' && NUMERIC_CAS_TYPES.has(colType)) {
+        typeNotes[param.name] = [{
+          tone: 'info',
+          text: `${col.name} is a numeric column (${col.type}); its values are sent as text and SAS missing values as null.`,
+        }];
+      }
+    }
+    const previewNotes: Record<string, MappingNote[]> = {};
+    if (previewRows.length > 0) {
+      const previewReport = scanMappedRows(previewRows, mappedCasColumns(columns, parameters, sources));
+      for (const [input, list] of Object.entries(notesFromReport(previewReport))) {
+        previewNotes[input] = list.map(n => ({ ...n, text: `Preview rows: ${n.text}` }));
+      }
+    }
+    return mergeNotes(typeNotes, previewNotes);
+  }, [columns, parameters, sources, previewRows]);
+
+  // Save as Test stores column mappings only. A constant has no verified SID
+  // mapping for a CAS-table test yet, so a setup with constants is not saved
+  // rather than saved differently from what is scored here.
+  const canSaveAsTest = summary.ready && summary.constant === 0 && summary.mapped > 0;
 
   const filteredTables = tableFilter
     ? tables.filter(t => t.name.toLowerCase().includes(tableFilter.toLowerCase()))
@@ -531,47 +583,17 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         {/* Column Mapping (shown after table selection) */}
         {columns.length > 0 && !loadingRows && (
           <div className="cas-table-score__mapping-section column-mapping">
-            <div className="column-mapping__header">
-              <h4>Column Mapping</h4>
-              <Badge variant={allMapped ? 'success' : 'warning'}>
-                {mappedCount}/{parameters.length} mapped
-              </Badge>
-            </div>
-
-            <div className="column-mapping__grid">
-              {parameters.map(param => (
-                <div key={param.name} className="column-mapping__row">
-                  <div className="column-mapping__param-info">
-                    <span className="column-mapping__param-name">{param.name}</span>
-                    <TypeBadge type={param.type} />
-                  </div>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="column-mapping__arrow"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                  <select
-                    value={mapping[param.name] || ''}
-                    onChange={(e) => handleMappingChange(param.name, e.target.value || null)}
-                    className={`sas-input column-mapping__select ${mapping[param.name] ? 'column-mapping__select--mapped' : 'column-mapping__select--unmapped'}`}
-                    aria-label={`Column for ${param.name}`}
-                    disabled={executing}
-                  >
-                    <option value="">-- Select column --</option>
-                    {columns.map(col => (
-                      <option key={col.name} value={col.name}>
-                        {col.name} ({col.type})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
+            <ColumnMappingGrid
+              idPrefix="cas-mapping"
+              parameters={parameters}
+              columns={columns.map(col => ({ name: col.name, label: `${col.name} (${col.type})` }))}
+              sources={sources}
+              summary={summary}
+              onChange={handleSourceChange}
+              onSetUnsetToMissing={handleUnsetToMissing}
+              notes={notes}
+              disabled={executing || fetchingForScore}
+            />
 
             {/* Data Preview */}
             <div className="column-mapping__preview">
@@ -686,9 +708,13 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                     serverName: selectedServer,
                     libraryName: selectedCaslib,
                     tableName: selectedTable,
-                    columnMappings: mapping,
+                    columnMappings: columnMappingsOf(parameters, sources),
+                    missingInputs: parameters
+                      .filter(p => sourceOf(sources, p.name).kind === 'missing')
+                      .map(p => p.name),
                   })}
-                  disabled={!allMapped || executing}
+                  disabled={!canSaveAsTest || executing}
+                  aria-describedby={summary.ready && summary.constant > 0 ? 'cas-save-test-constant-hint' : undefined}
                 >
                   Save as Test
                 </Button>
@@ -697,7 +723,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                 variant="primary"
                 size="large"
                 onClick={handleRunAll}
-                disabled={!allMapped || executing || fetchingForScore || totalRowCount === 0}
+                disabled={!summary.ready || executing || fetchingForScore || totalRowCount === 0 || pendingRun !== null}
                 loading={executing || fetchingForScore}
               >
                 {executing ? 'Executing...' : fetchingForScore ? fetchLabel : `Run All (${effectiveRowCount.toLocaleString()} rows)`}
@@ -708,12 +734,52 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           <span className="sr-only" role="status" aria-live="polite">
             {fetchingForScore ? fetchLabel : ''}
           </span>
-          {!allMapped && (
+          {pendingRun && (
+            <div className="batch-run__confirm">
+              <Alert
+                variant="warning"
+                title={`${pendingRun.report.issueCount.toLocaleString()} value${pendingRun.report.issueCount === 1 ? '' : 's'} can't be read`}
+                actions={
+                  <>
+                    <Button variant="primary" size="small" onClick={handleConfirmPendingRun}>
+                      Score {pendingRun.rows.length.toLocaleString()} rows anyway
+                    </Button>
+                    <Button variant="tertiary" size="small" onClick={() => setPendingRun(null)}>
+                      Cancel
+                    </Button>
+                  </>
+                }
+              >
+                <p className="batch-run__confirm-text">
+                  Nothing has been scored yet. These values do not fit their input&rsquo;s type and would be sent as missing (null), not 0:
+                </p>
+                <ul className="batch-run__confirm-list">
+                  {pendingRun.report.issues.map(issue => (
+                    <li key={issue.input}>
+                      <strong>{issue.input}</strong>: {describeIssue(issue)}
+                    </li>
+                  ))}
+                </ul>
+              </Alert>
+            </div>
+          )}
+          {summary.unset > 0 && (
             <span className="batch-run__warning" role="status">
-              Please map all input parameters before running
+              Choose a column, &ldquo;Send as missing&rdquo; or a constant for every input before running
+              ({summary.unset} not set)
             </span>
           )}
-          {allMapped && effectiveRowCount > LARGE_RUN_WARNING && (
+          {summary.unset === 0 && summary.invalidConstants.length > 0 && (
+            <span className="batch-run__warning" role="status">
+              Fix the constant value for {summary.invalidConstants.join(', ')} before running
+            </span>
+          )}
+          {onSaveAsTest && summary.ready && summary.constant > 0 && (
+            <span className="batch-run__warning" id="cas-save-test-constant-hint">
+              Save as Test needs a column or &ldquo;Send as missing&rdquo; for every input; constants apply to runs here only.
+            </span>
+          )}
+          {summary.ready && effectiveRowCount > LARGE_RUN_WARNING && (
             <span className="batch-run__warning" role="status">
               Scoring {effectiveRowCount.toLocaleString()} rows sends one request per row and keeps every row in memory until the run finishes.
             </span>
