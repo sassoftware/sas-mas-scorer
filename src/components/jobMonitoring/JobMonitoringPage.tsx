@@ -1,12 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 import { useSasAuth } from '../../auth';
-import { useJobMonitoring } from '../../hooks/useJobMonitoring';
+import { CompletedStateFilter, useJobMonitoring } from '../../hooks/useJobMonitoring';
+import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import { JobStatsCards } from './JobStatsCards';
 import { RunningJobsPanel } from './RunningJobsPanel';
 import { CompletedJobsTable } from './CompletedJobsTable';
@@ -15,9 +16,40 @@ interface JobMonitoringPageProps {
   onOpenJob: (jobId: string) => void;
 }
 
+// The history's search, state filter and page live in the URL
+// (#/jobs?q=…&state=failed&page=2), so Back from a job, a reload or a shared
+// link shows the same history view.
+const HISTORY_DEFAULTS = { q: '', state: 'all', page: '1' };
+
+const STATE_FILTERS: readonly CompletedStateFilter[] = ['all', 'completed', 'failed', 'canceled', 'timedOut'];
+
+const toStateFilter = (value: string): CompletedStateFilter =>
+  (STATE_FILTERS as readonly string[]).includes(value) ? (value as CompletedStateFilter) : 'all';
+
 export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
-  const monitor = useJobMonitoring({ enabled: isAuthenticated });
+
+  const [params, updateParams] = useListUrlParams('jobs', HISTORY_DEFAULTS);
+  const stateFilter = toStateFilter(params.state);
+  // 0-based for the hook and the table; the URL holds the 1-based number.
+  const page = parsePageParam(params.page) - 1;
+  // The box follows typing at once; the query (and the URL) after a pause.
+  // A new search starts from the first page.
+  const commitSearch = useCallback(
+    (q: string) => updateParams({ q, page: HISTORY_DEFAULTS.page }),
+    [updateParams]
+  );
+  const [searchText, setSearchText] = useDebouncedUrlText(params.q, commitSearch);
+  const setStateFilter = (next: CompletedStateFilter) =>
+    updateParams({ state: next, page: HISTORY_DEFAULTS.page });
+  const setPage = (next: number) => updateParams({ page: String(next + 1) });
+
+  const monitor = useJobMonitoring({
+    enabled: isAuthenticated,
+    search: params.q,
+    stateFilter,
+    page,
+  });
 
   if (!isAuthenticated && !authLoading) {
     return (
@@ -112,7 +144,7 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
         <div className="job-monitoring__section-header">
           <h2 className="job-monitoring__section-title">History</h2>
           <span className="job-monitoring__section-meta">
-            {monitor.search === '' && monitor.stateFilter === 'all' && monitor.page === 0
+            {params.q === '' && stateFilter === 'all' && page === 0
               ? 'Auto-refreshes every 30 s'
               : 'Auto-refresh paused while filtering'}
           </span>
@@ -133,13 +165,13 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
           jobs={monitor.completedJobs}
           loading={monitor.completedLoading}
           hasMore={monitor.completedHasMore}
-          page={monitor.page}
+          page={page}
           pageSize={monitor.pageSize}
-          search={monitor.search}
-          stateFilter={monitor.stateFilter}
-          onSearchChange={monitor.setSearch}
-          onStateFilterChange={monitor.setStateFilter}
-          onPageChange={monitor.setPage}
+          search={searchText}
+          stateFilter={stateFilter}
+          onSearchChange={setSearchText}
+          onStateFilterChange={setStateFilter}
+          onPageChange={setPage}
           onOpenJob={onOpenJob}
         />
       </section>

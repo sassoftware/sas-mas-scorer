@@ -292,6 +292,37 @@
   margin-bottom: var(--space-1);
 }
 
+/* DownloadFallback: a notice pinned to the bottom edge, above page chrome
+   and below modals, for files a sandboxed embed would not let us download. */
+.sas-download-fallback {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  left: var(--space-4);
+  z-index: var(--z-panel);
+  max-width: 560px;
+  margin-left: auto;
+  box-shadow: var(--shadow-lg);
+}
+
+.sas-download-fallback__note {
+  margin-top: var(--space-2);
+}
+
+.sas-download-fallback__text {
+  display: block;
+  width: 100%;
+  height: 160px;
+  margin-top: var(--space-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-900);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
 /* Rendered as <IconButton size="small">; only the colour is alert-specific. */
 .sas-alert__close.sas-icon-button {
   align-self: flex-start;

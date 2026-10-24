@@ -1,54 +1,39 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { StepParameter } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { Badge, TypeBadge } from '../common/Badge';
+import { Badge } from '../common/Badge';
 import {
   FileFormatAdapter,
+  MappedColumn,
   ParsedTable,
   acceptAttribute,
   adapters,
-  convertValue,
+  convertMappedRows,
   findAdapter,
+  scanMappedRows,
 } from '../../utils/fileFormats';
+import { ColumnMappingGrid } from './ColumnMappingGrid';
+import {
+  InputSource,
+  InputSources,
+  autoMapColumns,
+  fixedInputValues,
+  notesFromReport,
+  sourceOf,
+  summarizeSources,
+  unsetToMissing,
+} from './inputMapping';
 
 interface FileUploadProps {
   parameters: StepParameter[];
   onExecuteBatch: (rows: Record<string, unknown>[], concurrency: number) => void;
   executing: boolean;
 }
-
-interface ColumnMapping {
-  [paramName: string]: string | null;
-}
-
-const autoMapColumns = (
-  headers: string[],
-  parameters: StepParameter[]
-): ColumnMapping => {
-  const mapping: ColumnMapping = {};
-  const normalizedHeaders = headers.map(h => h.toLowerCase().replace(/[_\s-]/g, ''));
-
-  parameters.forEach(param => {
-    const normalizedParam = param.name.toLowerCase().replace(/[_\s-]/g, '');
-
-    let matchIndex = normalizedHeaders.findIndex(h => h === normalizedParam);
-
-    if (matchIndex === -1) {
-      matchIndex = normalizedHeaders.findIndex(h =>
-        h.includes(normalizedParam) || normalizedParam.includes(h)
-      );
-    }
-
-    mapping[param.name] = matchIndex !== -1 ? headers[matchIndex] : null;
-  });
-
-  return mapping;
-};
 
 const formatCell = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -63,6 +48,29 @@ const DELIMITER_PRESETS: { label: string; value: string }[] = [
   { label: 'Pipe', value: '|' },
 ];
 
+// The column-mapped inputs as converter columns (first header wins on
+// duplicates, as indexOf always did).
+const mappedColumnsOf = (
+  table: ParsedTable,
+  parameters: StepParameter[],
+  sources: InputSources
+): MappedColumn<unknown[]>[] => {
+  const columns: MappedColumn<unknown[]>[] = [];
+  for (const param of parameters) {
+    const source = sourceOf(sources, param.name);
+    if (source.kind !== 'column') continue;
+    const index = table.headers.indexOf(source.column);
+    if (index === -1) continue;
+    columns.push({
+      name: param.name,
+      type: param.type,
+      column: source.column,
+      read: row => row[index],
+    });
+  }
+  return columns;
+};
+
 export const FileUpload: React.FC<FileUploadProps> = ({
   parameters,
   onExecuteBatch,
@@ -70,7 +78,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [table, setTable] = useState<ParsedTable | null>(null);
-  const [mapping, setMapping] = useState<ColumnMapping>({});
+  const [sources, setSources] = useState<InputSources>({});
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [formatLabel, setFormatLabel] = useState<string | null>(null);
@@ -80,6 +88,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [delimiter, setDelimiter] = useState<string | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState<string>('');
+  const [dragOver, setDragOver] = useState(false);
 
   const runAdapter = useCallback(async (
     adapter: FileFormatAdapter,
@@ -98,7 +107,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
       setTable(parsed);
       setFormatLabel(adapter.label);
-      setMapping(autoMapColumns(parsed.headers, parameters));
+      setSources(autoMapColumns(parsed.headers, parameters));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to parse file';
       setError(message);
@@ -107,10 +116,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   }, [parameters]);
 
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  // One path for the file picker and a drop onto the upload area
+  const handleFile = useCallback(async (file: File) => {
     setError(null);
     setFileName(file.name);
     setFormatLabel(null);
@@ -132,6 +139,37 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     await runAdapter(adapter, file);
   }, [runAdapter]);
 
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
+  // Drag and drop is the pointer shortcut; the file picker (a focusable input
+  // with a visible label) stays the keyboard path. preventDefault on dragover
+  // and drop also stops the browser from opening the file and leaving the app.
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = executing ? 'none' : 'copy';
+    if (!executing) setDragOver(true);
+  }, [executing]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Moving onto a child element fires dragleave on the zone; only a pointer
+    // that really left it clears the highlight.
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (executing) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    // A later pick of the same file must still fire the input's change event
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    handleFile(file);
+  }, [executing, handleFile]);
+
   const handleSheetChange = useCallback(async (sheetName: string) => {
     if (!currentFile || !currentAdapter) return;
     setError(null);
@@ -145,16 +183,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     await runAdapter(currentAdapter, currentFile, { delimiter: next });
   }, [currentFile, currentAdapter, runAdapter]);
 
-  const handleMappingChange = useCallback((paramName: string, header: string | null) => {
-    setMapping(prev => ({
+  const handleSourceChange = useCallback((paramName: string, source: InputSource) => {
+    setSources(prev => ({
       ...prev,
-      [paramName]: header,
+      [paramName]: source,
     }));
   }, []);
 
+  const handleUnsetToMissing = useCallback(() => {
+    setSources(prev => unsetToMissing(parameters, prev));
+  }, [parameters]);
+
   const handleClear = useCallback(() => {
     setTable(null);
-    setMapping({});
+    setSources({});
     setFileName(null);
     setFormatLabel(null);
     setError(null);
@@ -167,32 +209,36 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   }, []);
 
+  const summary = useMemo(() => summarizeSources(parameters, sources), [parameters, sources]);
+
+  // Pre-flight: the whole file is converted once per column mapping (not per
+  // keystroke in a constant), so unreadable values are shown before the run.
+  const columnMappingKey = JSON.stringify(
+    parameters.map(p => {
+      const source = sourceOf(sources, p.name);
+      return source.kind === 'column' ? source.column : null;
+    })
+  );
+  const report = useMemo(() => {
+    if (!table) return null;
+    return scanMappedRows(table.rows, mappedColumnsOf(table, parameters, sources));
+    // sources is read through columnMappingKey: constants and "missing" do not
+    // change what the columns contain
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, parameters, columnMappingKey]);
+  const notes = useMemo(() => (report ? notesFromReport(report) : undefined), [report]);
+
   const handleRunAll = useCallback(() => {
-    if (!table) return;
-
-    // Resolve each parameter's column once (indexOf keeps first-wins semantics
-    // for duplicate headers) instead of per row × parameter.
-    const mapped = parameters
-      .map(param => {
-        const header = mapping[param.name];
-        return { name: param.name, type: param.type, index: header ? table.headers.indexOf(header) : -1 };
-      })
-      .filter(m => m.index !== -1);
-
-    const rows: Record<string, unknown>[] = table.rows.map(row => {
-      const rowData: Record<string, unknown> = {};
-      for (const m of mapped) {
-        rowData[m.name] = convertValue(row[m.index], m.type);
-      }
-      return rowData;
-    });
-
+    if (!table || !summary.ready) return;
+    const { rows } = convertMappedRows(
+      table.rows,
+      mappedColumnsOf(table, parameters, sources),
+      fixedInputValues(parameters, sources)
+    );
     onExecuteBatch(rows, concurrency);
-  }, [table, mapping, parameters, onExecuteBatch, concurrency]);
+  }, [table, summary.ready, parameters, sources, onExecuteBatch, concurrency]);
 
-  const unmappedParams = parameters.filter(p => !mapping[p.name]);
-  const allMapped = unmappedParams.length === 0;
-  const mappedCount = parameters.length - unmappedParams.length;
+  const supportedFormats = adapters.map(a => a.label).join(', ');
 
   return (
     <Card className="csv-upload">
@@ -200,7 +246,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         <h3>Batch File Upload</h3>
       </CardHeader>
       <CardBody>
-        <div className="csv-upload__file-section">
+        <div
+          className={`csv-upload__file-section csv-upload__dropzone${dragOver ? ' csv-upload__dropzone--active' : ''}`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -208,19 +260,24 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             onChange={handleFileSelect}
             className="csv-upload__file-input"
             id="file-upload-input"
+            aria-describedby="file-upload-hint"
+            disabled={executing}
           />
           <label htmlFor="file-upload-input" className="csv-upload__file-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
             </svg>
             <span>{fileName || 'Choose file...'}</span>
           </label>
           {formatLabel && <Badge variant="info">{formatLabel}</Badge>}
           {fileName && (
-            <Button variant="tertiary" size="small" onClick={handleClear}>
+            <Button variant="tertiary" size="small" onClick={handleClear} disabled={executing}>
               Clear
             </Button>
           )}
+          <span className="csv-upload__dropzone-hint" id="file-upload-hint">
+            {dragOver ? 'Drop the file to load it' : 'or drag and drop a file here'} ({supportedFormats})
+          </span>
         </div>
 
         {error && (
@@ -292,47 +349,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
         {table && (
           <div className="column-mapping">
-            <div className="column-mapping__header">
-              <h4>Column Mapping</h4>
-              <Badge variant={allMapped ? 'success' : 'warning'}>
-                {mappedCount}/{parameters.length} mapped
-              </Badge>
-            </div>
-
-            <div className="column-mapping__grid">
-              {parameters.map(param => (
-                <div key={param.name} className="column-mapping__row">
-                  <div className="column-mapping__param-info">
-                    <span className="column-mapping__param-name">{param.name}</span>
-                    <TypeBadge type={param.type} />
-                  </div>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="column-mapping__arrow"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                  <select
-                    value={mapping[param.name] || ''}
-                    onChange={(e) => handleMappingChange(param.name, e.target.value || null)}
-                    className={`sas-input column-mapping__select ${mapping[param.name] ? 'column-mapping__select--mapped' : 'column-mapping__select--unmapped'}`}
-                    aria-label={`Column for ${param.name}`}
-                    disabled={executing}
-                  >
-                    <option value="">-- Select column --</option>
-                    {table.headers.map(header => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
+            <ColumnMappingGrid
+              idPrefix="file-mapping"
+              parameters={parameters}
+              columns={table.headers.map(header => ({ name: header }))}
+              sources={sources}
+              summary={summary}
+              onChange={handleSourceChange}
+              onSetUnsetToMissing={handleUnsetToMissing}
+              notes={notes}
+              disabled={executing}
+            />
 
             <div className="column-mapping__preview">
               <h4>Data Preview ({table.rows.length} rows)</h4>
@@ -415,15 +442,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               variant="primary"
               size="large"
               onClick={handleRunAll}
-              disabled={!allMapped || executing || table.rows.length === 0}
+              disabled={!summary.ready || executing || table.rows.length === 0}
               loading={executing}
             >
               {executing ? 'Executing...' : `Run All (${table.rows.length} rows)`}
             </Button>
           </div>
-          {!allMapped && (
+          {summary.unset > 0 && (
             <span className="batch-run__warning" role="status">
-              Please map all input parameters before running
+              Choose a column, &ldquo;Send as missing&rdquo; or a constant for every input before running
+              ({summary.unset} not set)
+            </span>
+          )}
+          {summary.unset === 0 && summary.invalidConstants.length > 0 && (
+            <span className="batch-run__warning" role="status">
+              Fix the constant value for {summary.invalidConstants.join(', ')} before running
+            </span>
+          )}
+          {report && report.issueCount > 0 && (
+            <span className="batch-run__warning" role="status">
+              {report.issueCount.toLocaleString()} value{report.issueCount === 1 ? '' : 's'} in{' '}
+              {report.issues.length} input{report.issues.length === 1 ? '' : 's'} can&rsquo;t be read and
+              will be sent as missing (null), not 0 — see the notes under the mapping.
             </span>
           )}
         </CardFooter>

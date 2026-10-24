@@ -7,6 +7,12 @@ import { FolderBrowser } from '../scoring/FolderBrowser';
 import { useCasCatalog } from '../../hooks/useCasCatalog';
 import { createScoreDefinition } from '../../api/scoreDefinitions';
 import { createScoreExecution, waitForScoreExecution } from '../../api/scoreExecution';
+import { getFileText } from '../../api/files';
+import { getSasViyaUrl } from '../../config';
+import { buildDeepLink } from '../../utils/deepLinks';
+import { downloadTextFile } from '../../utils/csv';
+import { logExcerpt, type LogExcerpt } from '../../utils/segTree/runLog';
+import FlowDeepLink from '../flows/FlowDeepLink';
 import {
   casTableState,
   getAllTableRows,
@@ -43,9 +49,31 @@ interface SegTreeTestDialogProps {
   title: string;
   leafIds: string[];
   onClose: () => void;
-  /** A table test ran and its results should be shown on the tree. */
+  /**
+   * A table test finished and its results should be shown on the tree. Called
+   * as soon as the comparison is done, so closing the dialog in any way
+   * (Done, X, Escape) keeps them.
+   */
   onResults: (summary: TestRunSummary) => void;
+  /** Select the first failed path on the tree (offered when a run has failures). */
+  onShowFailure?: () => void;
 }
+
+/** Why a test run did not complete, with what its log says. */
+interface RunFailure {
+  state: string;
+  message?: string;
+  logUri?: string;
+  log?: string;
+  excerpt?: LogExcerpt;
+  logError?: string;
+}
+
+const EXCERPT_TITLE: Record<LogExcerpt['kind'], string> = {
+  errors: 'Errors in the run log',
+  warnings: 'The run log has no errors; its warnings',
+  tail: 'The run log has no errors or warnings; its last lines',
+};
 
 type Step = 'rows' | 'save' | 'run';
 type Mode = 'test' | 'scenarios';
@@ -72,7 +100,7 @@ function validateName(name: string): string | null {
 const message = (err: unknown, fallback: string) =>
   (err as { message?: string })?.message ?? fallback;
 
-export default function SegTreeTestDialog({ index, title, leafIds, onClose, onResults }: SegTreeTestDialogProps) {
+export default function SegTreeTestDialog({ index, title, leafIds, onClose, onResults, onShowFailure }: SegTreeTestDialogProps) {
   const generated = useMemo(() => buildTestRows(index, leafIds), [index, leafIds]);
 
   const [step, setStep] = useState<Step>('rows');
@@ -109,6 +137,7 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<TestRunSummary | null>(null);
+  const [failure, setFailure] = useState<RunFailure | null>(null);
   const [created, setCreated] = useState<{ ok: number; failed: string[] } | null>(null);
   const stopRef = useRef(false);
 
@@ -238,7 +267,24 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     const finished = await waitForScoreExecution(execution.id, () => stopRef.current);
     if (stopRef.current) return;
     if (finished.state !== 'completed' || !finished.outputTable) {
-      throw new Error(`The test run ended as "${finished.state}". Open the test in SAS Intelligent Decisioning to see its log.`);
+      // A failed execution has no error message of its own (verified live);
+      // its log, a Files resource at logFileUri, is what explains it.
+      const info: RunFailure = { state: finished.state, message: finished.error?.message, logUri: finished.logFileUri };
+      if (finished.logFileUri) {
+        setPhase('Reading the run log');
+        try {
+          info.log = await getFileText(finished.logFileUri);
+          info.excerpt = logExcerpt(info.log);
+        } catch (err) {
+          info.logError = message(err, 'unknown error');
+        }
+        setPhase('Running the test');
+      }
+      setFailure(info);
+      throw new Error(
+        `The test run ended as "${finished.state}"${info.message ? `: ${info.message}` : ''}.` +
+        (info.excerpt ? ' The run log below shows why.' : ' Open the test in SAS Intelligent Decisioning to see its log.')
+      );
     }
 
     setPhase('Reading the results');
@@ -248,7 +294,16 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
       getAllTableRows(out.serverName, out.libraryName, out.tableName),
     ]);
     const results = compareResults(cols.map((c) => c.name), data.rows, outputVariables);
-    setSummary({ testName: name.trim(), ranAt: new Date().toISOString(), outputTable: `${out.libraryName}.${out.tableName}`, results });
+    const finishedRun: TestRunSummary = {
+      testName: name.trim(),
+      ranAt: new Date().toISOString(),
+      outputTable: `${out.libraryName}.${out.tableName}`,
+      results,
+    };
+    setSummary(finishedRun);
+    // Shown on the tree right away: however the dialog is closed now, the
+    // comparison the user waited for stays.
+    onResults(finishedRun);
     setPhase('Test finished');
   };
 
@@ -295,6 +350,7 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     setError(null);
     setNotice(null);
     setSummary(null);
+    setFailure(null);
     setCreated(null);
     try {
       if (mode === 'test') await runTableTest();
@@ -561,9 +617,56 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
           <Alert variant={summary.results.failed > 0 ? 'warning' : 'success'} title={summary.results.failed > 0 ? 'Some paths failed' : 'All checked paths passed'}>
             {summary.results.passed.toLocaleString()} passed · {summary.results.failed.toLocaleString()} failed
             {summary.results.unchecked > 0 ? ` · ${summary.results.unchecked.toLocaleString()} without expected values` : ''}
-            . Output table: <code>{summary.outputTable}</code>.
+            . Output table: <code>{summary.outputTable}</code>. The results are now shown on the tree and stay there when you close this dialog.
           </Alert>
         </div>
+      )}
+      {!busy && failure && (
+        <section className="segtree-test__failure" aria-labelledby="segtree-test-failure-title">
+          <h3 className="segtree-test__failure-title" id="segtree-test-failure-title">
+            {failure.excerpt ? EXCERPT_TITLE[failure.excerpt.kind] : 'Run log'}
+          </h3>
+          {failure.excerpt && failure.excerpt.lines.length > 0 && (
+            <pre className="segtree-test__log" tabIndex={0} aria-labelledby="segtree-test-failure-title">
+              {failure.excerpt.lines.join('\n')}
+              {failure.excerpt.clipped ? '\n…' : ''}
+            </pre>
+          )}
+          {failure.logError && <p className="segtree-test__failure-text">The run log could not be read: {failure.logError}</p>}
+          {!failure.logUri && <p className="segtree-test__failure-text">The run left no log to show.</p>}
+          <div className="segtree-test__failure-actions">
+            {failure.log && (
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => downloadTextFile(failure.log ?? '', `${casTableName(name)}_run.log`, 'text/plain;charset=utf-8;')}
+              >
+                Download the log
+              </Button>
+            )}
+            {failure.logUri && getSasViyaUrl() && (
+              <a
+                className="segtree-test__failure-link"
+                href={`${getSasViyaUrl()}${failure.logUri.replace(/\/content\/?$/, '')}/content`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open the log in SAS Viya<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            )}
+            {(() => {
+              // The test lives on the tree's Tests tab; SID has no verified test URL.
+              const link = buildDeepLink('segmentationTree', index.tree.id);
+              return link ? <FlowDeepLink url={link.url} label="Open the tree's tests in SAS Intelligent Decisioning" showLabel /> : null;
+            })()}
+          </div>
+          {failure.log && (
+            <details className="segtree-test__full-log">
+              <summary>Full log ({failure.log.split('\n').length.toLocaleString()} lines)</summary>
+              <pre className="segtree-test__log segtree-test__log--full" tabIndex={0} aria-label="Full run log">{failure.log}</pre>
+            </details>
+          )}
+        </section>
       )}
       {!busy && created && (
         <Alert variant={created.failed.length ? 'warning' : 'success'}>
@@ -606,10 +709,10 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     return (
       <>
         {error && <Button variant="tertiary" onClick={() => setStep('save')}>Back</Button>}
-        {summary && (
-          <Button variant="secondary" onClick={() => { onResults(summary); onClose(); }}>Show results on the tree</Button>
+        {summary && summary.results.failed > 0 && onShowFailure && (
+          <Button variant="secondary" onClick={() => { onClose(); onShowFailure(); }}>Close and show failed paths</Button>
         )}
-        <Button variant="primary" onClick={onClose}>Done</Button>
+        <Button variant="primary" onClick={onClose}>{summary ? 'Close and view on the tree' : 'Done'}</Button>
       </>
     );
   })();

@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { Module, ModuleType, getModuleStepCount, getModuleType } from '../../types';
 import { DataTable, Column } from '../common/DataTable';
 import { Badge } from '../common/Badge';
@@ -11,6 +11,7 @@ import { SearchInput } from '../common/SearchInput';
 import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
+import { useDebouncedUrlText } from '../../utils/listUrlState';
 
 interface ModuleListProps {
   modules: Module[];
@@ -23,7 +24,10 @@ interface ModuleListProps {
   currentPage: number;
   pageSize: number;
   onPageChange: (page: number) => void;
-  onSearch: (filter: string) => void;
+  /** The applied search term (kept in the URL by the caller). */
+  searchTerm: string;
+  /** Called with the box's text once typing pauses. */
+  onSearch: (searchTerm: string) => void;
   onSort: (field: string, direction: 'asc' | 'desc') => void;
   onTypeFilter: (type: ModuleType | 'All') => void;
   sortBy: string;
@@ -53,6 +57,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   currentPage,
   pageSize,
   onPageChange,
+  searchTerm,
   onSearch,
   onSort,
   onTypeFilter,
@@ -60,35 +65,14 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   typeFilter,
 }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // The box starts from the applied search, so coming back to the list (or
+  // reloading it) shows the term the list is filtered by; the server search
+  // runs once typing pauses. A reset from outside (the sidebar's All Modules)
+  // clears the box.
+  const [searchText, setSearchText] = useDebouncedUrlText(searchTerm, onSearch);
 
   // Parse current sort state
   const currentSort = parseSortBy(sortBy);
-
-  // Reset local search state when sortBy is cleared (indicating a reset).
-  // Intentionally keyed on sortBy only — adding searchTerm would re-run this on
-  // every keystroke and wipe the user's in-progress search.
-  useEffect(() => {
-    if (!sortBy && searchTerm) {
-      setSearchTerm('');
-      setDebouncedSearch('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy]);
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Trigger server-side search when debounced value changes
-  useEffect(() => {
-    onSearch(debouncedSearch);
-  }, [debouncedSearch, onSearch]);
 
   // Handle column header click for sorting
   const handleSortClick = useCallback((field: string) => {
@@ -133,7 +117,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     );
   };
 
-  const isFiltered = typeFilter !== 'All' || !!debouncedSearch;
+  const isFiltered = typeFilter !== 'All' || !!searchTerm;
   const displayCount = typeFilter !== 'All' ? filteredCount : totalCount;
 
   const columns: Column<Module>[] = [
@@ -275,8 +259,8 @@ export const ModuleList: React.FC<ModuleListProps> = ({
           className="module-list__search"
           aria-label="Search all modules by name"
           placeholder="Search all modules by name..."
-          value={searchTerm}
-          onChange={setSearchTerm}
+          value={searchText}
+          onChange={setSearchText}
         />
       </div>
 
@@ -300,7 +284,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
         keyField="id"
         onRowClick={onSelectModule}
         loading={loading}
-        emptyMessage={debouncedSearch ? `No modules found matching "${debouncedSearch}".` : "No modules found. Create a module to get started."}
+        emptyMessage={searchTerm ? `No modules found matching "${searchTerm}".` : "No modules found. Create a module to get started."}
       />
 
       {totalPages > 1 && (

@@ -5,6 +5,9 @@
  * Persistent storage for OAuth tokens and connection settings.
  * Supports multiple named connections with per-connection token storage.
  * Uses electron-store with basic encryption for token obfuscation.
+ *
+ * The decrypted contents are kept in memory (see "In-memory copy" below), so
+ * reads never touch the disk; only writes do.
  */
 
 import Store from 'electron-store';
@@ -84,83 +87,117 @@ function migrateIfNeeded(): void {
 
 migrateIfNeeded();
 
+// --- In-memory copy ---
+//
+// conf reads and decrypts the whole file on every get (readFileSync plus a
+// 10 000-round PBKDF2, ~15 ms), and every API request asks for the active
+// connection and its tokens, which cost ~60 ms of blocked main process per
+// request. The decrypted contents are read once and kept here instead. Every
+// write goes to disk first, in one encrypted write of the whole store, and
+// only then replaces the copy, so the copy always matches the file: this
+// process is the store's only reader and writer. The file stays encrypted.
+let memory: StoreSchema | null = null;
+
+function current(): StoreSchema {
+  if (!memory) memory = store.store;
+  return memory;
+}
+
+function write(patch: Partial<StoreSchema>): void {
+  const next: StoreSchema = { ...current(), ...patch };
+  store.store = next;
+  memory = next;
+}
+
+// Callers get copies, so nothing outside this module can change the copy.
+const copyConnection = (c: SavedConnection): SavedConnection => ({ ...c });
+
 // --- Connection CRUD ---
 
 export function getAllConnections(): SavedConnection[] {
-  return store.get('connections', []);
+  return (current().connections ?? []).map(copyConnection);
 }
 
 export function getActiveConnectionId(): string | null {
-  return store.get('activeConnectionId', null);
+  return current().activeConnectionId ?? null;
 }
 
 /** Returns the active connection, or null if none is set. */
 export function getConnection(): SavedConnection | null {
   const id = getActiveConnectionId();
   if (!id) return null;
-  const connections = getAllConnections();
-  return connections.find((c) => c.id === id) ?? null;
+  const found = (current().connections ?? []).find((c) => c.id === id);
+  return found ? copyConnection(found) : null;
 }
 
 export function addConnection(conn: Omit<SavedConnection, 'id'>): SavedConnection {
   const id = randomUUID();
   const saved: SavedConnection = { ...conn, id };
-  const connections = getAllConnections();
-  connections.push(saved);
-  store.set('connections', connections);
-  return saved;
+  write({ connections: [...getAllConnections(), saved] });
+  return copyConnection(saved);
 }
 
 export function updateConnection(conn: SavedConnection): void {
   const connections = getAllConnections();
   const idx = connections.findIndex((c) => c.id === conn.id);
   if (idx === -1) return;
-  connections[idx] = conn;
-  store.set('connections', connections);
+  connections[idx] = { ...conn };
+  write({ connections });
 }
 
 export function deleteConnection(id: string): void {
-  const connections = getAllConnections().filter((c) => c.id !== id);
-  store.set('connections', connections);
-
-  // Clear tokens for this connection
-  const tokensByConnection = store.get('tokensByConnection', {});
+  // Drop the connection and its tokens, and clear it if it was the active one.
+  const tokensByConnection = { ...(current().tokensByConnection ?? {}) };
   delete tokensByConnection[id];
-  store.set('tokensByConnection', tokensByConnection);
-
-  // If this was the active connection, clear it
-  if (getActiveConnectionId() === id) {
-    store.set('activeConnectionId', null);
-  }
+  write({
+    connections: getAllConnections().filter((c) => c.id !== id),
+    tokensByConnection,
+    activeConnectionId: getActiveConnectionId() === id ? null : getActiveConnectionId(),
+  });
 }
 
 export function setActiveConnection(id: string): void {
-  const connections = getAllConnections();
-  if (!connections.some((c) => c.id === id)) return;
-  store.set('activeConnectionId', id);
+  if (!(current().connections ?? []).some((c) => c.id === id)) return;
+  write({ activeConnectionId: id });
 }
 
-// --- Token operations (scoped to active connection) ---
+// --- Token operations ---
+
+/** Tokens of one connection, or null when it has none. */
+export function getTokensFor(connectionId: string): StoredTokens | null {
+  const tokens = current().tokensByConnection?.[connectionId];
+  return tokens ? { ...tokens } : null;
+}
+
+/**
+ * Store tokens for one connection. A token refresh that started before the
+ * user switched connection writes to the connection it was started for, not
+ * to whichever one is active when it returns.
+ */
+export function setTokensFor(connectionId: string, tokens: StoredTokens): void {
+  write({ tokensByConnection: { ...(current().tokensByConnection ?? {}), [connectionId]: { ...tokens } } });
+}
+
+export function clearTokensFor(connectionId: string): void {
+  const tokensByConnection = { ...(current().tokensByConnection ?? {}) };
+  if (!(connectionId in tokensByConnection)) return;
+  delete tokensByConnection[connectionId];
+  write({ tokensByConnection });
+}
+
+// Scoped to the active connection.
 
 export function getTokens(): StoredTokens | null {
   const id = getActiveConnectionId();
-  if (!id) return null;
-  const tokensByConnection = store.get('tokensByConnection', {});
-  return tokensByConnection[id] ?? null;
+  return id ? getTokensFor(id) : null;
 }
 
 export function setTokens(tokens: StoredTokens): void {
   const id = getActiveConnectionId();
-  if (!id) return;
-  const tokensByConnection = store.get('tokensByConnection', {});
-  tokensByConnection[id] = tokens;
-  store.set('tokensByConnection', tokensByConnection);
+  if (id) setTokensFor(id, tokens);
 }
 
 export function clearTokens(): void {
   const id = getActiveConnectionId();
-  if (!id) return;
-  const tokensByConnection = store.get('tokensByConnection', {});
-  delete tokensByConnection[id];
-  store.set('tokensByConnection', tokensByConnection);
+  if (id) clearTokensFor(id);
 }

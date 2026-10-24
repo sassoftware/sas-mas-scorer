@@ -13,6 +13,28 @@ import type { CodeFileSignatureTerm } from '../api/codeFiles';
 // Communities blog comment on DataGrids in Python code nodes).
 const MAX_CHAR_LENGTH = 32672;
 
+/** Declared length of the parse_status output (the generated code clips to it). */
+const PARSE_STATUS_LENGTH = 256;
+
+/**
+ * Names the generated Python relies on inside execute(): the module imports and
+ * helpers it calls, the builtins it calls, and the fixed outputs. A user
+ * variable with one of these names would shadow it (Python then treats the name
+ * as a local, so a variable `json` turns `json.loads` into an
+ * UnboundLocalError) or clash with an output. Every other generated local
+ * carries the `_sb_` prefix, which is reserved as a whole
+ * (GENERATED_PY_PREFIX).
+ */
+export const GENERATED_PY_NAMES: ReadonlySet<string> = new Set([
+  'json', 'ET', 'Optional', 'execute',
+  '_to_str', '_to_int', '_to_float', '_to_bool', '_txt', '_attr',
+  'str', 'int', 'float', 'isinstance', 'len', 'list', 'dict', 'Exception',
+  'parse_success', 'parse_status',
+]);
+
+/** Prefix reserved for the generated code's own locals and helpers. */
+export const GENERATED_PY_PREFIX = '_sb_';
+
 /**
  * Map a SAS ID data type to a SID code file signature dataType. The allowed
  * values are string | decimal | integer | dataGrid | date | datetime | unknown.
@@ -55,7 +77,7 @@ export function buildCodeFileSignature(
   const terms: CodeFileSignatureTerm[] = [
     { name: inputVarName, dataType: 'string', direction: 'input', length: MAX_CHAR_LENGTH },
     { name: 'parse_success', dataType: 'integer', direction: 'output' },
-    { name: 'parse_status', dataType: 'string', direction: 'output', length: 256 },
+    { name: 'parse_status', dataType: 'string', direction: 'output', length: PARSE_STATUS_LENGTH },
   ];
 
   for (const m of mappings) {
@@ -179,23 +201,36 @@ function dgTypeStr(dt: DataGridColumn['dataType']): string {
   }
 }
 
-/** Raw (uncast) JSON access expression for a dotted source path. */
+/** A Python string literal for a JSON key / XML path (JSON string escaping is valid Python). */
+function pyStr(s: string): string {
+  return JSON.stringify(s);
+}
+
+/**
+ * None-safe JSON access expression for a dotted source path. `_sb_get` walks
+ * the keys and returns None (recording the path in `_sb_absent`) as soon as a
+ * key is missing or a parent is not an object, so one absent optional field
+ * defaults on its own instead of aborting every later extraction: the same
+ * per-field behaviour the XML path gets from `_txt` / `_attr`.
+ */
 function jsonAccess(sourcePath: string): string {
-  return 'data' + sourcePath.split('.').map(p => `['${p}']`).join('');
+  const keys = sourcePath.split('.').map(pyStr);
+  // A one-element tuple needs its trailing comma.
+  return `_sb_get(_sb_data, (${keys.join(', ')}${keys.length === 1 ? ',' : ''}), _sb_absent)`;
 }
 
 /** Raw (uncast) XML access expression for a scalar mapping. */
 function xmlAccess(m: VariableMapping): string {
   const relParts = m.sourcePath.split('/').slice(1); // drop the root tag
-  if (relParts.length === 0) return 'root.text';
+  if (relParts.length === 0) return '_sb_root.text';
 
   const xpath = relParts.slice(0, -1).join('/');
   const lastPart = relParts[relParts.length - 1];
 
   if (xpath === '') {
-    return `(root.attrib.get('${lastPart}') or _txt(root, '${lastPart}'))`;
+    return `(_sb_root.attrib.get(${pyStr(lastPart)}) or _txt(_sb_root, ${pyStr(lastPart)}))`;
   }
-  return `(_attr(root, '${xpath}', '${lastPart}') or _txt(root, '${xpath}/${lastPart}'))`;
+  return `(_attr(_sb_root, ${pyStr(xpath)}, ${pyStr(lastPart)}) or _txt(_sb_root, ${pyStr(`${xpath}/${lastPart}`)}))`;
 }
 
 /** Generate the Python execute() function for SAS Intelligent Decisioning */
@@ -246,6 +281,15 @@ export function generatePythonCode(
     lines.push('def _to_bool(v):');
     lines.push("    return 1 if str(v).lower() in ('true', '1', 'yes') else 0");
   }
+  if (format === 'json') {
+    lines.push('def _sb_get(obj, keys, absent):');
+    lines.push('    for k in keys:');
+    lines.push('        if not isinstance(obj, dict) or k not in obj:');
+    lines.push("            absent.append('.'.join(keys))");
+    lines.push('            return None');
+    lines.push('        obj = obj[k]');
+    lines.push('    return obj');
+  }
   if (format === 'xml') {
     lines.push('def _txt(el, path):');
     lines.push('    node = el.find(path)');
@@ -287,12 +331,17 @@ export function generatePythonCode(
   // ── Parse ──
   lines.push('    try:');
   lines.push(format === 'json'
-    ? `        data = json.loads(${inputVarName})`
-    : `        root = ET.fromstring(${inputVarName})`);
-  lines.push('    except Exception as _e:');
-  lines.push(`        parse_status = '${format === 'json' ? 'JSON' : 'XML'} parse error: ' + str(_e)`);
+    ? `        _sb_data = json.loads(${inputVarName})`
+    : `        _sb_root = ET.fromstring(${inputVarName})`);
+  lines.push('    except Exception as _sb_e:');
+  lines.push(`        parse_status = '${format === 'json' ? 'JSON' : 'XML'} parse error: ' + str(_sb_e)`);
   lines.push(retEarly);
   lines.push('');
+  if (format === 'json') {
+    // Paths absent from this payload: they keep their defaults and are listed
+    // in parse_status, while parse_success still reports a usable parse.
+    lines.push('    _sb_absent = []');
+  }
 
   // ── Extract (linear assignments via helpers — no inline conditionals) ──
   lines.push('    try:');
@@ -305,8 +354,12 @@ export function generatePythonCode(
   }
   lines.push('        parse_success = 1');
   lines.push("        parse_status = 'OK'");
-  lines.push('    except Exception as _e:');
-  lines.push("        parse_status = 'Extraction error: ' + str(_e)");
+  if (format === 'json') {
+    lines.push('        if _sb_absent:');
+    lines.push(`            parse_status = ('OK; absent: ' + ', '.join(_sb_absent))[:${PARSE_STATUS_LENGTH}]`);
+  }
+  lines.push('    except Exception as _sb_e:');
+  lines.push("        parse_status = 'Extraction error: ' + str(_sb_e)");
   lines.push('');
   lines.push(ret);
   lines.push('');
@@ -318,14 +371,14 @@ function jsonDataGrid(m: VariableMapping): string[] {
   const indent = '        ';
   const cols = m.dataGridColumns ?? [];
   const meta = cols.map(c => `{"name": "${c.name}", "type": "${dgTypeStr(c.dataType)}"}`).join(', ');
-  const row = cols.map(c => `${helperForColumn(c.dataType)}(_item.get('${c.sourcePath}'))`).join(', ');
+  const row = cols.map(c => `${helperForColumn(c.dataType)}(_sb_item.get(${pyStr(c.sourcePath)}))`).join(', ');
 
   return [
     `${indent}# DataGrid: ${m.variableName}`,
-    `${indent}_arr = ${jsonAccess(m.sourcePath)}`,
-    `${indent}if isinstance(_arr, list) and len(_arr) > 0:`,
-    `${indent}    _rows = [[${row}] for _item in _arr]`,
-    `${indent}    ${m.variableName} = json.dumps([{"metadata": [${meta}]}, {"data": _rows}])`,
+    `${indent}_sb_arr = ${jsonAccess(m.sourcePath)}`,
+    `${indent}if isinstance(_sb_arr, list) and len(_sb_arr) > 0:`,
+    `${indent}    _sb_rows = [[${row}] for _sb_item in _sb_arr if isinstance(_sb_item, dict)]`,
+    `${indent}    ${m.variableName} = json.dumps([{"metadata": [${meta}]}, {"data": _sb_rows}])`,
   ];
 }
 
@@ -335,14 +388,14 @@ function xmlDataGrid(m: VariableMapping): string[] {
   const xpath = m.sourcePath.split('/').slice(1).join('/');
   const meta = cols.map(c => `{"name": "${c.name}", "type": "${dgTypeStr(c.dataType)}"}`).join(', ');
   const row = cols
-    .map(c => `${helperForColumn(c.dataType)}((_el.attrib.get('${c.sourcePath}') or _txt(_el, '${c.sourcePath}')))`)
+    .map(c => `${helperForColumn(c.dataType)}((_sb_el.attrib.get(${pyStr(c.sourcePath)}) or _txt(_sb_el, ${pyStr(c.sourcePath)})))`)
     .join(', ');
 
   return [
     `${indent}# DataGrid: ${m.variableName}`,
-    `${indent}_elements = root.findall('${xpath}')`,
-    `${indent}if _elements:`,
-    `${indent}    _rows = [[${row}] for _el in _elements]`,
-    `${indent}    ${m.variableName} = json.dumps([{"metadata": [${meta}]}, {"data": _rows}])`,
+    `${indent}_sb_elements = _sb_root.findall(${pyStr(xpath)})`,
+    `${indent}if _sb_elements:`,
+    `${indent}    _sb_rows = [[${row}] for _sb_el in _sb_elements]`,
+    `${indent}    ${m.variableName} = json.dumps([{"metadata": [${meta}]}, {"data": _sb_rows}])`,
   ];
 }

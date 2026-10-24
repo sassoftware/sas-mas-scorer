@@ -58,6 +58,11 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  // While the session is being checked (at startup the desktop app may be
+  // renewing it with the stored refresh token) or a login is in progress,
+  // say so instead of a premature "Not connected".
+  const signedOutStatus = isLoading ? 'Connecting…' : 'Not connected';
+
   return (
     <header className="sas-header">
       <div className="sas-header__brand">
@@ -145,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="sas-header__auth-status">
                   <span className="sas-header__auth-indicator sas-header__auth-indicator--disconnected" />
                   <span className="sas-header__auth-text">
-                    {activeConnectionName ? `${activeConnectionName} — Not connected` : 'Not connected'}
+                    {activeConnectionName ? `${activeConnectionName} — ${signedOutStatus}` : signedOutStatus}
                   </span>
                 </div>
               )}

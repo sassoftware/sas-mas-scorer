@@ -1,14 +1,78 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fetchAllPaginated } from './paginate';
+import { paginateCollection } from './paginate';
 import { ContentItem, ContentType, CoverageByType, CoverageResult, CoverageStats, CollectionProgress, TestScenarioInfo } from '../types/coverage';
 
-interface ScoreDefinition {
+/** One walked collection: the content types plus the score definitions. */
+export type CoverageCollectionKey = ContentType | 'scoreDefinition';
+
+/**
+ * How one collection walk ended, so a gap is reported instead of showing up
+ * only as lower coverage:
+ * - ok         every page was read
+ * - truncated  the walk stopped at the page cap while more pages existed
+ * - skipped    the walk failed (403/404/timeout…) and contributed nothing
+ */
+export interface CoverageCollectionStatus {
+  key: CoverageCollectionKey;
+  label: string;
+  status: 'ok' | 'truncated' | 'skipped';
+  /** Items read. */
+  loaded: number;
+  /** Total the service reported, or null when it sends no count (scoreDefinitions). */
+  total: number | null;
+  /** HTTP status of a failed walk, when it can be told. */
+  httpStatus?: number;
+  /** Why a walk failed. */
+  error?: string;
+}
+
+/** How the score definitions were sorted into coverage. */
+export interface ScoreDefinitionBreakdown {
+  /** Definitions read (trashed ones are already excluded). */
+  examined: number;
+  /** properties.test = 'true' (or a test-like name with no type information). */
+  tests: number;
+  /** inputData.type = 'Scenario'. */
+  scenarios: number;
+  /** Publishing validations: never coverage. */
+  publishValidations: number;
+  /** Trashed definitions dropped on the client (the server filter normally drops them first). */
+  trashed: number;
+}
+
+export interface CoverageRunResult extends CoverageResult {
+  collections: CoverageCollectionStatus[];
+  scoreDefinitions: ScoreDefinitionBreakdown;
+}
+
+/** True when the tests themselves could not be read, so no asset's coverage is known. */
+export function testsNotCollected(result: CoverageRunResult): boolean {
+  return result.collections.some(c => c.key === 'scoreDefinition' && c.status === 'skipped');
+}
+
+/** Collections that did not load completely. */
+export function collectionGaps(result: CoverageRunResult): CoverageCollectionStatus[] {
+  return result.collections.filter(c => c.status !== 'ok');
+}
+
+/** "330 of 330", "loaded 100 (no total reported)", "not collected (…)". */
+export function describeCollectionStatus(c: CoverageCollectionStatus): string {
+  if (c.status === 'skipped') {
+    return `not collected${c.error ? ` (${c.error})` : ''}`;
+  }
+  const counted = c.total !== null ? `${c.loaded} of ${c.total}` : `loaded ${c.loaded} (no total reported)`;
+  return c.status === 'truncated' ? `${counted}, stopped at the page limit` : counted;
+}
+
+/** The score-definition fields coverage reads. */
+export interface ScoreDefinition {
   id: string;
   name: string;
   description?: string;
   createdBy?: string;
+  folderType?: string;
   objectDescriptor?: {
     uri?: string;
     type?: string;
@@ -57,20 +121,44 @@ const CONTENT_ENDPOINTS: Record<ContentType, { path: string; accept: string; acc
 
 const COVERAGE_PAGE_SIZE = 100;
 
-/** Walk one content collection completely, with the endpoint's own Accept headers. */
+/**
+ * Score definitions in the trash still point at live assets; the same filter
+ * listDecisionScenarios uses keeps them out. Live definitions carry no
+ * folderType at all, hence the isNull branch.
+ */
+const NOT_TRASHED_FILTER = "or(isNull(folderType),ne(folderType,'trashFolder'))";
+
+/**
+ * Walk one collection completely, with the endpoint's own Accept headers.
+ * Returns the walker's result so a truncated walk can be reported.
+ */
 function fetchCollection(
   path: string,
   accept: string,
   acceptItem?: string,
-): Promise<Array<Record<string, unknown>>> {
+  params?: Record<string, string>,
+) {
   const headers: Record<string, string> = { Accept: accept };
   if (acceptItem) {
     headers['Accept-Item'] = acceptItem;
   }
-  return fetchAllPaginated<Record<string, unknown>>(path, {
+  return paginateCollection<Record<string, unknown>>(path, {
     headers,
+    params,
     pageSize: COVERAGE_PAGE_SIZE,
   });
+}
+
+/** The HTTP status behind a failed walk, read from the error or its message. */
+function httpStatusOf(err: unknown): number | undefined {
+  const status = (err as { response?: { status?: unknown } })?.response?.status;
+  if (typeof status === 'number') return status;
+  const match = err instanceof Error ? err.message.match(/\b([45]\d\d)\b/) : null;
+  return match ? Number(match[1]) : undefined;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function mapToContentItem(raw: Record<string, unknown>, contentType: ContentType): ContentItem {
@@ -124,56 +212,48 @@ function extractIdFromUri(uri: string): string | null {
 }
 
 /**
- * Identify which score definitions represent test scenarios.
- * Mirrors the Python script: properties.test == "true" OR name contains "test"/"scenario".
+ * What a score definition counts as for coverage, or null when it is not a
+ * test. Only the properties SAS Intelligent Decisioning writes decide:
+ * properties.test = 'true' marks a test (also set by this app's tests),
+ * inputData.type = 'Scenario' a scenario; the name never counts. Trashed
+ * definitions and publishing validations never count (a validation's
+ * objectDescriptor points at a /modelPublish model, so it would not match an
+ * asset anyway).
  */
-function isTestScoreDefinition(scoreDef: ScoreDefinition): boolean {
+export function classifyScoreDefinition(scoreDef: ScoreDefinition): 'Test' | 'Scenario' | 'Publishing/Validation' | 'Trashed' | null {
+  if (scoreDef.folderType === 'trashFolder') return 'Trashed';
   const props = scoreDef.properties ?? {};
-  if (String(props.test ?? '').toLowerCase() === 'true') return true;
-
-  const name = (scoreDef.name ?? '').toLowerCase();
-  if (/test|scenario/.test(name)) return true;
-
-  return false;
-}
-
-/**
- * Determine the scenario type following the Python script's priority logic.
- */
-function determineScenarioType(scoreDef: ScoreDefinition): string {
-  const name = (scoreDef.name ?? '').toLowerCase();
-  const objType = scoreDef.objectDescriptor?.type ?? '';
-  const inputType = scoreDef.inputData?.type ?? '';
-  const props = scoreDef.properties ?? {};
-
-  // Publishing/Validation (highest priority)
-  if (objType === 'sas.publish.validation' || props.publishDestination ||
-      name.includes('publishing') || (name.includes('publish') && !name.includes('validation'))) {
+  if (scoreDef.objectDescriptor?.type === 'sas.publish.validation' || props.publishDestination) {
     return 'Publishing/Validation';
   }
-  // Explicit Scenario input type
-  if (inputType === 'Scenario') return 'Scenario';
-  // Test property or name
-  if (String(props.test ?? '').toLowerCase() === 'true' || name.includes('test')) return 'Test';
-  // Scenario in name
-  if (name.includes('scenario')) return 'Scenario';
-
-  return 'Other';
+  if (String(props.test ?? '').toLowerCase() === 'true') return 'Test';
+  if (scoreDef.inputData?.type === 'Scenario') return 'Scenario';
+  return null;
 }
 
-function linkTestScenarios(items: ContentItem[], scoreDefinitions: ScoreDefinition[]): void {
+function linkTestScenarios(items: ContentItem[], scoreDefinitions: ScoreDefinition[]): ScoreDefinitionBreakdown {
   // Build a map of content item IDs for quick lookup
   const itemMap = new Map<string, ContentItem>();
   for (const item of items) {
     itemMap.set(item.id, item);
   }
 
-  // Filter to test score definitions, then link to content items
-  const testScoreDefs = scoreDefinitions.filter(isTestScoreDefinition);
-  console.log(`[Coverage] Found ${scoreDefinitions.length} score definitions, ${testScoreDefs.length} are test scenarios`);
+  const breakdown: ScoreDefinitionBreakdown = {
+    examined: 0, tests: 0, scenarios: 0, publishValidations: 0, trashed: 0,
+  };
 
-  let linked = 0;
-  for (const scoreDef of testScoreDefs) {
+  for (const scoreDef of scoreDefinitions) {
+    const kind = classifyScoreDefinition(scoreDef);
+    if (kind === 'Trashed') {
+      breakdown.trashed++;
+      continue;
+    }
+    breakdown.examined++;
+    if (kind === 'Publishing/Validation') breakdown.publishValidations++;
+    if (kind !== 'Test' && kind !== 'Scenario') continue;
+    if (kind === 'Test') breakdown.tests++;
+    else breakdown.scenarios++;
+
     const objectUri = scoreDef.objectDescriptor?.uri;
     if (!objectUri) continue;
 
@@ -187,16 +267,15 @@ function linkTestScenarios(items: ContentItem[], scoreDefinitions: ScoreDefiniti
       item.testScenarios.push({
         scoreDefinitionId: scoreDef.id,
         name: scoreDef.name ?? 'Unnamed',
-        scenarioType: determineScenarioType(scoreDef),
+        scenarioType: kind,
         description: scoreDef.description ?? null,
         createdBy: scoreDef.createdBy ?? '',
         inputDataType: scoreDef.inputData?.type ?? null,
       } satisfies TestScenarioInfo);
-      linked++;
     }
   }
 
-  console.log(`[Coverage] Linked ${linked} test scenarios to content items`);
+  return breakdown;
 }
 
 function calculateStats(items: ContentItem[]): CoverageStats {
@@ -245,7 +324,7 @@ function calculateStats(items: ContentItem[]): CoverageStats {
 
 export async function collectCoverage(
   onProgress: (progress: CollectionProgress) => void,
-): Promise<CoverageResult> {
+): Promise<CoverageRunResult> {
   const contentTypes = Object.keys(CONTENT_ENDPOINTS) as ContentType[];
   const collectionSteps = contentTypes.length + 1; // +1 for score definitions
   const totalSteps = collectionSteps + 1; // +1 for analysis
@@ -266,49 +345,95 @@ export async function collectCoverage(
 
   reportCollecting('Collecting content and score definitions...');
 
-  const collectContentType = async (contentType: ContentType): Promise<ContentItem[]> => {
+  // A failed or truncated walk is recorded, never just logged: the finished
+  // view and the Markdown export both report it (covpub-2).
+  const statusOf = (
+    key: CoverageCollectionKey,
+    label: string,
+    walk: { loaded: number; total: number | null; truncated: boolean },
+  ): CoverageCollectionStatus => ({
+    key,
+    label,
+    status: walk.truncated ? 'truncated' : 'ok',
+    loaded: walk.loaded,
+    total: walk.total,
+  });
+  const skippedStatus = (key: CoverageCollectionKey, label: string, err: unknown): CoverageCollectionStatus => ({
+    key,
+    label,
+    status: 'skipped',
+    loaded: 0,
+    total: null,
+    httpStatus: httpStatusOf(err),
+    error: errorText(err),
+  });
+
+  const collectContentType = async (
+    contentType: ContentType,
+  ): Promise<{ items: ContentItem[]; status: CoverageCollectionStatus }> => {
     const endpoint = CONTENT_ENDPOINTS[contentType];
     try {
-      const rawItems = await fetchCollection(endpoint.path, endpoint.accept);
-      const items = rawItems.map(raw => mapToContentItem(raw, contentType));
+      const walk = await fetchCollection(endpoint.path, endpoint.accept);
+      const items = walk.items.map(raw => mapToContentItem(raw, contentType));
       itemsCollected += items.length;
       completedSteps++;
       reportCollecting(`Collected ${endpoint.label} (${items.length})`);
-      return items;
+      return { items, status: statusOf(contentType, endpoint.label, walk) };
     } catch (err) {
-      // Some endpoints may 404 if the service isn't licensed — skip gracefully
+      // Some endpoints 404 when the service isn't licensed, or 403 for the user.
       console.warn(`Failed to collect ${endpoint.label}:`, err);
       completedSteps++;
       reportCollecting(`Skipped ${endpoint.label}`);
-      return [];
+      return { items: [], status: skippedStatus(contentType, endpoint.label, err) };
     }
   };
 
-  const collectScoreDefinitions = async (): Promise<ScoreDefinition[]> => {
+  const collectScoreDefinitions = async (): Promise<{
+    definitions: ScoreDefinition[];
+    status: CoverageCollectionStatus;
+  }> => {
+    const label = 'Score Definitions (tests)';
+    const walkDefinitions = (params?: Record<string, string>) => fetchCollection(
+      '/scoreDefinitions/definitions',
+      'application/vnd.sas.collection+json, application/json',
+      'application/vnd.sas.score.definition+json', // Accept-Item: get full details with objectDescriptor
+      params,
+    );
     try {
-      const rawScoreDefs = await fetchCollection(
-        '/scoreDefinitions/definitions',
-        'application/vnd.sas.collection+json, application/json',
-        'application/vnd.sas.score.definition+json', // Accept-Item: get full details with objectDescriptor
-      );
+      let walk;
+      try {
+        walk = await walkDefinitions({ filter: NOT_TRASHED_FILTER });
+      } catch (filterErr) {
+        // A service that rejects the filter (the client's error interceptor
+        // drops the 400 status, so this can't test for it) is walked
+        // unfiltered; trashed definitions are then dropped on the client
+        // (classifyScoreDefinition). Access errors would only fail again.
+        const status = httpStatusOf(filterErr);
+        if (status === 401 || status === 403) throw filterErr;
+        walk = await walkDefinitions();
+      }
       completedSteps++;
-      reportCollecting(`Collected Score Definitions (${rawScoreDefs.length})`);
-      return rawScoreDefs as unknown as ScoreDefinition[];
+      reportCollecting(`Collected Score Definitions (${walk.items.length})`);
+      return {
+        definitions: walk.items as unknown as ScoreDefinition[],
+        status: statusOf('scoreDefinition', label, walk),
+      };
     } catch (err) {
       console.warn('Failed to collect score definitions:', err);
       completedSteps++;
       reportCollecting('Skipped Score Definitions');
-      return [];
+      return { definitions: [], status: skippedStatus('scoreDefinition', label, err) };
     }
   };
 
   // Promise.all keeps the input order, so allItems stays grouped by content
   // type exactly as the sequential walk produced it (exports are unchanged).
-  const [contentResults, scoreDefinitions] = await Promise.all([
+  const [contentResults, scoreDefResult] = await Promise.all([
     Promise.all(contentTypes.map(collectContentType)),
     collectScoreDefinitions(),
   ]);
-  const allItems: ContentItem[] = contentResults.flat();
+  const allItems: ContentItem[] = contentResults.flatMap(r => r.items);
+  const collections = [...contentResults.map(r => r.status), scoreDefResult.status];
 
   // Analyze: link test scenarios to content items
   onProgress({
@@ -319,7 +444,7 @@ export async function collectCoverage(
     itemsCollected,
   });
 
-  linkTestScenarios(allItems, scoreDefinitions);
+  const breakdown = linkTestScenarios(allItems, scoreDefResult.definitions);
 
   const stats = calculateStats(allItems);
 
@@ -327,17 +452,20 @@ export async function collectCoverage(
     stats,
     items: allItems,
     collectionDate: new Date().toISOString(),
+    collections,
+    scoreDefinitions: breakdown,
   };
 }
 
 // Export helpers for generating downloadable files
 
-export function generateCoverageCSV(items: ContentItem[]): string {
+/** `testsKnown` false (the tests could not be read) writes "Unknown" instead of "No". */
+export function generateCoverageCSV(items: ContentItem[], testsKnown = true): string {
   const headers = ['Name', 'Type', 'Has Test', 'Test Count', 'Created By', 'Created', 'Modified By', 'Modified', 'ID', 'URI'];
   const rows = items.map(item => [
     `"${(item.name ?? '').replace(/"/g, '""')}"`,
     item.contentType,
-    item.hasTestScenario ? 'Yes' : 'No',
+    !testsKnown ? 'Unknown' : item.hasTestScenario ? 'Yes' : 'No',
     String(item.testScenarioCount),
     item.createdBy,
     item.creationTimestamp,
@@ -350,14 +478,25 @@ export function generateCoverageCSV(items: ContentItem[]): string {
   return [headers.join(','), ...rows].join('\n');
 }
 
-export function generateCoverageMarkdown(result: CoverageResult): string {
+export function generateCoverageMarkdown(result: CoverageRunResult): string {
   const { stats, items } = result;
   const lines: string[] = [];
+  const noTests = testsNotCollected(result);
+  const gaps = collectionGaps(result);
+  const statusByKey = new Map(result.collections.map(c => [c.key, c]));
+  const cell = (s: string) => s.replace(/\|/g, '\\|');
 
   lines.push(`# Test Coverage Report`);
   lines.push('');
   lines.push(`**Generated:** ${new Date(result.collectionDate).toLocaleString()}`);
   lines.push('');
+
+  if (gaps.length > 0) {
+    lines.push(noTests
+      ? '> **Warning:** the score definitions (tests) could not be read, so no coverage figure is reported. See Data Collection.'
+      : '> **Warning:** some collections were not read completely; the figures below cover only what was collected. See Data Collection.');
+    lines.push('');
+  }
 
   // Overall summary
   lines.push('## Overall Summary');
@@ -365,10 +504,30 @@ export function generateCoverageMarkdown(result: CoverageResult): string {
   lines.push(`| Metric | Value |`);
   lines.push(`| --- | --- |`);
   lines.push(`| Total Assets | ${stats.overall.totalItems} |`);
-  lines.push(`| With Tests | ${stats.overall.itemsWithTests} |`);
-  lines.push(`| Without Tests | ${stats.overall.itemsWithoutTests} |`);
-  lines.push(`| **Coverage** | **${stats.overall.coveragePercentage}%** |`);
+  lines.push(`| With Tests | ${noTests ? 'n/a' : stats.overall.itemsWithTests} |`);
+  lines.push(`| Without Tests | ${noTests ? 'n/a' : stats.overall.itemsWithoutTests} |`);
+  lines.push(`| **Coverage** | **${noTests ? 'n/a' : `${stats.overall.coveragePercentage}%`}** |`);
   lines.push('');
+
+  // What was read, and what counted as a test
+  lines.push('## Data Collection');
+  lines.push('');
+  lines.push('| Collection | Status | Items |');
+  lines.push('| --- | --- | --- |');
+  for (const c of result.collections) {
+    const status = c.status === 'ok' ? 'Complete' : c.status === 'truncated' ? 'Truncated' : 'Not collected';
+    lines.push(`| ${c.label} | ${status} | ${cell(describeCollectionStatus(c))} |`);
+  }
+  lines.push('');
+  if (!noTests) {
+    const sd = result.scoreDefinitions;
+    lines.push(
+      `Counted as coverage: ${sd.tests} test${sd.tests === 1 ? '' : 's'} and ${sd.scenarios} scenario${sd.scenarios === 1 ? '' : 's'} ` +
+      `of ${sd.examined} score definitions. Trashed definitions` +
+      `${sd.trashed > 0 ? ` (${sd.trashed})` : ''} and publishing validations (${sd.publishValidations}) are not counted.`,
+    );
+    lines.push('');
+  }
 
   // Coverage by type
   lines.push('## Coverage by Type');
@@ -387,8 +546,13 @@ export function generateCoverageMarkdown(result: CoverageResult): string {
 
   for (const [type, label] of Object.entries(typeLabels)) {
     const s = stats.byType[type as ContentType];
-    if (s.total > 0) {
-      lines.push(`| ${label} | ${s.total} | ${s.withTests} | ${s.withoutTests} | ${s.coveragePercentage}% |`);
+    if (statusByKey.get(type as ContentType)?.status === 'skipped') {
+      // A type that could not be read is listed, not silently dropped.
+      lines.push(`| ${label} | not collected | – | – | n/a |`);
+    } else if (s.total > 0) {
+      lines.push(noTests
+        ? `| ${label} | ${s.total} | n/a | n/a | n/a |`
+        : `| ${label} | ${s.total} | ${s.withTests} | ${s.withoutTests} | ${s.coveragePercentage}% |`);
     }
   }
   lines.push('');
@@ -416,7 +580,8 @@ export function generateCoverageMarkdown(result: CoverageResult): string {
   // Items without tests
   const untested = items.filter(i => !i.hasTestScenario);
   if (untested.length > 0) {
-    lines.push('## Assets Without Test Coverage');
+    // Without the tests nothing is known to be untested; list the assets only.
+    lines.push(noTests ? '## Assets (test coverage unknown)' : '## Assets Without Test Coverage');
     lines.push('');
     lines.push('| Name | Type | Created By | Modified |');
     lines.push('| --- | --- | --- | --- |');

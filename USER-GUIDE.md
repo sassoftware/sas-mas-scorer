@@ -76,6 +76,8 @@ The desktop app supports **multiple named connections** (e.g. "Production", "Dev
 - The active connection name and a green status dot are shown in the header.
 - Editing the **Environment Color** of the active connection recolors the header immediately — handy for making sure production and test environments never look alike.
 
+**Later launches:** if the stored session has expired, the app renews it at startup with the saved refresh token — the header shows **Connecting…** meanwhile, and no login window opens. If the server cannot be reached at startup (a network outage, VPN not up yet), the saved session is kept, so you do not have to log in again once the connection is back.
+
 ### Web Server (Browser)
 
 When deployed on a web server on the same origin as SAS Viya, authentication uses browser cookies. Click **Login** in the header. A popup window opens to the SAS Viya login page. Once authenticated, the popup closes and the app loads.
@@ -83,6 +85,8 @@ When deployed on a web server on the same origin as SAS Viya, authentication use
 ### SAS Visual Analytics (Embedded)
 
 When embedded in a SAS Visual Analytics report via a Job Definition, the application inherits the user's existing SAS Viya session. No separate login is needed.
+
+**Downloads inside SAS Visual Analytics:** the report can show the app in a frame that does not allow downloads. Every export in the app (batch results CSV, coverage CSV and Markdown, flow Markdown, path CSV, job log and code, Rules Import files, the Schema → Code `.py`, UI App export) then shows a notice instead of doing nothing: **Download blocked** when the frame is known to block downloads, or **Did the download start?** when the app cannot tell. Click **Copy contents** and paste the text into a file. If the clipboard is blocked as well, the notice shows the text so you can select it and copy it with **Ctrl+C** (**⌘C** on a Mac).
 
 ---
 
@@ -108,8 +112,12 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 
 When you select a module, two additional navigation items appear:
 
-- **Details** — View module metadata, steps, submodules, and source links.
-- **Execute Score** — Open the scoring panel for the currently selected step.
+- **Details** — Opens the module's details page: metadata, steps, submodules, and source links.
+- **Execute Score** — Returns to the scoring panel for the step you last scored in this module. If you have not scored a step of it yet, it opens the module with focus on its **Steps** list so you can pick one.
+
+### Lists Keep Their View
+
+The search, filters, sort order and page of the **All Modules**, **View Flows** and **Segmentation Trees** lists and of the Job Monitoring history, and the search, type and coverage filters of the **Test Coverage** table, are kept in the page link. The browser's **Back** button, a reload and a copied link therefore bring back the same view, and going back to View Flows or Segmentation Trees does not reload the whole list. Choosing the page in the sidebar starts a fresh, unfiltered list. The open tab of a job's detail page is kept the same way (`?tab=…`).
 
 ### Recent Items
 
@@ -117,7 +125,7 @@ The sidebar also shows your most recently accessed **UI Apps** and **Modules** (
 
 ### Collapsing the Sidebar
 
-The **Collapse** control at the bottom of the sidebar folds it to a narrow rail of icons, giving the page the extra width; click it again (**Expand navigation**) to restore the labels. Hover an icon to see its name. The choice is remembered on that computer, so the sidebar opens the way you left it. The recent-items lists are hidden while the sidebar is collapsed.
+The sidebar starts as a narrow rail of icons, giving the page the extra width; hover an icon to see its name. The double-arrow button at the bottom (next to the version number when the sidebar is open) expands it to show the labels and folds it back; hovering or focusing the button shows **Expand** or **Collapse**. Once you have chosen, the choice is remembered on that computer, so the sidebar opens the way you left it. The recent-items lists are hidden while the sidebar is collapsed.
 
 ### Narrow Windows and Embeds
 
@@ -247,8 +255,10 @@ After a successful execution, a results section appears below the input form sho
 
 **Actions on results:**
 
-- **Save as Scenario** — Save the input/output pair as a test scenario in SAS Intelligent Decisioning (Decision modules only).
+- **Save as Scenario** — Save the input/output pair as a test scenario in SAS Intelligent Decisioning (Decision modules only). The scenario stores the inputs that were sent with the run, not whatever the form holds now.
 - **Clear Results** — Dismiss the results section.
+
+**When the inputs change after a run:** the results stay on screen, dimmed, under **Results (previous run)**, with an **Inputs changed since this run** banner and a **Run again** button. **Save as Scenario** is disabled until you run again, so a scenario never pairs inputs with outputs they did not produce. If a re-run fails, the error is shown and the previous successful result stays below it, dimmed and labelled the same way.
 
 ---
 
@@ -264,13 +274,15 @@ Switch to the **Parallel (File Upload)** tab to score many rows at once from a f
 | TSV | `.tsv`, `.tab` | Tab-delimited |
 | JSON / JSONL | `.json`, `.jsonl`, `.ndjson` | Either a single JSON array of objects or one JSON object per line. Headers are inferred from the union of keys in the first 100 records |
 | Excel | `.xlsx` | Workbooks with multiple sheets are supported — a sheet picker appears after upload |
-| Parquet | `.parquet` | Native column types are preserved (numbers stay numbers, dates stay dates) — no string coercion |
+| Parquet | `.parquet` | Native column types are preserved (numbers stay numbers) — no string coercion |
 
 The file format is detected automatically from the extension, and a badge next to the file name confirms which parser was used. Excel and Parquet parsers are loaded on demand the first time you pick one of those formats.
 
+**Dates (Excel and Parquet):** a date is sent to a numeric input as a SAS date value (days since 1 Jan 1960), or as a SAS datetime value (seconds since 1 Jan 1960) when it has a time of day, and to a string input as ISO 8601 text. A note under the mapped input says which conversion is used.
+
 ### Uploading a File
 
-Click the file picker and choose a file in one of the supported formats, or drag and drop onto the upload area. The file is parsed entirely in the browser — nothing is uploaded to a server.
+Click the file picker and choose a file in one of the supported formats, or drag and drop the file onto the upload area. From the keyboard, the file picker is the way in. The file is parsed entirely in the browser — nothing is uploaded to a server.
 
 ### Custom Delimiter (CSV / TSV only)
 
@@ -282,9 +294,17 @@ If the uploaded workbook contains more than one sheet, a **Sheet** dropdown appe
 
 ### Column Mapping
 
-After the file is parsed, a mapping interface shows each module input parameter on the left and a dropdown of column names on the right. The app automatically maps columns by name (case-insensitive, ignoring underscores, spaces, and hyphens). You can adjust any mapping manually.
+After the file is parsed, a mapping interface shows each module input parameter on the left and a source dropdown on the right. The app automatically maps columns by name (case-insensitive, ignoring underscores, spaces, and hyphens); inputs it cannot match are left unset. Each input takes one of:
 
-A badge shows how many parameters are mapped (e.g. "8/8 mapped"). All parameters must be mapped before you can run.
+| Source | What Is Sent |
+|--------|--------------|
+| A **column** | That column's value on each row |
+| **Send as missing (null)** | A missing value on every row — for optional inputs the file does not have |
+| **Constant value…** | The value you type, on every row. It is checked against the input's type; for an array input, separate the values with `;` |
+
+The file therefore does not need a column for every input. A badge summarizes the mapping (e.g. "5 mapped, 2 missing, 1 constant", plus "N not set" while inputs are still open), and **Send N unset inputs as missing** sets every input you have not chosen to missing in one click — quick when a module has dozens of optional inputs. **Run All** waits until every input has a source and every constant is valid; the message next to it says what is left.
+
+**Missing and unreadable values:** empty cells, SAS missing values (`.`, `.A`–`.Z`, `._`) and values that cannot be read as the input's type (`N/A`, `1,5`, `12abc` for a number) are all sent as missing (null), never as 0. Unreadable values are flagged before you run: a **Check:** note under the mapped input says how many there are, with examples and the first row — e.g. *2 values in column clage can't be read as decimal (e.g. "N/A", "12abc"; first in row 3). They are sent as missing (null), not 0.* Fix the file, or map another column, if those rows should not be scored that way.
 
 **Datagrid inputs:** a flat file cannot nest a table inside a cell, so a column mapped to a datagrid parameter should contain the serialized datagrid JSON (e.g. `[{"metadata":[{"col":"string"}]},{"data":[["a"]]}]`) in each cell. The app parses it into the native structure MAS expects before scoring — this applies to CAS table batches as well.
 
@@ -351,7 +371,17 @@ Switch to the **Parallel (CAS Table)** tab to score rows directly from a CAS tab
 
 ### Column Mapping
 
-Once you select a table, the app loads its column metadata and shows the mapping interface — the same as the file upload mode. Columns are auto-matched by name. Adjust any mapping manually using the dropdowns.
+Once you select a table, the app loads its column metadata and shows the mapping interface — the same as the file upload mode: each input takes a column (listed with its CAS type), **Send as missing (null)** or a **constant**, the badge summarizes the choices, **Send N unset inputs as missing** fills the rest, and **Run All** waits until every input has a source. Columns are auto-matched by name.
+
+The notes under each input are based on the table's metadata and the preview rows:
+
+- A character column mapped to a numeric input is flagged — values that are not numbers are sent as missing (null).
+- A numeric column mapped to a string input is noted — its values are sent as text, and SAS missing values as null.
+- Values in the preview rows that cannot be read are listed, prefixed *Preview rows:*.
+
+CAS returns every missing numeric as `.`; these, and the special missing values `.A`–`.Z` and `._`, are sent as missing (null), not 0.
+
+**Before scoring:** the full table is only read when you click **Run All**, and the same check then runs on every fetched row. If any values cannot be read, nothing is scored yet: a warning lists, per input, how many values are affected, with examples and the first row, and offers **Score N rows anyway** (those values are sent as missing) or **Cancel**.
 
 ### Data Preview
 
@@ -366,7 +396,7 @@ Switching table or caslib while data is still loading discards the earlier load 
 
 ### Save as Test
 
-For Decision modules, a **Save as Test** button appears next to **Run All**. This lets you save the CAS table and column mapping configuration as a Test (score definition) back to SAS Intelligent Decisioning — without needing to run the batch first. See [Scenarios and Tests](#9-scenarios-and-tests) for details.
+For Decision modules, a **Save as Test** button appears next to **Run All**. This lets you save the CAS table and column mapping configuration as a Test (score definition) back to SAS Intelligent Decisioning — without needing to run the batch first. Inputs set to **Send as missing** are saved without a mapping, which is how a test leaves them missing. A setup with a **constant** cannot be saved as a test (SAS Intelligent Decisioning has no constant mapping for table tests): the button stays disabled and a note explains why — constants apply to runs in this app only. See [Scenarios and Tests](#9-scenarios-and-tests) for details.
 
 ### Running and Results
 
@@ -413,7 +443,7 @@ A **Test** captures a CAS table reference and column-to-variable mappings. Inste
 
 **Saving a test (from Parallel CAS Table):**
 
-1. In the CAS Table tab, select a table and map all columns.
+1. In the CAS Table tab, select a table and give every input a column or **Send as missing** (constants cannot be saved in a test).
 2. Click **Save as Test** (you do not need to run the batch first).
 3. Fill in the dialog:
    - **Input Table** — Shown read-only, confirming the server, caslib, and table name.
@@ -421,7 +451,7 @@ A **Test** captures a CAS table reference and column-to-variable mappings. Inste
    - **Description** — Optional description.
    - **SAS Content Folder** — Browse and select a folder (click "Select current folder" to confirm).
    - **CAS Output Library** — Choose where the output table will be written.
-   - **Column Mappings** — A read-only summary showing each variable mapped to its CAS column.
+   - **Column Mappings** — A read-only summary showing each variable mapped to its CAS column, or *(missing)* for inputs sent as missing.
 4. Click **Save Test**.
 
 Both Scenarios and Tests appear in SAS Intelligent Decisioning under the decision's test section, where they can be executed and validated.
@@ -560,7 +590,7 @@ From the **UI Apps** list, click **Run** on any app. The runner displays the for
 
 - **Standalone** — Switch to standalone mode (see below).
 - **Edit** — Open the builder to modify the app.
-- **Save to My UI Apps** — Appears instead of **Edit** when the app was opened from a shared link. Saves the embedded definition into your own library (with a new ID) so you can keep and edit it.
+- **Save to My UI Apps** — Appears instead of **Edit** when the app was opened from a shared link, whichever output layout the app uses. Saves the embedded definition into your own library (with a new ID) so you can keep and edit it. Opening the builder for an app that is not in your library shows **This UI App is not in your library**, explaining that you open the shared link, choose **Save to My UI Apps**, then edit your copy.
 - **Back** — Return to the UI Apps list.
 
 ### Sharing & Standalone Mode
@@ -749,7 +779,11 @@ The page finds them when the tree loads. A banner says how many there are, with 
 
 The folder and caslib you pick are remembered for next time.
 
-**3. Result.** For a test run, the dialog reports how many rows passed and failed. **Show results on the tree** overlays them on the page: branches show passed and failed counts for everything below them, the outcome index can filter to outcomes with failures, a banner offers **Next failed path**, and the path panel of a failed path lists each output with its expected and actual value.
+**3. Result.** For a test run, the dialog reports how many rows passed and failed, and the results are applied on the tree as soon as the comparison finishes — however you close the dialog (**Close and view on the tree**, **Close and show failed paths**, **Escape**). On the page, branches show passed and failed counts for everything below them, the outcome index can filter to outcomes with failures, a banner offers **Next failed path**, and the path panel of a failed path lists each output with its expected and actual value.
+
+The last test results are kept for the browser session for that revision of the tree, so they are still there after you leave the page and come back; a new revision of the tree starts without them. Dismissing the results banner hides them, and **Show last test results** in the header brings them back.
+
+**When a run fails.** SAS Intelligent Decisioning records no error message for these runs, so the dialog reads the run's SAS log and shows its **ERROR** lines (or, when there are none, its warnings or last lines). Below them are the **Full log**, **Download the log**, **Open the log in SAS Viya** and a link that opens the tree's tests in SAS Intelligent Decisioning.
 
 ---
 
@@ -760,7 +794,7 @@ The **Test Coverage** page helps you understand which of your SAS Intelligent De
 ### Running an Analysis
 
 1. Navigate to **Test Coverage** in the sidebar.
-2. Click **Start Analysis** (or **Run Analysis** if you have previous results).
+2. Click **Start Analysis** (or **Re-run Analysis** if you have previous results).
 3. The app collects all assets from your environment:
    - Decisions
    - Business Rules
@@ -770,7 +804,13 @@ The **Test Coverage** page helps you understand which of your SAS Intelligent De
 4. It then cross-references these against Score Definitions to determine which assets have test scenarios.
 5. A progress indicator shows the current phase and item count.
 
+**What counts as a test:** a score definition counts when SAS Intelligent Decisioning marks it as a test (the `test` property) or a scenario (`inputData.type = Scenario`); its name does not count. Score definitions in the trash do not count, and publishing validations are never counted. The **Data collection** section (below) states how many tests and scenarios were counted, out of how many score definitions.
+
 ### Reading the Results
+
+**Gaps in the collection:** if a collection could not be read (HTTP 403, 404 or another error) or stopped at the page limit, a warning above the results lists it — the figures then cover only what was collected. A type that could not be read stays in the bar chart as *not collected*, with *n/a* and no bar, and is left out of the totals. If the score definitions themselves could not be read, coverage is unknown: the gauge, the **With Tests** / **Without Tests** cards and every type show *n/a* instead of a misleading 0%, while the asset counts are still listed.
+
+**Data collection:** the expandable **Data collection** section under the bar chart (*complete*, or *N incomplete*) lists every collection with its status — **Complete**, **Truncated** or **Not collected** — and how many items were read: *330 of 330*, or *loaded N (no total reported)* where the service does not report a total, as for score definitions. Its last line is the count of tests and scenarios used for coverage.
 
 **Summary Dashboard:**
 
@@ -799,7 +839,7 @@ Each asset row has a link icon that opens the asset in SAS Intelligent Decisioni
 ### Exporting
 
 - **Export CSV** — Downloads a `test-coverage.csv` file with all assets and their coverage status.
-- **Export Markdown** — Downloads a formatted `test-coverage-report.md` with the full analysis.
+- **Export Markdown** — Downloads a formatted `test-coverage-report.md` with the full analysis, including a **Data Collection** section (what was read and what was counted as a test) and a warning at the top when the collection was incomplete.
 
 ---
 
@@ -882,6 +922,8 @@ Selecting a job opens its detail page at `/jobs/<id>`. The header shows:
 - A **← Back to Job Monitoring** link.
 - A **Refresh** button that re-fetches the job record and log/listing for this one job.
 - A red **Cancel Job** or **Delete Job** button (see *Cancelling or Deleting a Job* below).
+
+The open tab is part of the link (`?tab=code`, for example), so a reload, **Back** or a shared link shows the same tab.
 
 #### Cancelling or Deleting a Job
 
@@ -988,11 +1030,24 @@ The detected variables are listed in a table:
 | **SAS ID Type** | Inferred data type (Character, Integer, Decimal, Boolean, Date, Datetime) — change it with the dropdown |
 | **Sample Value** | The value pulled from your sample |
 
+A JSON number written with a decimal point (`100.00`) is inferred as **Decimal**, not Integer, so a later value such as `99.5` is not truncated.
+
 Repeating elements (JSON arrays / repeated XML elements) become a **DataGrid** variable, with their child fields captured as grid columns. Use the **×** button to remove any variable you do not need. When the mapping looks right, click **Generate Python code**.
+
+**Names that would break the code are blocked.** Each name is checked as you type, and problems are shown in place:
+
+- **Errors** — a Python keyword (`class`, `return`, …), a duplicate (names are case-insensitive), a name the generated code itself uses (`parse_success`, `parse_status`), a name starting with `_sb_` (reserved for the generated code), or the same name as the input variable.
+- **Warnings** — a DS2 reserved word; it is allowed, but SAS Intelligent Decisioning may reject it.
+
+The **Input variable name** from step 1 is checked the same way. While any error remains, **Generate Python code** and **Save to SAS Viya** are disabled and a line next to them says why (e.g. *Fix 2 invalid variable names in step 2 first.*).
 
 ### Step 3 — Python Output
 
-The generated `execute()` function is shown with syntax highlighting. The function initializes all output variables, guards against empty input, parses the string, and extracts each value with type casting and error handling (returning `parse_success` and `parse_status` alongside your variables). From here you can:
+The generated `execute()` function is shown with syntax highlighting. The function initializes all output variables, guards against empty input, parses the string, and extracts each value with type casting and error handling (returning `parse_success` and `parse_status` alongside your variables). The code is regenerated from the current mapping after every edit, so the code, its signature and the `execute()` parameter always match what is saved.
+
+For JSON, a field that is absent from the payload defaults on its own and does not void the other variables: `parse_success` stays `1` and `parse_status` lists the missing paths (`OK; absent: customer.phone, …`).
+
+From here you can:
 
 - **Copy to clipboard**
 - **Download .py**
@@ -1067,6 +1122,8 @@ Edits that change rule set names or folder paths mark the checks as stale — re
 - The scope line shows what will be sent: all rule sets, or only the previously rejected ones on a retry.
 - **Import…** opens a confirmation dialog listing every rule set with a CREATE / UPDATE badge. If any rule sets will be updated, you must tick an acknowledgment checkbox first — an update replaces the rule set content with a new unlocked revision.
 - After the import, the results appear below: **imported** rule sets (green), **rejected** rule sets (red, with the server's reasons), and any global issues. Rejected rows are also tinted in the Review & Fix grid with the reasons attached to them.
+- Each imported rule set shows its new **revision**, an **Open in SAS Intelligent Decisioning** link and **Show rules**, which displays the rule chain as it now stands on the server. The rule set is looked up by name and folder; if it cannot be found, the line says so.
+- The server checks are refreshed automatically after an import, so the CREATE / UPDATE labels and the update acknowledgment are correct if you import the same file again.
 - **Import again — rejected only** re-sends just the rejected rule sets after you fix them — rule sets that already imported are never sent twice (every import creates a new revision).
 - **Download rejected rows (CSV)** and **Download server response** are available for offline analysis.
 
@@ -1087,7 +1144,7 @@ The application meets **WCAG 2.1 AA**: every control can be reached and operated
 - With the operating system's **reduce motion** setting on, nothing in the app animates or spins.
 - **Shift+Click** on batch result checkboxes to select a range of rows.
 - The scoring panel **remembers your last-used folder and CAS library** when saving scenarios and tests, so you do not need to re-select them each time.
-- Switching between Single Execution, Parallel (File Upload), and Parallel (CAS Table) modes **clears previous results** to avoid confusion.
+- Switching between Single Execution, Parallel (File Upload), and Parallel (CAS Table) modes **keeps your work**: each mode keeps its uploaded file, delimiter, sheet, column mapping, selected CAS table and results, and the single-run result stays too. Clicking the tab you are already on does nothing.
 - In the folder browser dialogs, you must click the **"Select current folder"** link at the bottom to confirm your folder choice. Simply navigating into a folder does not select it.
 
 ---

@@ -33,8 +33,8 @@ export function inferType(value: string | null | undefined): SasDataType {
   // Integer
   if ((/^-?\d+$/.test(v) && !v.startsWith('0')) || v === '0') return 'Integer';
 
-  // Decimal
-  if (/^-?\d+\.\d+$/.test(v)) return 'Decimal';
+  // Decimal (a fraction and/or an exponent, e.g. 100.00, 1.5e-3, 2E10)
+  if (/^-?\d+\.\d+$/.test(v) || /^-?\d+(\.\d+)?[eE][+-]?\d+$/.test(v)) return 'Decimal';
 
   return 'Character';
 }
@@ -113,6 +113,42 @@ interface FlatField {
   arrayItems?: Record<string, string>[];
 }
 
+// JSON.parse turns the token `100.00` into the number 100, so String() gives
+// "100" and the field would be inferred as Integer (and a later 99.5 silently
+// truncated by int()). Number tokens are therefore swapped for marked strings
+// that keep their source text before parsing, and unwrapped while flattening.
+const RAW_NUMBER_MARK = '\u0000num:';
+
+function markRawNumbers(input: string): string {
+  let out = '';
+  let i = 0;
+  while (i < input.length) {
+    const ch = input[i];
+    if (ch === '"') {
+      // Copy a whole string literal, honouring backslash escapes.
+      let j = i + 1;
+      while (j < input.length && input[j] !== '"') j += input[j] === '\\' ? 2 : 1;
+      out += input.slice(i, j + 1);
+      i = j + 1;
+    } else if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      let j = i + 1;
+      while (j < input.length && /[0-9eE.+-]/.test(input[j])) j++;
+      out += JSON.stringify(RAW_NUMBER_MARK + input.slice(i, j));
+      i = j;
+    } else {
+      out += ch;
+      i++;
+    }
+  }
+  return out;
+}
+
+/** The display/inference text of a parsed JSON value (raw text for numbers). */
+function jsonValueText(v: unknown): string {
+  if (typeof v === 'string' && v.startsWith(RAW_NUMBER_MARK)) return v.slice(RAW_NUMBER_MARK.length);
+  return String(v ?? '');
+}
+
 function flattenJson(obj: unknown, path: string[] = []): FlatField[] {
   const fields: FlatField[] = [];
 
@@ -122,7 +158,7 @@ function flattenJson(obj: unknown, path: string[] = []): FlatField[] {
       const items = obj.map(item => {
         const flat: Record<string, string> = {};
         for (const [k, v] of Object.entries(item as Record<string, unknown>)) {
-          flat[k] = String(v ?? '');
+          flat[k] = jsonValueText(v);
         }
         return flat;
       });
@@ -138,12 +174,15 @@ function flattenJson(obj: unknown, path: string[] = []): FlatField[] {
     return fields;
   }
 
-  fields.push({ path, value: String(obj ?? ''), isArray: false });
+  fields.push({ path, value: jsonValueText(obj), isArray: false });
   return fields;
 }
 
 export function parseJson(input: string): VariableMapping[] {
-  const parsed = JSON.parse(input);
+  // Validate the payload as written first, so a malformed sample reports the
+  // native JSON error rather than one about the marked copy.
+  JSON.parse(input);
+  const parsed = JSON.parse(markRawNumbers(input));
   const fields = flattenJson(parsed);
 
   const mappings: VariableMapping[] = fields.map(f => {

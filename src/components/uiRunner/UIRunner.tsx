@@ -136,6 +136,46 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
   // Unified layout for inline/below modes
   const unifiedLayout = definition.layout;
 
+  // One header for every output layout, so a shared link offers "Save to My
+  // UI Apps" whichever layout the app uses. A shared app is not in the
+  // recipient's library, so Edit would open an empty builder; saving a copy
+  // (under a fresh id) is the way to edit it.
+  const renderHeader = (leadingBadges?: React.ReactNode) => (
+    <>
+      {standalone && (
+        <div className="ui-runner__standalone-bar">
+          <span className="ui-runner__standalone-title">{title}</span>
+          <Button variant="tertiary" size="small" onClick={handleExitStandalone}>
+            Exit Standalone
+          </Button>
+        </div>
+      )}
+      {!standalone && (
+        <PageHeader
+          title={title}
+          subtitle={definition.description}
+          breadcrumbs={[
+            { label: 'UI Apps', onClick: onBack },
+            { label: definition.name },
+          ]}
+          actions={
+            <div className="ui-runner__header-actions">
+              {leadingBadges}
+              <Badge variant="info">{module?.name ?? definition.moduleId}</Badge>
+              <Button variant="tertiary" onClick={handleOpenStandalone}>Standalone</Button>
+              {shareToken ? (
+                onSaveCopy && <Button variant="secondary" onClick={onSaveCopy}>Save to My UI Apps</Button>
+              ) : (
+                <Button variant="secondary" onClick={onEdit}>Edit</Button>
+              )}
+              <Button variant="tertiary" onClick={onBack}>Back</Button>
+            </div>
+          }
+        />
+      )}
+    </>
+  );
+
   if (outputLayout === 'side-by-side') {
     // Separate input and output sections for side-by-side layout
     const hasInputFields = definition.layout.sections.some(s =>
@@ -165,38 +205,10 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
 
     return (
       <div className="ui-runner">
-        {standalone && (
-          <div className="ui-runner__standalone-bar">
-            <span className="ui-runner__standalone-title">{title}</span>
-            <Button variant="tertiary" size="small" onClick={handleExitStandalone}>
-              Exit Standalone
-            </Button>
-          </div>
-        )}
-        {!standalone && (
-          <PageHeader
-            title={title}
-            subtitle={definition.description}
-            breadcrumbs={[
-              { label: 'UI Apps', onClick: onBack },
-              { label: definition.name },
-            ]}
-            actions={
-              <div className="ui-runner__header-actions">
-                {definition.settings.showExecutionTime && executionTime && (
-                  <Badge variant="default">{executionTime.toFixed(0)}ms</Badge>
-                )}
-                <Badge variant="info">{module?.name ?? definition.moduleId}</Badge>
-                <Button variant="tertiary" onClick={handleOpenStandalone}>Standalone</Button>
-                {shareToken ? (
-                  onSaveCopy && <Button variant="secondary" onClick={onSaveCopy}>Save to My UI Apps</Button>
-                ) : (
-                  <Button variant="secondary" onClick={onEdit}>Edit</Button>
-                )}
-                <Button variant="tertiary" onClick={onBack}>Back</Button>
-              </div>
-            }
-          />
+        {renderHeader(
+          definition.settings.showExecutionTime && executionTime && (
+            <Badge variant="default">{executionTime.toFixed(0)}ms</Badge>
+          )
         )}
 
         <div className="ui-runner__content ui-runner__content--side-by-side">
@@ -254,32 +266,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({ definition, onBack, onEdit, 
   // Inline or below: single unified card
   return (
     <div className="ui-runner">
-      {standalone && (
-        <div className="ui-runner__standalone-bar">
-          <span className="ui-runner__standalone-title">{title}</span>
-          <Button variant="tertiary" size="small" onClick={handleExitStandalone}>
-            Exit Standalone
-          </Button>
-        </div>
-      )}
-      {!standalone && (
-        <PageHeader
-          title={title}
-          subtitle={definition.description}
-          breadcrumbs={[
-            { label: 'UI Apps', onClick: onBack },
-            { label: definition.name },
-          ]}
-          actions={
-            <div className="ui-runner__header-actions">
-              <Badge variant="info">{module?.name ?? definition.moduleId}</Badge>
-              <Button variant="tertiary" onClick={handleOpenStandalone}>Standalone</Button>
-              <Button variant="secondary" onClick={onEdit}>Edit</Button>
-              <Button variant="tertiary" onClick={onBack}>Back</Button>
-            </div>
-          }
-        />
-      )}
+      {renderHeader()}
 
       <Card>
         <CardHeader

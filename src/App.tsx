@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Module, Step } from './types';
+import { Module, ModuleType, Step } from './types';
 import { UIDefinition, UIDefinitionSummary } from './types/uiBuilder';
 import { Layout, ViewType } from './components/layout';
 import { ModuleList } from './components/modules/ModuleList';
@@ -17,6 +17,8 @@ import { PublishingOverview } from './components/publishing';
 import { RulesImportPage } from './components/rulesImport/RulesImportPage';
 import { Loading } from './components/common/Loading';
 import { Modal } from './components/common/Modal';
+import { Button } from './components/common/Button';
+import { EmptyState } from './components/common/EmptyState';
 import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
@@ -27,8 +29,10 @@ import { initViyaUrl } from './config';
 import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import { applyEnvironmentColor } from './utils/envColor';
 import { clearAllViewCaches } from './utils/viewCaches';
+import { buildListSearch, parsePageParam, readListParams, RESET_LIST_STATE } from './utils/listUrlState';
 import { clearCasCatalog } from './hooks/useCasCatalog';
 import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
+import { DownloadFallback } from './components/common/DownloadFallback';
 import './styles/index.css';
 
 // The views that carry the heavy vendor code (@xyflow/react + dagre for the
@@ -50,6 +54,46 @@ const SchemaBuilder = lazy(() =>
 );
 
 const isElectron = !!window.electronAPI;
+
+// The module list's query lives in the URL (#/?q=credit&type=Decision&
+// sort=name:ascending&page=2), so Back, a reload or a shared link shows the
+// same list. `page` is 1-based.
+const MODULE_LIST_DEFAULTS = { q: '', type: 'All', sort: '', page: '1' };
+type ModuleListParams = typeof MODULE_LIST_DEFAULTS;
+
+const MODULE_TYPE_FILTERS: readonly (ModuleType | 'All')[] = ['All', 'Model', 'Decision', 'Data'];
+const toModuleTypeFilter = (value: string): ModuleType | 'All' =>
+  MODULE_TYPE_FILTERS.find((type) => type === value) ?? 'All';
+
+const readModuleListSearch = (search: string): ModuleListParams =>
+  readListParams(new URLSearchParams(search), MODULE_LIST_DEFAULTS);
+
+// The page's own <title> (index.html / index-jobdef.html), suffixed to each
+// view's title.
+// The <title> of index.html and index-jobdef.html. A constant, not read from
+// document.title, which by then may already carry a view label (after a
+// hot reload in development).
+const BASE_DOCUMENT_TITLE = 'MAS Module Scorer - SAS';
+
+const VIEW_TITLES: Record<ViewType, string> = {
+  modules: 'Modules',
+  'module-details': 'Module',
+  score: 'Score',
+  'ui-apps': 'UI Apps',
+  'ui-app-run': 'UI App',
+  'ui-app-edit': 'Edit UI App',
+  'ui-app-new': 'New UI App',
+  flows: 'Decision Flows',
+  'flow-detail': 'Decision Flow',
+  segtrees: 'Segmentation Trees',
+  'segtree-detail': 'Segmentation Tree',
+  coverage: 'Test Coverage',
+  'publishing-overview': 'Publishing Overview',
+  'job-monitoring': 'Job Monitoring',
+  'job-detail': 'Job',
+  'schema-builder': 'Schema → Code',
+  'rules-import': 'Rules Import',
+};
 
 function App() {
   const { isAuthenticated, checkAuth } = useSasAuth();
@@ -139,6 +183,38 @@ function App() {
 
   const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isSegTreesListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, flowDetailId, jobDetailId, segTreeId, isStandalone, uiAppDef } = getRouteParams();
 
+  // Determine active view from current route
+  const getActiveView = (): ViewType => {
+    if (jobDetailId) return 'job-detail';
+    if (isJobMonitoringView) return 'job-monitoring';
+    if (isSchemaBuilderView) return 'schema-builder';
+    if (isRulesImportView) return 'rules-import';
+    if (flowDetailId) return 'flow-detail';
+    if (isFlowsListView) return 'flows';
+    if (segTreeId) return 'segtree-detail';
+    if (isSegTreesListView) return 'segtrees';
+    if (isCoverageView) return 'coverage';
+    if (isPublishingView) return 'publishing-overview';
+    if (isUIAppsListView) return 'ui-apps';
+    if (uiAppNewModuleId) return 'ui-app-new';
+    if (uiAppEditId) return 'ui-app-edit';
+    if (uiAppId) return 'ui-app-run';
+    if (stepId) return 'score';
+    if (moduleId) return 'module-details';
+    return 'modules';
+  };
+
+  // The module list's query: read from the URL while the list is shown, and
+  // kept while another view is open, so the loaded page survives a visit to a
+  // module and the breadcrumb or Back button can return to the same list.
+  const moduleListSearchRef = useRef('');
+  if (getActiveView() === 'modules') {
+    moduleListSearchRef.current = buildListSearch(readModuleListSearch(location.search), MODULE_LIST_DEFAULTS);
+  }
+  const moduleListParams = readModuleListSearch(moduleListSearchRef.current);
+  const moduleSearchTerm = moduleListParams.q;
+  const escapedModuleSearch = moduleSearchTerm.trim().replace(/'/g, "''");
+
   // Data hooks - only fetch when authenticated
   const {
     loading: loadingModules,
@@ -147,21 +223,33 @@ function App() {
     totalCount,
     currentPage,
     pageSize,
-    setPage,
-    setFilter,
-    setSortBy,
-    setTypeFilter,
-    reset: resetModules,
     sortBy,
     typeFilter,
     filteredCount,
     displayModules,
-  } = useModules({ enabled: isAuthenticated });
+  } = useModules({
+    enabled: isAuthenticated,
+    filter: escapedModuleSearch ? `contains(name,'${escapedModuleSearch}')` : '',
+    sortBy: moduleListParams.sort,
+    typeFilter: toModuleTypeFilter(moduleListParams.type),
+    page: parsePageParam(moduleListParams.page) - 1,
+  });
+
+  // Write a change to the module list's query. Replaces the history entry, so
+  // Back leaves the list instead of stepping through its filters.
+  const updateModuleList = useCallback((patch: Partial<ModuleListParams>) => {
+    const next = buildListSearch(
+      { ...readModuleListSearch(moduleListSearchRef.current), ...patch },
+      MODULE_LIST_DEFAULTS
+    );
+    moduleListSearchRef.current = next;
+    navigate({ pathname: '/', search: next }, { replace: true });
+  }, [navigate]);
 
   // Keyed on the URL, not the fetched module, so a deep link or refresh starts
   // the steps/submodules requests alongside getModule instead of after it.
   const routedModuleId = isAuthenticated ? moduleId : null;
-  const { steps, loading: loadingSteps } = useSteps(routedModuleId);
+  const { steps, loading: loadingSteps, loadedModuleId: stepsModuleId } = useSteps(routedModuleId);
   const { submodules, loading: loadingSubmodules } = useSubmodules(routedModuleId);
 
   // Load recent UI apps
@@ -213,8 +301,11 @@ function App() {
   // Load UI definition from URL when needed.
   // A `def` token in the URL carries the full definition, so it takes priority
   // over localStorage — this is what makes shared links work for any recipient.
+  // Only the runner honours it: the builder saves under the definition's id,
+  // and a shared definition must never be saved under the sender's id (Save to
+  // My UI Apps imports it under a fresh one instead).
   useEffect(() => {
-    if (uiAppDef) {
+    if (uiAppDef && uiAppId) {
       setActiveUIDefinition(decodeUIDefinition(uiAppDef));
       setUILoading(false);
       return;
@@ -245,33 +336,24 @@ function App() {
     }
   }, [stepId, steps, selectedStep]);
 
-  // Determine active view from current route
-  const getActiveView = (): ViewType => {
-    if (jobDetailId) return 'job-detail';
-    if (isJobMonitoringView) return 'job-monitoring';
-    if (isSchemaBuilderView) return 'schema-builder';
-    if (isRulesImportView) return 'rules-import';
-    if (flowDetailId) return 'flow-detail';
-    if (isFlowsListView) return 'flows';
-    if (segTreeId) return 'segtree-detail';
-    if (isSegTreesListView) return 'segtrees';
-    if (isCoverageView) return 'coverage';
-    if (isPublishingView) return 'publishing-overview';
-    if (isUIAppsListView) return 'ui-apps';
-    if (uiAppNewModuleId) return 'ui-app-new';
-    if (uiAppEditId) return 'ui-app-edit';
-    if (uiAppId) return 'ui-app-run';
-    if (stepId) return 'score';
-    if (moduleId) return 'module-details';
-    return 'modules';
-  };
+  // The step last opened for scoring, per module, for this session. The
+  // sidebar's Execute Score goes back to it from the module details, a flow
+  // or the UI builder. Recorded only once the URL's step has resolved, so a
+  // step id that does not exist is never remembered.
+  const lastStepIdsRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (moduleId && stepId && selectedStep?.id === stepId) {
+      lastStepIdsRef.current.set(moduleId, stepId);
+    }
+  }, [moduleId, stepId, selectedStep]);
 
   // Navigation handlers
   const handleNavigate = useCallback((view: ViewType) => {
     if (view === 'modules') {
+      // The sidebar entry is the one way to a fresh list: the bare route
+      // carries no query, so search, filters, sort and page start over.
       setSelectedModule(null);
       setSelectedStep(null);
-      resetModules();
       navigate('/');
     } else if (view === 'ui-apps') {
       setSelectedModule(null);
@@ -280,15 +362,15 @@ function App() {
     } else if (view === 'flows') {
       setSelectedModule(null);
       setSelectedStep(null);
-      navigate('/flows');
+      navigate('/flows', { state: RESET_LIST_STATE });
     } else if (view === 'segtrees') {
       setSelectedModule(null);
       setSelectedStep(null);
-      navigate('/segmentation-trees');
+      navigate('/segmentation-trees', { state: RESET_LIST_STATE });
     } else if (view === 'coverage') {
       setSelectedModule(null);
       setSelectedStep(null);
-      navigate('/coverage');
+      navigate('/coverage', { state: RESET_LIST_STATE });
     } else if (view === 'publishing-overview') {
       setSelectedModule(null);
       setSelectedStep(null);
@@ -296,7 +378,7 @@ function App() {
     } else if (view === 'job-monitoring') {
       setSelectedModule(null);
       setSelectedStep(null);
-      navigate('/jobs');
+      navigate('/jobs', { state: RESET_LIST_STATE });
     } else if (view === 'schema-builder') {
       setSelectedModule(null);
       setSelectedStep(null);
@@ -305,8 +387,25 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/rules-import');
+    } else if (view === 'module-details' || view === 'score') {
+      // The sidebar's Current Module section: Details opens the module,
+      // Execute Score the step last scored in it. With no step yet, Execute
+      // Score opens the module with focus on its Steps card to pick one.
+      const current = selectedModuleRef.current;
+      if (!current) return;
+      const modulePath = `/modules/${encodeURIComponent(current.id)}`;
+      const scoreStepId = view === 'score' ? lastStepIdsRef.current.get(current.id) : undefined;
+      if (scoreStepId) {
+        const stepPath = `${modulePath}/steps/${encodeURIComponent(scoreStepId)}`;
+        navigate(stepPath, { replace: location.pathname === stepPath });
+      } else {
+        navigate(modulePath, {
+          replace: location.pathname === modulePath,
+          state: view === 'score' ? { focusSteps: true } : undefined,
+        });
+      }
     }
-  }, [resetModules, navigate]);
+  }, [navigate, location.pathname]);
 
   const handleOpenJob = useCallback((id: string) => {
     navigate(`/jobs/${encodeURIComponent(id)}`);
@@ -333,12 +432,12 @@ function App() {
     }
   }, [selectedModule, navigate]);
 
+  // Breadcrumb and Back button: return to the list as it was left.
   const handleBackToModules = useCallback(() => {
     setSelectedModule(null);
     setSelectedStep(null);
-    resetModules();
-    navigate('/');
-  }, [resetModules, navigate]);
+    navigate({ pathname: '/', search: moduleListSearchRef.current });
+  }, [navigate]);
 
   const handleBackToModuleDetails = useCallback(() => {
     setSelectedStep(null);
@@ -353,23 +452,40 @@ function App() {
     setSelectedStep(null);
     setRecentModules((prev) => prev.filter((m) => m.id !== moduleIdToDelete));
     refreshModules();
-    navigate('/');
+    navigate({ pathname: '/', search: moduleListSearchRef.current });
   }, [refreshModules, navigate]);
 
+  // A new search, sort or type filter starts from the first page.
   const handleSearch = useCallback((searchTerm: string) => {
-    setPage(0);
-    if (searchTerm.trim()) {
-      const escaped = searchTerm.trim().replace(/'/g, "''");
-      setFilter(`contains(name,'${escaped}')`);
-    } else {
-      setFilter('');
-    }
-  }, [setFilter, setPage]);
+    updateModuleList({ q: searchTerm, page: MODULE_LIST_DEFAULTS.page });
+  }, [updateModuleList]);
 
   const handleSort = useCallback((field: string, direction: 'asc' | 'desc') => {
-    setPage(0);
-    setSortBy(`${field}:${direction === 'asc' ? 'ascending' : 'descending'}`);
-  }, [setSortBy, setPage]);
+    updateModuleList({
+      sort: `${field}:${direction === 'asc' ? 'ascending' : 'descending'}`,
+      page: MODULE_LIST_DEFAULTS.page,
+    });
+  }, [updateModuleList]);
+
+  const handleTypeFilter = useCallback((type: ModuleType | 'All') => {
+    updateModuleList({ type, page: MODULE_LIST_DEFAULTS.page });
+  }, [updateModuleList]);
+
+  // ModuleList speaks 0-based pages; the URL holds the 1-based number.
+  const handleModulePageChange = useCallback((page: number) => {
+    updateModuleList({ page: String(page + 1) });
+  }, [updateModuleList]);
+
+  // A list that shrank (a module deleted elsewhere, a reload) or a hand-edited
+  // URL can point past the last page; go to the last page instead.
+  const moduleListTotalPages = Math.ceil((typeFilter !== 'All' ? filteredCount : totalCount) / pageSize);
+  useEffect(() => {
+    if (getActiveView() !== 'modules' || loadingModules || modulesError) return;
+    if (moduleListTotalPages > 0 && currentPage + 1 > moduleListTotalPages) {
+      updateModuleList({ page: String(moduleListTotalPages) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingModules, modulesError, moduleListTotalPages, currentPage, updateModuleList]);
 
   // UI App navigation handlers
   const handleRunUIApp = useCallback((id: string) => {
@@ -429,6 +545,24 @@ function App() {
     await initViyaUrl();
     await checkAuth();
   }, [loadActiveConnection, checkAuth, navigate]);
+
+  // Each view gets its own document title (browser tab, history menu, the
+  // first thing a screen reader announces after navigation).
+  const activeViewForTitle = getActiveView();
+  useEffect(() => {
+    let label = VIEW_TITLES[activeViewForTitle];
+    if (activeViewForTitle === 'module-details' && selectedModule) {
+      label = selectedModule.name;
+    } else if (activeViewForTitle === 'score' && selectedModule && selectedStep) {
+      label = `${selectedStep.id} - ${selectedModule.name}`;
+    } else if (
+      (activeViewForTitle === 'ui-app-run' || activeViewForTitle === 'ui-app-edit') &&
+      activeUIDefinition
+    ) {
+      label = activeUIDefinition.name;
+    }
+    document.title = `${label} - ${BASE_DOCUMENT_TITLE}`;
+  }, [activeViewForTitle, selectedModule, selectedStep, activeUIDefinition]);
 
   // Render content based on current view
   const renderView = () => {
@@ -503,10 +637,11 @@ function App() {
       if (uiLoading) return <Loading message="Loading UI App..." />;
       if (!activeUIDefinition) {
         return (
-          <div className="error-message">
-            <p>UI App not found.</p>
-            <button type="button" onClick={handleBackToUIApps}>Back to UI Apps</button>
-          </div>
+          <EmptyState
+            title="UI App not found"
+            hint="It may have been deleted, or it was saved in another browser."
+            action={<Button variant="secondary" onClick={handleBackToUIApps}>Back to UI Apps</Button>}
+          />
         );
       }
       return (
@@ -524,6 +659,17 @@ function App() {
     // UI App Edit View
     if (activeView === 'ui-app-edit') {
       if (uiLoading) return <Loading message="Loading UI App..." />;
+      // Not in this browser's library (e.g. an app someone shared): the
+      // builder would start empty with "No module specified".
+      if (!activeUIDefinition) {
+        return (
+          <EmptyState
+            title="This UI App is not in your library"
+            hint="To edit an app someone shared with you, open the shared link and choose Save to My UI Apps, then edit your copy."
+            action={<Button variant="secondary" onClick={handleBackToUIApps}>Back to UI Apps</Button>}
+          />
+        );
+      }
       return (
         <UIBuilder
           definition={activeUIDefinition}
@@ -558,10 +704,11 @@ function App() {
           filteredCount={filteredCount}
           currentPage={currentPage}
           pageSize={pageSize}
-          onPageChange={setPage}
+          onPageChange={handleModulePageChange}
+          searchTerm={moduleSearchTerm}
           onSearch={handleSearch}
           onSort={handleSort}
-          onTypeFilter={setTypeFilter}
+          onTypeFilter={handleTypeFilter}
           sortBy={sortBy}
           typeFilter={typeFilter}
         />
@@ -576,10 +723,11 @@ function App() {
     // Error state for module
     if (moduleError) {
       return (
-        <div className="error-message">
-          <p>Error: {moduleError}</p>
-          <button type="button" onClick={handleBackToModules}>Back to Modules</button>
-        </div>
+        <EmptyState
+          title="This module could not be loaded"
+          hint={moduleError}
+          action={<Button variant="secondary" onClick={handleBackToModules}>Back to Modules</Button>}
+        />
       );
     }
 
@@ -600,6 +748,9 @@ function App() {
           onDelete={handleDeleteModule}
           onBuildUI={handleBuildUI}
           onViewFlow={handleViewFlow}
+          focusStepsRequest={
+            (location.state as { focusSteps?: boolean } | null)?.focusSteps ? location.key : undefined
+          }
         />
       );
     }
@@ -610,7 +761,9 @@ function App() {
       if (!selectedModule || selectedModule.id !== moduleId) {
         return <Loading message="Loading module..." />;
       }
-      if (loadingSteps) {
+      // Until this module's own steps have arrived (the list can still be the
+      // previous module's, or empty, for a render), a missing step proves nothing.
+      if (loadingSteps || stepsModuleId !== moduleId) {
         return <Loading message="Loading steps..." />;
       }
       if (!selectedStep) {
@@ -691,6 +844,8 @@ function App() {
       >
         {renderContent()}
       </Layout>
+      {/* Offers to copy a generated file when an embed blocks downloads. */}
+      <DownloadFallback />
       {/* Electron: connection settings dialog. ConnectionSettings supplies the
           title/actions/footer for its current view; Modal owns the chrome. */}
       {showSettings && (

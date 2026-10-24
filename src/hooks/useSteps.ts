@@ -10,12 +10,20 @@ interface UseStepsReturn {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /**
+   * The module `steps` belong to (null before the first answer). For one
+   * render after the module id changes, `steps` is still the old list and
+   * `loading` not yet true; compare with this before concluding a step is
+   * missing.
+   */
+  loadedModuleId: string | null;
 }
 
 export const useSteps = (moduleId: string | null): UseStepsReturn => {
   const [steps, setSteps] = useState<Step[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadedModuleId, setLoadedModuleId] = useState<string | null>(null);
   // Bumped on every fetch; a response for an older module is dropped so a
   // slow earlier request cannot overwrite the current module's steps.
   const requestIdRef = useRef(0);
@@ -25,6 +33,7 @@ export const useSteps = (moduleId: string | null): UseStepsReturn => {
 
     if (!moduleId) {
       setSteps([]);
+      setLoadedModuleId(null);
       return;
     }
 
@@ -35,9 +44,12 @@ export const useSteps = (moduleId: string | null): UseStepsReturn => {
       const result = await getAllSteps(moduleId);
       if (requestId !== requestIdRef.current) return;
       setSteps(result);
+      setLoadedModuleId(moduleId);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch steps');
+      setSteps([]);
+      setLoadedModuleId(moduleId);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -47,7 +59,7 @@ export const useSteps = (moduleId: string | null): UseStepsReturn => {
     fetchSteps();
   }, [fetchSteps]);
 
-  return { steps, loading, error, refresh: fetchSteps };
+  return { steps, loading, error, refresh: fetchSteps, loadedModuleId };
 };
 
 interface UseStepReturn {
@@ -98,6 +110,14 @@ interface UseStepExecutionState {
   executing: boolean;
   error: string | null;
   executionTime: number | null;
+  /**
+   * The input values that produced `output`, captured when the run was sent
+   * by executeWithValues (null for a raw execute or no output). Anything that
+   * pairs inputs with this output — Save as Scenario — must use these, not the
+   * live form state, which may have been edited since. A failed run leaves
+   * both the previous output and its values in place (with `error` set).
+   */
+  outputInputValues: Record<string, unknown> | null;
 }
 
 interface UseStepExecutionReturn extends UseStepExecutionState {
@@ -119,10 +139,15 @@ export const useStepExecution = (
     executing: false,
     error: null,
     executionTime: null,
+    outputInputValues: null,
   });
 
-  const execute = useCallback(
-    async (input: StepInput, options?: ExecuteStepOptions): Promise<StepOutput> => {
+  const run = useCallback(
+    async (
+      input: StepInput,
+      values: Record<string, unknown> | null,
+      options?: ExecuteStepOptions
+    ): Promise<StepOutput> => {
       if (!moduleId || !stepId) {
         throw new Error('Module ID and Step ID are required');
       }
@@ -139,6 +164,7 @@ export const useStepExecution = (
           executing: false,
           error: null,
           executionTime: endTime - startTime,
+          outputInputValues: values,
         });
 
         return result;
@@ -155,6 +181,12 @@ export const useStepExecution = (
     [moduleId, stepId]
   );
 
+  const execute = useCallback(
+    (input: StepInput, options?: ExecuteStepOptions): Promise<StepOutput> =>
+      run(input, null, options),
+    [run]
+  );
+
   const executeWithValues = useCallback(
     async (
       step: Step,
@@ -162,9 +194,10 @@ export const useStepExecution = (
       options?: ExecuteStepOptions
     ): Promise<StepOutput> => {
       const input = buildStepInput(step, values);
-      return execute(input, options);
+      // A shallow copy: the caller's object may be mutated after the call
+      return run(input, { ...values }, options);
     },
-    [execute]
+    [run]
   );
 
   const reset = useCallback(() => {
@@ -173,6 +206,7 @@ export const useStepExecution = (
       executing: false,
       error: null,
       executionTime: null,
+      outputInputValues: null,
     });
   }, []);
 

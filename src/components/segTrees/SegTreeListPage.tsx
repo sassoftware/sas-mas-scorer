@@ -1,43 +1,70 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listAllSegmentationTrees, type SegmentationTreeSummary } from '../../api/segmentationTrees';
 import { formatTimestamp, truncate } from '../../utils/formatters';
+import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
+import { registerViewCache } from '../../utils/viewCaches';
 import { Alert, Button, Loading, Pagination, SearchInput } from '../common';
 
 const PAGE_SIZE = 20;
 
 type SortDir = 'asc' | 'desc';
 
+// Search, sort and page live in the URL (#/segmentation-trees?q=…&page=2), so
+// Back from a tree, a reload or a shared link shows the same view.
+const LIST_DEFAULTS = { q: '', sort: 'asc', page: '1' };
+
+// The collection from the last visit. Coming back from a tree shows it at
+// once (the trees endpoint can be slow); it is fetched again in the
+// background only when older than CACHE_FRESH_MS. Dropped on logout and
+// connection switch.
+const CACHE_FRESH_MS = 60_000;
+let cachedTrees: { items: SegmentationTreeSummary[]; fetchedAt: number } | null = null;
+
+registerViewCache('segTreeList', () => {
+  cachedTrees = null;
+});
+
 export default function SegTreeListPage() {
   const navigate = useNavigate();
-  const [allTrees, setAllTrees] = useState<SegmentationTreeSummary[]>([]);
-  const [search, setSearch] = useState('');
+  const [allTrees, setAllTrees] = useState<SegmentationTreeSummary[]>(() => cachedTrees?.items ?? []);
+  const [params, updateParams] = useListUrlParams('segtrees', LIST_DEFAULTS);
+  const sortDir: SortDir = params.sort === 'desc' ? 'desc' : 'asc';
   // 1-based, the page number <Pagination> speaks.
-  const [page, setPage] = useState(1);
+  const page = parsePageParam(params.page);
+  // The box filters at once; the URL catches up when typing pauses.
+  const commitSearch = useCallback((q: string) => updateParams({ q }), [updateParams]);
+  const [search, setSearchText] = useDebouncedUrlText(params.q, commitSearch);
+  const setSearch = (value: string) => {
+    setSearchText(value);
+    if (page !== 1) updateParams({ page: '1' });
+  };
+  const setPage = (next: number) => updateParams({ page: String(next) });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
   // Bumped by the alert's Retry button to re-run the load below.
   const [reloadToken, setReloadToken] = useState(0);
 
   // The whole collection is fetched once; search and sort run in memory.
   useEffect(() => {
+    const cached = cachedTrees;
+    if (reloadToken === 0 && cached && Date.now() - cached.fetchedAt < CACHE_FRESH_MS) return;
     let active = true;
-    setLoading(true);
+    // With a list already on screen the refetch is silent.
+    if (!cached || reloadToken > 0) setLoading(true);
     setError('');
     listAllSegmentationTrees()
-      .then((items) => { if (active) setAllTrees(items); })
+      .then((items) => {
+        cachedTrees = { items, fetchedAt: Date.now() };
+        if (active) setAllTrees(items);
+      })
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [reloadToken]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allTrees;
@@ -63,8 +90,7 @@ export default function SegTreeListPage() {
   }, [sorted, page, totalPages]);
 
   const toggleSort = () => {
-    setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    setPage(1);
+    updateParams({ sort: sortDir === 'asc' ? 'desc' : 'asc', page: '1' });
   };
 
   return (

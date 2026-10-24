@@ -24,6 +24,7 @@ import { useStepExecution } from '../../hooks';
 import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo, getDecisionSignature, DecisionSignatureVariable } from '../../api';
 import { DataGridParamInfo } from './DataGridInputModal';
 import { coerceDatagridValue } from '../../utils/datagrid';
+import { saveTextFile } from '../../utils/download';
 
 interface ScorePanelProps {
   module: Module;
@@ -33,6 +34,7 @@ interface ScorePanelProps {
 }
 
 type ExecutionMode = 'single' | 'batch' | 'casTable';
+type BatchMode = Exclude<ExecutionMode, 'single'>;
 
 interface BatchResult {
   rowIndex: number;
@@ -54,10 +56,29 @@ interface BatchStats {
   errorCount: number;
 }
 
+// The results of the last run of one batch mode. Each mode keeps its own, so
+// switching tabs neither discards a run nor shows it under the other mode.
+interface BatchRun {
+  results: BatchResult[];
+  stats: BatchStats | null;
+}
+
 // Stable empty values so "no signature" / "no datagrid params" keep their
 // identity across renders and do not re-run the consumers' effects.
 const EMPTY_SIGNATURE: DecisionSignatureVariable[] = [];
 const EMPTY_DATAGRID_PARAMS: Record<string, DataGridParamInfo> = {};
+const EMPTY_BATCH_RUN: BatchRun = { results: [], stats: null };
+const EMPTY_BATCH_RESULTS: BatchResult[] = [];
+
+// Progress is published at most this often during a batch, so a very large
+// run does not re-render the panel once per scored row.
+const PROGRESS_INTERVAL_MS = 100;
+
+const EXECUTION_MODES: { mode: ExecutionMode; label: string }[] = [
+  { mode: 'single', label: 'Single Execution' },
+  { mode: 'batch', label: 'Parallel (File Upload)' },
+  { mode: 'casTable', label: 'Parallel (CAS Table)' },
+];
 
 export const ScorePanel: React.FC<ScorePanelProps> = ({
   module,
@@ -76,10 +97,20 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
   // Batch execution state
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('single');
-  const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
-  const [batchExecuting, setBatchExecuting] = useState(false);
+  // Modes opened so far. A batch mode is mounted on first visit (the CAS one
+  // loads the server catalogue on mount) and then kept mounted but hidden, so
+  // its file, sheet, delimiter, table and mapping survive a look elsewhere.
+  const [visitedModes, setVisitedModes] = useState<ReadonlySet<ExecutionMode>>(
+    () => new Set<ExecutionMode>(['single'])
+  );
+  const [batchRuns, setBatchRuns] = useState<Record<BatchMode, BatchRun>>({
+    batch: EMPTY_BATCH_RUN,
+    casTable: EMPTY_BATCH_RUN,
+  });
+  // The batch mode whose run is in progress (one at a time), or null
+  const [runningBatchMode, setRunningBatchMode] = useState<BatchMode | null>(null);
+  const batchExecuting = runningBatchMode !== null;
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
-  const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const batchAbortRef = useRef(false);
   // Aborts the HTTP requests of the running batch; fired only on unmount.
   const batchAbortControllerRef = useRef<AbortController | null>(null);
@@ -224,8 +255,25 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     return `${module.revision}`;
   }, [moduleType, decisionInfo, modelInfo, module.revision]);
 
-  const { output, executing, error, executionTime, executeWithValues, reset } =
+  const { output, executing, error, executionTime, outputInputValues, executeWithValues, reset } =
     useStepExecution(module.id, step.id);
+
+  // The results on screen belong to the inputs captured with the run
+  // (outputInputValues), not to the live form. Compared as they would be
+  // sent (buildStepInput sends `value ?? null` per input), so re-typing the
+  // same value or an auto-fill to identical values is not a change.
+  const sentInputsKey = useCallback(
+    (values: Record<string, unknown>) =>
+      JSON.stringify((step.inputs ?? []).map(p => values[p.name] ?? null)),
+    [step.inputs]
+  );
+  const inputsChangedSinceRun = useMemo(
+    () => !!output && !!outputInputValues && sentInputsKey(outputInputValues) !== sentInputsKey(inputValues),
+    [output, outputInputValues, inputValues, sentInputsKey]
+  );
+  // A failed re-run keeps the last good result on screen, dimmed and labelled
+  const lastRunFailed = !!output && !!error;
+  const outputStale = inputsChangedSinceRun || lastRunFailed;
 
   const handleExecute = useCallback(async () => {
     try {
@@ -353,91 +401,129 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     }
   }, [module.id, step, normalizeDatagridInputs]);
 
-  // Batch execution handler with configurable concurrency
-  const handleBatchExecute = useCallback(async (rows: Record<string, unknown>[], concurrency: number) => {
+  // Batch execution handler with configurable concurrency. The results are
+  // stored under the mode that started the run.
+  const handleBatchExecute = useCallback(async (
+    mode: BatchMode,
+    rows: Record<string, unknown>[],
+    concurrency: number
+  ) => {
     batchAbortRef.current = false;
     // One controller per batch. Stop does NOT abort it (in-flight rows are
     // allowed to land and be counted); only the unmount cleanup does.
     const controller = new AbortController();
     batchAbortControllerRef.current = controller;
-    setBatchExecuting(true);
+    setRunningBatchMode(mode);
     setBatchProgress({ current: 0, total: rows.length });
-    setBatchResults([]);
-    setBatchStats(null);
+    setBatchRuns(prev => ({ ...prev, [mode]: EMPTY_BATCH_RUN }));
 
-    const results: BatchResult[] = new Array(rows.length);
-    let completedCount = 0;
-    const batchStartTime = performance.now();
+    // Whatever happens below, the progress card must not outlive the run
+    try {
+      const results: BatchResult[] = new Array(rows.length);
+      let completedCount = 0;
+      let lastProgressAt = 0;
+      const batchStartTime = performance.now();
 
-    // Process rows with concurrency limit
-    const processWithConcurrency = async () => {
-      let currentIndex = 0;
+      // Process rows with concurrency limit
+      const processWithConcurrency = async () => {
+        let currentIndex = 0;
 
-      const processNext = async (): Promise<void> => {
-        while (currentIndex < rows.length && !batchAbortRef.current) {
-          const index = currentIndex++;
-          const input = rows[index];
+        const processNext = async (): Promise<void> => {
+          while (currentIndex < rows.length && !batchAbortRef.current) {
+            const index = currentIndex++;
+            const input = rows[index];
 
-          const result = await executeRow(index, input, controller.signal);
-          // Cancelled: the panel is unmounting, so this worker stops rather
-          // than recording a row nobody will see.
-          if (!result) return;
-          results[index] = result;
-          completedCount++;
+            const result = await executeRow(index, input, controller.signal);
+            // Cancelled: the panel is unmounting, so this worker stops rather
+            // than recording a row nobody will see.
+            if (!result) return;
+            results[index] = result;
+            completedCount++;
 
-          // Only the progress is published per row. The results table is not
-          // rendered while the batch runs, so the array is published once below.
-          setBatchProgress({ current: completedCount, total: rows.length });
-        }
+            // Only the progress is published while running, and at most every
+            // PROGRESS_INTERVAL_MS (plus the last row). The results table is
+            // not rendered while the batch runs, so the array is published once below.
+            const now = performance.now();
+            if (now - lastProgressAt >= PROGRESS_INTERVAL_MS || completedCount === rows.length) {
+              lastProgressAt = now;
+              setBatchProgress({ current: completedCount, total: rows.length });
+            }
+          }
+        };
+
+        // Start concurrent workers
+        const workers = Array(Math.min(concurrency, rows.length))
+          .fill(null)
+          .map(() => processNext());
+
+        await Promise.all(workers);
       };
 
-      // Start concurrent workers
-      const workers = Array(Math.min(concurrency, rows.length))
-        .fill(null)
-        .map(() => processNext());
+      await processWithConcurrency();
 
-      await Promise.all(workers);
-    };
+      if (batchAbortControllerRef.current === controller) {
+        batchAbortControllerRef.current = null;
+      }
 
-    await processWithConcurrency();
+      const batchEndTime = performance.now();
+      const totalRuntime = batchEndTime - batchStartTime;
 
-    if (batchAbortControllerRef.current === controller) {
-      batchAbortControllerRef.current = null;
+      // Each result sits at its own row index, so the filtered array is already
+      // in rowIndex order (it may be partial if stopped early).
+      const sortedResults = results.filter(r => r !== undefined);
+
+      // Statistics in one pass: Math.min(...times) / Math.max(...times) spread
+      // every row onto the call stack and throw a RangeError on very large runs.
+      let stats: BatchStats | null = null;
+      if (sortedResults.length > 0) {
+        const executionTimes = new Float64Array(sortedResults.length);
+        let sum = 0;
+        let fastest = Infinity;
+        let slowest = -Infinity;
+        let successCount = 0;
+        let errorCount = 0;
+        sortedResults.forEach((r, i) => {
+          const time = r.executionTime;
+          executionTimes[i] = time;
+          sum += time;
+          if (time < fastest) fastest = time;
+          if (time > slowest) slowest = time;
+          if (r.error) errorCount++;
+          else if (r.output) successCount++;
+        });
+        // A typed-array sort is numeric and allocates no per-element boxes
+        const sortedTimes = executionTimes.sort();
+        const mid = Math.floor(sortedTimes.length / 2);
+
+        stats = {
+          totalRuntime,
+          avgRequestTime: sum / sortedTimes.length,
+          successRate: (successCount / sortedResults.length) * 100,
+          fastestResponse: fastest,
+          slowestResponse: slowest,
+          medianResponse: sortedTimes.length % 2 === 0
+            ? (sortedTimes[mid - 1] + sortedTimes[mid]) / 2
+            : sortedTimes[mid],
+          totalRequests: sortedResults.length,
+          successCount,
+          errorCount,
+        };
+      }
+
+      setBatchRuns(prev => ({ ...prev, [mode]: { results: sortedResults, stats } }));
+    } finally {
+      setRunningBatchMode(null);
     }
-
-    const batchEndTime = performance.now();
-    const totalRuntime = batchEndTime - batchStartTime;
-
-    // Each result sits at its own row index, so the filtered array is already
-    // in rowIndex order (it may be partial if stopped early).
-    const sortedResults = results.filter(r => r !== undefined);
-    setBatchResults(sortedResults);
-
-    // Calculate statistics on completed results
-    if (sortedResults.length > 0) {
-      const executionTimes = sortedResults.map(r => r.executionTime);
-      const sortedTimes = [...executionTimes].sort((a, b) => a - b);
-      const successCount = sortedResults.filter(r => r.output && !r.error).length;
-      const errorCount = sortedResults.filter(r => r.error).length;
-
-      const stats: BatchStats = {
-        totalRuntime,
-        avgRequestTime: executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length,
-        successRate: (successCount / sortedResults.length) * 100,
-        fastestResponse: Math.min(...executionTimes),
-        slowestResponse: Math.max(...executionTimes),
-        medianResponse: sortedTimes.length % 2 === 0
-          ? (sortedTimes[sortedTimes.length / 2 - 1] + sortedTimes[sortedTimes.length / 2]) / 2
-          : sortedTimes[Math.floor(sortedTimes.length / 2)],
-        totalRequests: sortedResults.length,
-        successCount,
-        errorCount,
-      };
-
-      setBatchStats(stats);
-    }
-    setBatchExecuting(false);
   }, [executeRow]);
+
+  const handleBatchExecuteFile = useCallback(
+    (rows: Record<string, unknown>[], concurrency: number) => handleBatchExecute('batch', rows, concurrency),
+    [handleBatchExecute]
+  );
+  const handleBatchExecuteCas = useCallback(
+    (rows: Record<string, unknown>[], concurrency: number) => handleBatchExecute('casTable', rows, concurrency),
+    [handleBatchExecute]
+  );
 
   const handleStopBatch = useCallback(() => {
     batchAbortRef.current = true;
@@ -455,11 +541,24 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     };
   }, []);
 
-  // Clear batch results
+  // The batch mode on screen, and its last run (download, upload and Save as
+  // Scenarios all act on the run the user is looking at)
+  const activeBatchMode: BatchMode | null = executionMode === 'single' ? null : executionMode;
+  const batchResults = activeBatchMode ? batchRuns[activeBatchMode].results : EMPTY_BATCH_RESULTS;
+
+  // Clear the visible mode's batch results
   const handleClearBatchResults = useCallback(() => {
-    setBatchResults([]);
-    setBatchStats(null);
-  }, []);
+    if (!activeBatchMode) return;
+    setBatchRuns(prev => ({ ...prev, [activeBatchMode]: EMPTY_BATCH_RUN }));
+  }, [activeBatchMode]);
+
+  // Switching modes keeps every mode's setup and results; clicking the active
+  // tab does nothing.
+  const handleModeChange = useCallback((mode: ExecutionMode) => {
+    if (mode === executionMode) return;
+    setExecutionMode(mode);
+    setVisitedModes(prev => (prev.has(mode) ? prev : new Set(prev).add(mode)));
+  }, [executionMode]);
 
   // Save selected batch rows as scenarios
   const handleSaveAsScenarios = useCallback((selectedIndices: number[]) => {
@@ -1090,12 +1189,7 @@ title;`;
     const csvContent = buildResultsCsv();
     if (!csvContent) return;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `${module.name}_${step.id}_results.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    saveTextFile(csvContent, `${module.name}_${step.id}_results.csv`, 'text/csv;charset=utf-8;');
   }, [buildResultsCsv, module.name, step.id]);
 
   return (
@@ -1229,93 +1323,149 @@ title;`;
       )}
 
       {/* Mode Toggle */}
-      <div className="score-panel__mode-toggle">
-        <Button
-          variant={executionMode === 'single' ? 'primary' : 'tertiary'}
-          onClick={() => { setExecutionMode('single'); setBatchResults([]); setBatchStats(null); reset(); }}
-        >
-          Single Execution
-        </Button>
-        <Button
-          variant={executionMode === 'batch' ? 'primary' : 'tertiary'}
-          onClick={() => { setExecutionMode('batch'); setBatchResults([]); setBatchStats(null); reset(); }}
-        >
-          Parallel (File Upload)
-        </Button>
-        <Button
-          variant={executionMode === 'casTable' ? 'primary' : 'tertiary'}
-          onClick={() => { setExecutionMode('casTable'); setBatchResults([]); setBatchStats(null); reset(); }}
-        >
-          Parallel (CAS Table)
-        </Button>
+      <div className="score-panel__mode-toggle" role="group" aria-label="Execution mode">
+        {EXECUTION_MODES.map(({ mode, label }) => (
+          <Button
+            key={mode}
+            variant={executionMode === mode ? 'primary' : 'tertiary'}
+            aria-pressed={executionMode === mode}
+            onClick={() => handleModeChange(mode)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
       <div className="score-panel__content">
-        {/* Single Execution Mode */}
-        {executionMode === 'single' && (
-          <>
-            <Card className="score-panel__input-card">
-              <CardHeader
-                actions={
-                  <div className="score-panel__input-actions">
-                    {moduleType === 'Decision' && sourceURI && (
-                      <Button
-                        variant="tertiary"
-                        size="small"
-                        onClick={() => {
-                          retryDecisionSignature();
-                          setShowLoadScenario(true);
-                        }}
-                      >
-                        Load Scenario
-                      </Button>
-                    )}
-                    <Button variant="tertiary" size="small" onClick={handleAutoFill}>
-                      Auto-fill Defaults
+        {/* Single Execution Mode. Every mode stays mounted once opened and is
+            hidden while another is shown, so nothing is lost by switching. */}
+        <div className="score-panel__mode-body" hidden={executionMode !== 'single'}>
+          <Card className="score-panel__input-card">
+            <CardHeader
+              actions={
+                <div className="score-panel__input-actions">
+                  {moduleType === 'Decision' && sourceURI && (
+                    <Button
+                      variant="tertiary"
+                      size="small"
+                      onClick={() => {
+                        retryDecisionSignature();
+                        setShowLoadScenario(true);
+                      }}
+                    >
+                      Load Scenario
                     </Button>
-                    <Button variant="tertiary" size="small" onClick={handleReset}>
-                      Clear All
-                    </Button>
-                  </div>
-                }
+                  )}
+                  <Button variant="tertiary" size="small" onClick={handleAutoFill}>
+                    Auto-fill Defaults
+                  </Button>
+                  <Button variant="tertiary" size="small" onClick={handleReset}>
+                    Clear All
+                  </Button>
+                </div>
+              }
+            >
+              <h3>Input Parameters ({step.inputs?.length ?? 0})</h3>
+            </CardHeader>
+            <CardBody>
+              <InputForm
+                parameters={step.inputs ?? []}
+                values={inputValues}
+                onChange={setInputValues}
+                disabled={executing}
+                datagridParams={datagridParams}
+              />
+            </CardBody>
+            <CardFooter>
+              <Button
+                variant="primary"
+                size="large"
+                onClick={handleExecute}
+                loading={executing}
+                disabled={executing}
               >
-                <h3>Input Parameters ({step.inputs?.length ?? 0})</h3>
-              </CardHeader>
-              <CardBody>
-                <InputForm
-                  parameters={step.inputs ?? []}
-                  values={inputValues}
-                  onChange={setInputValues}
-                  disabled={executing}
-                  datagridParams={datagridParams}
-                />
-              </CardBody>
-              <CardFooter>
-                <Button
-                  variant="primary"
-                  size="large"
-                  onClick={handleExecute}
-                  loading={executing}
-                  disabled={executing}
+                {executing ? 'Executing...' : 'Execute Score'}
+              </Button>
+            </CardFooter>
+          </Card>
+
+          {/* Error Display */}
+          {error && (
+            <Alert variant="error" title="Execution Error" dismissible onClose={reset}>
+              {error}
+              {output && ' The results below are from the previous successful run.'}
+            </Alert>
+          )}
+
+          {/* Output Display */}
+          {output && (
+            <div className="score-panel__output-section">
+              <div className="score-panel__output-header">
+                <h3>{outputStale ? 'Results (previous run)' : 'Results'}</h3>
+                <div className="score-panel__output-actions">
+                  {moduleType === 'Decision' && output?.executionState === 'completed' && sourceURI && (
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      disabled={outputStale || !outputInputValues}
+                      aria-describedby={outputStale ? 'score-panel-stale-note' : undefined}
+                      onClick={() => {
+                        retryDecisionSignature();
+                        setShowSaveScenario(true);
+                      }}
+                    >
+                      Save as Scenario
+                    </Button>
+                  )}
+                  <Button variant="tertiary" size="small" onClick={handleClearOutputs}>
+                    Clear Results
+                  </Button>
+                </div>
+              </div>
+              {inputsChangedSinceRun && (
+                <Alert
+                  variant="warning"
+                  title="Inputs changed since this run"
+                  actions={
+                    <Button variant="secondary" size="small" onClick={handleExecute} disabled={executing}>
+                      Run again
+                    </Button>
+                  }
                 >
-                  {executing ? 'Executing...' : 'Execute Score'}
-                </Button>
-              </CardFooter>
-            </Card>
-          </>
-        )}
+                  <span id="score-panel-stale-note">
+                    These results were produced by the inputs as they were at the last run. Run again
+                    to score the current inputs; Save as Scenario is available again after the run.
+                  </span>
+                </Alert>
+              )}
+              {!inputsChangedSinceRun && lastRunFailed && (
+                <p className="score-panel__stale-note" id="score-panel-stale-note">
+                  The last run failed. These are the results of the previous successful run;
+                  run again to save a scenario.
+                </p>
+              )}
+              <div className={outputStale ? 'score-panel__output--stale' : undefined}>
+                <OutputDisplay
+                  output={output}
+                  parameters={step.outputs ?? []}
+                  executionTime={executionTime}
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Batch Execution Mode */}
-        {executionMode === 'batch' && (
-          <>
+        {visitedModes.has('batch') && (
+          <div className="score-panel__mode-body" hidden={executionMode !== 'batch'}>
             <FileUpload
               parameters={step.inputs ?? []}
-              onExecuteBatch={handleBatchExecute}
+              onExecuteBatch={handleBatchExecuteFile}
               executing={batchExecuting}
             />
 
             {/* Batch Progress */}
-            {batchExecuting && (
+            {runningBatchMode === 'batch' && (
               <Card className="score-panel__progress-card">
                 <CardBody>
                   <div className="score-panel__progress">
@@ -1336,33 +1486,32 @@ title;`;
             )}
 
             {/* Batch Results */}
-            {batchResults.length > 0 && !batchExecuting && (
+            {batchRuns.batch.results.length > 0 && runningBatchMode !== 'batch' && (
               <BatchResults
-                results={batchResults}
+                results={batchRuns.batch.results}
                 parameters={step.outputs ?? []}
-                stats={batchStats}
+                stats={batchRuns.batch.stats}
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
                 onUploadToCas={() => setShowCasUpload(true)}
                 onSaveAsScenarios={moduleType === 'Decision' && sourceURI ? handleSaveAsScenarios : undefined}
               />
             )}
-          </>
-
+          </div>
         )}
 
         {/* CAS Table Execution Mode */}
-        {executionMode === 'casTable' && (
-          <>
+        {visitedModes.has('casTable') && (
+          <div className="score-panel__mode-body" hidden={executionMode !== 'casTable'}>
             <CasTableScore
               parameters={step.inputs ?? []}
-              onExecuteBatch={handleBatchExecute}
+              onExecuteBatch={handleBatchExecuteCas}
               executing={batchExecuting}
               onSaveAsTest={moduleType === 'Decision' && sourceURI ? handleSaveAsTest : undefined}
             />
 
             {/* Batch Progress */}
-            {batchExecuting && (
+            {runningBatchMode === 'casTable' && (
               <Card className="score-panel__progress-card">
                 <CardBody>
                   <div className="score-panel__progress">
@@ -1383,55 +1532,17 @@ title;`;
             )}
 
             {/* Batch Results */}
-            {batchResults.length > 0 && !batchExecuting && (
+            {batchRuns.casTable.results.length > 0 && runningBatchMode !== 'casTable' && (
               <BatchResults
-                results={batchResults}
+                results={batchRuns.casTable.results}
                 parameters={step.outputs ?? []}
-                stats={batchStats}
+                stats={batchRuns.casTable.stats}
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
                 onUploadToCas={() => setShowCasUpload(true)}
                 onSaveAsScenarios={moduleType === 'Decision' && sourceURI ? handleSaveAsScenarios : undefined}
               />
             )}
-          </>
-        )}
-
-        {/* Error Display */}
-        {error && (
-          <Alert variant="error" title="Execution Error" dismissible onClose={reset}>
-            {error}
-          </Alert>
-        )}
-
-        {/* Output Display */}
-        {output && (
-          <div className="score-panel__output-section">
-            <div className="score-panel__output-header">
-              <h3>Results</h3>
-              <div className="score-panel__output-actions">
-                {moduleType === 'Decision' && executionMode === 'single' && output?.executionState === 'completed' && sourceURI && (
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    onClick={() => {
-                      retryDecisionSignature();
-                      setShowSaveScenario(true);
-                    }}
-                  >
-                    Save as Scenario
-                  </Button>
-                )}
-                <Button variant="tertiary" size="small" onClick={handleClearOutputs}>
-                  Clear Results
-                </Button>
-              </div>
-            </div>
-            <OutputDisplay
-              output={output}
-              parameters={step.outputs ?? []}
-              executionTime={executionTime}
-            />
           </div>
         )}
       </div>
@@ -1456,11 +1567,11 @@ title;`;
         />
       )}
 
-      {showSaveScenario && sourceURI && output && (
+      {showSaveScenario && sourceURI && output && outputInputValues && (
         <SaveScenarioDialog
           module={module}
           sourceURI={sourceURI}
-          inputValues={inputValues}
+          inputValues={outputInputValues}
           inputParameters={step.inputs ?? []}
           outputValues={output.outputs}
           outputParameters={step.outputs ?? []}

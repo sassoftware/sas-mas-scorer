@@ -10,6 +10,7 @@ import { StepNav } from '../common/StepNav';
 import { VariableTable } from './VariableTable';
 import { CodeOutput } from './CodeOutput';
 import { DataGridOutputNotes } from './DataGridOutputNotes';
+import { checkVariableNames } from './variableNames';
 import { parseInput, defaultLength } from '../../utils/schemaParser';
 import { generatePythonCode, buildCodeFileSignature } from '../../utils/schemaCodegen';
 import type { VariableMapping, InputFormat, SasDataType } from '../../types/schemaBuilder';
@@ -25,7 +26,6 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
   const [inputVarName, setInputVarName] = useState('input_string');
   const [mappings, setMappings] = useState<VariableMapping[]>([]);
   const [format, setFormat] = useState<InputFormat>('unknown');
-  const [pythonCode, setPythonCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<Step>('input');
   // When true, unset output variables default to missing values (None) instead
@@ -38,12 +38,11 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
       const result = parseInput(text);
       setFormat(result.format);
       setMappings(result.mappings);
-      setPythonCode(generatePythonCode(result.mappings, result.format, inputVarName, missingDefaults));
       setActiveStep('variables');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to parse input');
     }
-  }, [inputVarName, missingDefaults]);
+  }, []);
 
   const handleParse = useCallback(() => doParse(inputText), [doParse, inputText]);
 
@@ -78,17 +77,25 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
     setMappings(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleGenerate = useCallback(() => {
-    setPythonCode(generatePythonCode(mappings, format, inputVarName, missingDefaults));
-    setActiveStep('output');
-  }, [mappings, format, inputVarName, missingDefaults]);
+  // Name problems that would break the generated code (Python keywords,
+  // duplicates, clashes with the code's own names) block Generate and Save.
+  const nameCheck = useMemo(
+    () => checkVariableNames(mappings, inputVarName),
+    [mappings, inputVarName],
+  );
+  const blockedReason = nameCheck.blockedReason;
 
-  // Toggling the missing-default option regenerates the code in place so the
-  // output screen reflects the choice immediately.
-  const handleToggleMissingDefaults = useCallback((checked: boolean) => {
-    setMissingDefaults(checked);
-    setPythonCode(generatePythonCode(mappings, format, inputVarName, checked));
-  }, [mappings, format, inputVarName]);
+  // Derived, never stored: the code always matches the current mapping, input
+  // name and missing-default choice, so it can't drift from the signature that
+  // is saved alongside it, however the output step is reached.
+  const pythonCode = useMemo(
+    () => (format === 'unknown' ? '' : generatePythonCode(mappings, format, inputVarName, missingDefaults)),
+    [mappings, format, inputVarName, missingDefaults],
+  );
+
+  const handleGenerate = useCallback(() => {
+    if (!blockedReason) setActiveStep('output');
+  }, [blockedReason]);
 
   // The code file signature (input + output terms, with lengths) sent on save.
   const signature = useMemo(
@@ -130,7 +137,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
             label: `2. Variable Mapping (${mappings.length})`,
             disabled: mappings.length === 0,
           },
-          { id: 'output', label: '3. Python Output', disabled: !pythonCode },
+          { id: 'output', label: '3. Python Output', disabled: !pythonCode || !!blockedReason },
         ]}
       />
 
@@ -151,9 +158,19 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
                 value={inputVarName}
                 onChange={e => setInputVarName(e.target.value.replace(/[^A-Za-z0-9_]/g, ''))}
                 maxLength={32}
-                className="sas-input schema-builder__input--mono"
+                className={`sas-input schema-builder__input--mono${nameCheck.input.error ? ' schema-builder__var-input--error' : ''}`}
+                aria-invalid={nameCheck.input.error ? true : undefined}
+                aria-describedby="sb-input-var-msg"
               />
-              <span className="schema-builder__hint">The SAS ID Character variable holding the raw string</span>
+              {nameCheck.input.error ? (
+                <span id="sb-input-var-msg" className="schema-builder__field-error" role="alert">
+                  {nameCheck.input.error}
+                </span>
+              ) : (
+                <span id="sb-input-var-msg" className="schema-builder__hint">
+                  {nameCheck.input.warning ?? 'The SAS ID Character variable holding the raw string'}
+                </span>
+              )}
             </div>
             <div className="schema-builder__sample-buttons">
               {/* Visually hidden but still focusable: [hidden]/display:none would
@@ -201,13 +218,25 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
               <Button variant="secondary" size="small" onClick={() => setActiveStep('input')}>
                 Back to input
               </Button>
-              <Button variant="primary" size="small" onClick={handleGenerate}>
+              <Button
+                variant="primary"
+                size="small"
+                onClick={handleGenerate}
+                disabled={!!blockedReason}
+                aria-describedby={blockedReason ? 'sb-blocked-reason' : undefined}
+              >
                 Generate Python code
               </Button>
             </div>
           </div>
+          {blockedReason && (
+            <p id="sb-blocked-reason" className="schema-builder__blocked-reason" role="status">
+              {blockedReason}
+            </p>
+          )}
           <VariableTable
             mappings={mappings}
+            checks={nameCheck.rows}
             onChange={handleMappingChange}
             onDelete={handleDeleteMapping}
           />
@@ -225,7 +254,7 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
                 <input
                   type="checkbox"
                   checked={missingDefaults}
-                  onChange={e => handleToggleMissingDefaults(e.target.checked)}
+                  onChange={e => setMissingDefaults(e.target.checked)}
                 />
                 Default unset variables to missing values
               </label>
@@ -235,7 +264,12 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
             </div>
           </div>
           <DataGridOutputNotes mappings={mappings} />
-          <CodeOutput code={pythonCode} signature={signature} exampleInput={inputText} />
+          <CodeOutput
+            code={pythonCode}
+            signature={signature}
+            exampleInput={inputText}
+            saveBlockedReason={blockedReason}
+          />
         </div>
       )}
 

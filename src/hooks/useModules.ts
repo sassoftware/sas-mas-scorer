@@ -3,25 +3,19 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Module, ModuleType, Submodule, getModuleType } from '../types';
-import { getModules, getAllModules, getModule, getAllSubmodules, GetModulesParams } from '../api';
+import { getModules, getAllModules, getModule, getAllSubmodules } from '../api';
 
 interface UseModulesState {
   modules: Module[];
   loading: boolean;
   error: string | null;
   totalCount: number;
-  currentPage: number;
-  pageSize: number;
 }
 
 interface UseModulesReturn extends UseModulesState {
   refresh: () => Promise<void>;
-  setPage: (page: number) => void;
-  setPageSize: (size: number) => void;
-  setFilter: (filter: string) => void;
-  setSortBy: (sortBy: string) => void;
-  setTypeFilter: (type: ModuleType | 'All') => void;
-  reset: () => void;
+  currentPage: number;
+  pageSize: number;
   filter: string;
   sortBy: string;
   typeFilter: ModuleType | 'All';
@@ -29,34 +23,48 @@ interface UseModulesReturn extends UseModulesState {
   displayModules: Module[];
 }
 
-interface UseModulesOptions extends GetModulesParams {
+/**
+ * The list query is owned by the caller (App keeps it in the URL, so Back and
+ * a reload restore it). Leaving the list does not change the query, so coming
+ * back shows the loaded page without a refetch.
+ */
+interface UseModulesOptions {
   enabled?: boolean;
+  /** MAS filter expression, e.g. contains(name,'credit'); '' for none. */
+  filter?: string;
+  /** e.g. name:ascending; '' for the server default. */
+  sortBy?: string;
+  typeFilter?: ModuleType | 'All';
+  /** 0-based page. */
+  page?: number;
+  limit?: number;
 }
 
 export const useModules = (options: UseModulesOptions = {}): UseModulesReturn => {
-  const { enabled = true, ...initialParams } = options;
+  const {
+    enabled = true,
+    filter = '',
+    sortBy = '',
+    typeFilter = 'All',
+    page = 0,
+    limit: pageSize = 20,
+  } = options;
 
   const [state, setState] = useState<UseModulesState>({
     modules: [],
     loading: enabled,
     error: null,
     totalCount: 0,
-    currentPage: 0,
-    pageSize: initialParams.limit ?? 20,
   });
-
-  const [filter, setFilter] = useState(initialParams.filter ?? '');
-  const [sortBy, setSortBy] = useState(initialParams.sortBy ?? '');
-  const [typeFilter, setTypeFilter] = useState<ModuleType | 'All'>('All');
 
   const isTypeFiltered = typeFilter !== 'All';
 
   // The server query is either one page, or — with a type filter, which the
   // MAS filter grammar cannot express — the whole collection filtered
   // client-side. Depending on these two derived values rather than on the raw
-  // page state means client-side paging does not refetch the collection.
-  const serverStart = isTypeFiltered ? 0 : state.currentPage * state.pageSize;
-  const serverLimit = isTypeFiltered ? null : state.pageSize;
+  // page means client-side paging does not refetch the collection.
+  const serverStart = isTypeFiltered ? 0 : page * pageSize;
+  const serverLimit = isTypeFiltered ? null : pageSize;
 
   // Bumped on every fetch; a response for an older request is dropped so a
   // slow page 1 cannot overwrite page 2 (the same idiom as useJobMonitoring).
@@ -112,39 +120,15 @@ export const useModules = (options: UseModulesOptions = {}): UseModulesReturn =>
   // When type filter is active, paginate the filtered results client-side
   const displayModules = useMemo(() => {
     if (!isTypeFiltered) return state.modules;
-    const start = state.currentPage * state.pageSize;
-    return typeFilteredModules.slice(start, start + state.pageSize);
-  }, [typeFilteredModules, state.currentPage, state.pageSize, isTypeFiltered, state.modules]);
-
-  const setPage = useCallback((page: number) => {
-    setState((prev) => ({ ...prev, currentPage: page }));
-  }, []);
-
-  const setPageSize = useCallback((size: number) => {
-    setState((prev) => ({ ...prev, pageSize: size, currentPage: 0 }));
-  }, []);
-
-  const handleSetTypeFilter = useCallback((type: ModuleType | 'All') => {
-    setTypeFilter(type);
-    setState((prev) => ({ ...prev, currentPage: 0 }));
-  }, []);
-
-  const reset = useCallback(() => {
-    setState((prev) => ({ ...prev, currentPage: 0 }));
-    setFilter('');
-    setSortBy('');
-    setTypeFilter('All');
-  }, []);
+    const start = page * pageSize;
+    return typeFilteredModules.slice(start, start + pageSize);
+  }, [typeFilteredModules, page, pageSize, isTypeFiltered, state.modules]);
 
   return {
     ...state,
     refresh: fetchModules,
-    setPage,
-    setPageSize,
-    setFilter,
-    setSortBy,
-    setTypeFilter: handleSetTypeFilter,
-    reset,
+    currentPage: page,
+    pageSize,
     filter,
     sortBy,
     typeFilter,

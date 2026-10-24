@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
@@ -41,6 +41,8 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
   ref
 ) {
   const isUIView = activeView.startsWith('ui-app');
+  // The collapse button's hover/focus label, until Escape hides it.
+  const [tipDismissed, setTipDismissed] = useState(false);
 
   return (
     <aside
@@ -277,21 +279,29 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
       </nav>
 
       <div className="sas-sidebar__footer">
-        {onToggleCollapsed && (
-          <button
-            type="button"
-            className="sas-sidebar__collapse"
-            aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-            aria-expanded={!collapsed}
-            onClick={onToggleCollapsed}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              {collapsed ? <path d="M13 6l6 6-6 6M5 6l6 6-6 6" /> : <path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" />}
-            </svg>
-            <span>Collapse</span>
-          </button>
-        )}
         <div className="sas-sidebar__version">MAS Scorer v{__APP_VERSION__}</div>
+        {onToggleCollapsed && (
+          <span className={`sas-sidebar__collapse-wrap${tipDismissed ? ' sas-sidebar__collapse-wrap--tip-dismissed' : ''}`}
+            onMouseLeave={() => setTipDismissed(false)}
+          >
+            <button
+              type="button"
+              className="sas-sidebar__collapse"
+              aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+              aria-expanded={!collapsed}
+              onClick={onToggleCollapsed}
+              onBlur={() => setTipDismissed(false)}
+              // Escape hides the hover label without moving focus (WCAG 1.4.13).
+              onKeyDown={(e) => { if (e.key === 'Escape') setTipDismissed(true); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {collapsed ? <path d="M13 6l6 6-6 6M5 6l6 6-6 6" /> : <path d="M11 6l-6 6 6 6M19 6l-6 6 6 6" />}
+              </svg>
+            </button>
+            {/* Visual label only; the button's aria-label already names it. */}
+            <span className="sas-sidebar__collapse-tip" aria-hidden="true">{collapsed ? 'Expand' : 'Collapse'}</span>
+          </span>
+        )}
       </div>
     </aside>
   );

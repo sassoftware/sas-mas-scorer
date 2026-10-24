@@ -219,6 +219,50 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A type whose collection could not be read: a note in place of the bar */
+.coverage-type-row__gap-note {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  font-style: italic;
+}
+
+/* ─── Collection gaps & status ─── */
+
+/* Rendered inside <Alert variant="warning"> */
+.coverage-gaps__intro {
+  margin: 0 0 var(--space-1);
+}
+
+.coverage-gaps__list {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.coverage-collections {
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.coverage-collections__summary {
+  cursor: pointer;
+  color: var(--sas-gray-700);
+  font-weight: var(--font-weight-medium);
+}
+
+.coverage-collections__summary:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.coverage-collections__table {
+  margin-top: var(--space-2);
+}
+
+.coverage-collections__note {
+  margin: var(--space-2) 0 0;
+  color: var(--sas-text-muted);
+}
+
 /* ─── Detail Table ─── */
 
 /* The filter block is passed as CardHeader actions; .sas-card__header now
