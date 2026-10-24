@@ -27,7 +27,7 @@ Nothing lost, nothing wrong: this release fixes the places where the app silentl
 - **Rules Import refreshes the server checks after an import**, so CREATE/UPDATE labels and the update acknowledgement are right on a re-import
 - **Desktop app: faster API calls** — connection details and tokens are kept in memory (still encrypted on disk) instead of decrypting the settings file on every request, which capped batch and CAS-table scoring speed
 - **Desktop app: silent session renewal** — when the stored session has expired, the app renews it at startup with the saved refresh token and shows "Connecting…" instead of "Not connected" and the login window. A network outage at startup no longer discards the saved session
-- **Sidebar starts collapsed** — the navigation opens as the icon rail by default; once you expand or collapse it, that choice is remembered. The collapse control is now a compact double-arrow button beside the version number, labelled **Collapse** / **Expand** on hover or focus, instead of a full-width "Collapse" row above it
+- **Sidebar starts collapsed** — the navigation opens as the icon rail by default; once you expand or collapse it, that choice is remembered. The collapse control is now a compact double-arrow button beside the version number, labelled **Collapse** / **Expand** on hover or focus, instead of a full-width "Collapse" row above it. Expanding or collapsing no longer makes the menu jump: labels stay on one line while the width animates
 - **Not-found pages** — a missing UI App, an app that is not in your library and a module that cannot be loaded now show a proper message with a way back, instead of unstyled text
 
 ### Fixed

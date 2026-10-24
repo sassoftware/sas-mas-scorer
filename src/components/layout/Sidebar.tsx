@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
@@ -44,12 +44,30 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
   // The collapse button's hover/focus label, until Escape hides it.
   const [tipDismissed, setTipDismissed] = useState(false);
 
+  // While the width animates, labels would wrap in the narrow space and make
+  // every row jump in height; this class keeps them on one line until the
+  // transition ends (or a fallback timer, when motion is reduced).
+  const [resizing, setResizing] = useState(false);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setResizing(true);
+    const timer = setTimeout(() => setResizing(false), 400);
+    return () => clearTimeout(timer);
+  }, [collapsed]);
+
   return (
     <aside
       ref={ref}
       id={id}
-      className={`sas-sidebar ${open ? 'sas-sidebar--open' : ''} ${collapsed ? 'sas-sidebar--collapsed' : ''}`}
+      className={`sas-sidebar ${open ? 'sas-sidebar--open' : ''} ${collapsed ? 'sas-sidebar--collapsed' : ''}${resizing ? ' sas-sidebar--resizing' : ''}`}
       tabIndex={-1}
+      onTransitionEnd={(e) => {
+        if (e.target === e.currentTarget && e.propertyName === 'width') setResizing(false);
+      }}
     >
       <nav className="sas-sidebar__nav" aria-label="Main">
         <div className="sas-sidebar__section">
