@@ -7,6 +7,7 @@ import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
 import type { RuleSetBundle } from '../../api/rulesets';
 import { generateMarkdownExport, type ExportProgress } from '../../flow/mermaidExport';
 import { Button } from '../common';
+import { saveTextFile } from '../../utils/download';
 
 interface FlowExportButtonProps {
   flow: DecisionFlow;
@@ -31,13 +32,7 @@ export default function FlowExportButton({ flow, subDecisionCache, restApiCache,
     setProgress(null);
     try {
       const md = await generateMarkdownExport(flow, setProgress, subDecisionCache, restApiCache, ruleSetCache);
-      const blob = new Blob([md], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${flow.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+      saveTextFile(md, `${flow.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`, 'text/markdown');
     } catch (e) {
       console.error('Export failed:', e);
     } finally {

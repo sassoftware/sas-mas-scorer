@@ -9,21 +9,17 @@ import { FolderBrowser } from './FolderBrowser';
 import { useCasCatalog } from '../../hooks/useCasCatalog';
 import {
   createScoreDefinition,
-  ScoreDefinitionMapping,
   ScoreDefinitionPayload,
 } from '../../api/scoreDefinitions';
 import { DecisionSignatureVariable } from '../../api/modules';
 import { Module, StepParameter, Variable } from '../../types';
-
-// --- localStorage helpers ---
-
-const STORAGE_PREFIX = 'mas-scenario:';
-
-const loadPref = (key: string): string | null =>
-  localStorage.getItem(`${STORAGE_PREFIX}${key}`);
-
-const savePref = (key: string, value: string): void =>
-  localStorage.setItem(`${STORAGE_PREFIX}${key}`, value);
+import {
+  buildNameLookup,
+  buildScenarioMappings,
+  loadPref,
+  savePref,
+  validateName,
+} from './scoreDefinitionHelpers';
 
 // --- Props ---
 
@@ -37,114 +33,6 @@ interface SaveScenarioDialogProps {
   /** Decision signature, resolved once by ScorePanel and passed down. */
   decisionSignature: DecisionSignatureVariable[];
   onClose: () => void;
-}
-
-// --- Mapping helpers ---
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/;
-
-function formatMappingValue(value: unknown): unknown {
-  // Return null (not undefined) so the key survives JSON.stringify
-  if (value === null || value === undefined) return null;
-
-  // Booleans pass through
-  if (typeof value === 'boolean') return value;
-
-  // Numbers pass through
-  if (typeof value === 'number') return value;
-
-  // Strings: detect date/datetime patterns
-  if (typeof value === 'string') {
-    if (DATE_RE.test(value)) return { type: 'date', value };
-    if (DATETIME_RE.test(value)) return { type: 'datetime', value };
-    return value;
-  }
-
-  // Objects/arrays: JSON-stringify for datagrids or complex types
-  if (typeof value === 'object') {
-    // Already wrapped date/datetime objects pass through
-    if ('type' in (value as Record<string, unknown>) && 'value' in (value as Record<string, unknown>)) {
-      return value;
-    }
-    return JSON.stringify(value);
-  }
-
-  return value;
-}
-
-/**
- * Build a case-insensitive lookup from MAS variable names to the original
- * decision variable names. MAS lowercases and appends a trailing '_' to
- * variable names when publishing a decision (e.g. "Cylinders" → "cylinders_").
- *
- * The lookup tries two matches against each signature variable:
- *   1. Exact case-insensitive match (masName vs sigName)
- *   2. Case-insensitive match after stripping trailing '_' from the MAS name
- */
-function buildNameLookup(signature: DecisionSignatureVariable[]): (masName: string) => string {
-  // Map lowercase decision name → original decision name
-  const lowerToOriginal = new Map<string, string>();
-  for (const v of signature) {
-    lowerToOriginal.set(v.name.toLowerCase(), v.name);
-  }
-
-  return (masName: string): string => {
-    // Try exact case-insensitive match first
-    const direct = lowerToOriginal.get(masName.toLowerCase());
-    if (direct) return direct;
-
-    // Try after stripping trailing '_' (MAS suffix)
-    if (masName.endsWith('_')) {
-      const stripped = masName.slice(0, -1);
-      const matched = lowerToOriginal.get(stripped.toLowerCase());
-      if (matched) return matched;
-    }
-
-    // Fallback: return as-is (strip trailing '_' at minimum)
-    return masName.endsWith('_') ? masName.slice(0, -1) : masName;
-  };
-}
-
-function buildMappings(
-  inputValues: Record<string, unknown>,
-  inputParameters: StepParameter[],
-  outputValues: Variable[],
-  resolveName: (masName: string) => string
-): ScoreDefinitionMapping[] {
-  const mappings: ScoreDefinitionMapping[] = [];
-
-  // Input mappings (static)
-  for (const param of inputParameters) {
-    const rawValue = inputValues[param.name];
-    mappings.push({
-      variableName: resolveName(param.name),
-      mappingType: 'static',
-      mappingValue: formatMappingValue(rawValue),
-    });
-  }
-
-  // Output mappings (expected)
-  for (const variable of outputValues) {
-    mappings.push({
-      variableName: resolveName(variable.name),
-      mappingType: 'expected',
-      mappingValue: formatMappingValue(variable.value),
-    });
-  }
-
-  return mappings;
-}
-
-// --- Name validation ---
-
-const NAME_INVALID_CHARS = /[/{}]/;
-
-function validateName(name: string): string | null {
-  if (!name.trim()) return 'Name is required';
-  if (name.length > 100) return 'Name must be 100 characters or less';
-  if (NAME_INVALID_CHARS.test(name)) return 'Name cannot contain /, {, or } characters';
-  return null;
 }
 
 // --- Component ---
@@ -235,7 +123,7 @@ export const SaveScenarioDialog: React.FC<SaveScenarioDialogProps> = ({
 
     try {
       const resolveName = buildNameLookup(decisionSignature);
-      const mappings = buildMappings(inputValues, inputParameters, outputValues, resolveName);
+      const mappings = buildScenarioMappings(inputValues, inputParameters, outputValues, resolveName);
 
       const payload: ScoreDefinitionPayload = {
         name: name.trim(),

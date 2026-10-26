@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useEffect, useId, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../layout/Layout';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
@@ -52,7 +53,14 @@ const useNowTick = (intervalMs: number, enabled: boolean): number => {
 export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) => {
   const { isAuthenticated } = useSasAuth();
   const detail = useJobDetail(jobId, { enabled: isAuthenticated });
-  const [activeTab, setActiveTab] = useState<Tab>('log');
+  // The open tab lives in the URL (#/jobs/{id}?tab=code) so a reload, Back or
+  // a shared link opens the same tab; the default Log tab keeps a clean URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: Tab = TABS.find((tab) => tab.value === tabParam)?.value ?? 'log';
+  const setActiveTab = (tab: Tab) => {
+    setSearchParams(tab === 'log' ? {} : { tab }, { replace: true });
+  };
   // Ids wiring each tab to the single panel (aria-controls / aria-labelledby).
   const idBase = useId();
   const tabId = (tab: Tab) => `${idBase}-tab-${tab}`;

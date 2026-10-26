@@ -2,6 +2,47 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.10.0] - 2026-10-24
+
+Nothing lost, nothing wrong: this release fixes the places where the app silently dropped work or scored, saved or counted the wrong thing, and makes lists and pages remember where you were.
+
+### Added
+
+- **Choose how each batch input gets its value** — in Parallel (File Upload) and Parallel (CAS Table), each input can take a column, **Send as missing (null)** or a **constant**, so a file or CAS table no longer needs every input as a column. A summary ("5 mapped, 2 missing, 1 constant") and a **Send unset inputs as missing** button make dozens of optional inputs quick to handle; Run waits until every input has a choice. A CAS setup with a constant cannot be saved as a SID test (SID has no constant mapping for table tests); one with missing inputs can
+- **Unreadable values flagged before scoring** — the file mapping shows, per input, how many values cannot be read as the input's type, with examples and the first row ("2 values in column clage can't be read as decimal (e.g. "N/A", "12abc"; first in row 3). They are sent as missing (null), not 0."). A CAS run pauses with the same list before scoring, and character columns mapped to numeric inputs are flagged
+- **Drag and drop for File Upload** — drop a CSV, TSV, JSON/JSONL, Excel or Parquet file onto the upload area, as the User Guide describes; the file picker remains the keyboard route
+- **Rules Import links to what you imported** — each imported rule set shows its new revision, an **Open in SAS Intelligent Decisioning** link and its rule chain on demand (**Show rules**)
+- **Test Coverage reports its gaps** — a collection that could not be read (403/404/error) or was cut off is listed in a warning, in a **Data collection** table and in the Markdown export, and a failed type shows as "not collected". If the tests themselves cannot be read, coverage shows n/a instead of 0%
+- **Segmentation tree test runs explain failures** — a failed run shows the error lines from its SAS log (SID records no error message for these runs), with the full log, a download and links to the log and the tree
+- **Copy instead of download where an embed blocks downloads** — inside SAS Visual Analytics the app can run in a frame that blocks downloads. Every export (batch results CSV, coverage CSV/Markdown, flow Markdown, path CSV, job log and code, Rules Import files, the Schema → Code .py, UI App export) now goes through one helper that offers **Copy contents** when the download is blocked or may have been, instead of doing nothing
+
+### Changed
+
+- **Lists remember where you were** — search, filters, sort and page on Modules, Decision Flows, Segmentation Trees, Test Coverage and Job history are kept in the link, so Back, a reload and a shared link show the same view; the sidebar entry starts a fresh list. The open job detail tab is kept the same way. Going back to Decision Flows or Segmentation Trees no longer reloads the whole list, and each view now has its own browser tab title
+- **Switching execution mode keeps your work** — the uploaded file, delimiter, sheet, column mapping, selected CAS table, the single-run result and each mode's batch results are kept when you switch tabs; clicking the active tab no longer clears anything
+- **Missing and unreadable values are sent as missing, not 0** — SAS missing values (`.`, `.A`–`.Z`, `._`), empty cells and values such as `N/A` or `1,5` are now sent as null instead of 0. Excel/Parquet dates are sent as SAS date/datetime numbers to numeric inputs and as ISO text to string inputs
+- **Test Coverage: "covered" means a live test** — trashed score definitions no longer count, tests and scenarios are recognised only by their SID properties (`test`, `inputData.type`), no longer by "test" or "scenario" in the name, and publishing validations are never counted. The page says how many tests and scenarios were counted
+- **Schema → Code: generated code always matches the mapping** — the Python is regenerated from every edit, so the code, the signature and the `execute()` parameter cannot drift apart. Python keywords, duplicate names and names the generated code uses are flagged in place and block Generate and Save; DS2 reserved words show a warning
+- **Segmentation tree test results stay** — a finished table test is shown on the tree immediately, however the dialog is closed, and is kept for the browser session for that tree revision; dismissing the banner hides the results and **Show last test results** brings them back
+- **Rules Import refreshes the server checks after an import**, so CREATE/UPDATE labels and the update acknowledgement are right on a re-import
+- **Desktop app: faster API calls** — connection details and tokens are kept in memory (still encrypted on disk) instead of decrypting the settings file on every request, which capped batch and CAS-table scoring speed
+- **Desktop app: silent session renewal** — when the stored session has expired, the app renews it at startup with the saved refresh token and shows "Connecting…" instead of "Not connected" and the login window. A network outage at startup no longer discards the saved session
+- **Sidebar starts collapsed** — the navigation opens as the icon rail by default; once you expand or collapse it, that choice is remembered. The collapse control is now a compact double-arrow button beside the version number, labelled **Collapse** / **Expand** on hover or focus, instead of a full-width "Collapse" row above it. Expanding or collapsing no longer makes the menu jump: labels stay on one line while the width animates
+- **Not-found pages** — a missing UI App, an app that is not in your library and a module that cannot be loaded now show a proper message with a way back, instead of unstyled text
+
+### Fixed
+
+- **Batch scoring turned SAS missing values into 0** — CAS returns every missing numeric as `.`, and the app scored those as 0; unreadable file values (`N/A`, `1,5`) were scored as 0 as well
+- **Save as Scenario saved inputs that did not produce the result** — a scenario now stores the inputs sent with the run. If inputs change after a run, the results are marked "Inputs changed since this run" and Save as Scenario waits for a re-run; a failed re-run keeps the previous result dimmed and labelled
+- **Wrong model version for similarly named models** — the published-model lookup now matches the module name exactly (the service's `contains()` matches substrings and ignores case), so a model no longer shows the version, Model Manager link or CSV version of a model published later under a longer name; names with an apostrophe no longer lose their version
+- **Job Monitoring mixed servers** — switching connection or logging out and back in now clears the previous server's job counts, instead of adding the new server's jobs to the old totals
+- **The sidebar's Details and Execute Score items did nothing** — Details opens the current module; Execute Score returns to the step last scored in it, or moves to the module's Steps list when none has been scored yet
+- **Shared UI App links showed a broken Edit button** in the default (below) and inline layouts; they now show **Save to My UI Apps** in every layout, and opening the editor for an app that is not in your library explains how to save a copy
+- **Schema → Code: one missing JSON field voided every other variable** — absent fields now default one at a time, `parse_success` stays 1 and `parse_status` lists the absent paths (`OK; absent: …`). A JSON number written with a decimal point (`100.00`) is inferred as Decimal, so a later 99.5 is no longer truncated
+- **Opening a step could land on the module page instead** — coming from UI Apps (or the UI Builder) to a module's step, the score page briefly saw no steps and redirected to the module; it now waits for that module's steps
+- **Very large batch runs could fail at the end** — run statistics no longer overflow the call stack, and the progress card always closes
+- **Save dialogs could crash the scoring page where browser storage is blocked** — Save as Scenario, Save Batch Scenarios and Save as Test now work without stored preferences
+
 ## [2.9.0] - 2026-10-19
 
 ### Added

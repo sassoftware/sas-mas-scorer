@@ -1680,3 +1680,117 @@
     display: none;
   }
 }
+
+
+/* Batch Inputs and Run State
+   The file drop zone, the per-input source choice (column / missing /
+   constant) with its pre-flight notes, the CAS run confirmation and the
+   stale single-run result. */
+
+/* --- File drop zone (wraps .csv-upload__file-section) --- */
+
+.csv-upload__dropzone {
+  padding: var(--space-3);
+  border: 2px dashed transparent;
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.csv-upload__dropzone--active {
+  border-color: var(--sas-blue-primary);
+  background: var(--sas-blue-lighter);
+}
+
+.csv-upload__dropzone-hint {
+  flex-basis: 100%;
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* --- Input source grid --- */
+
+.column-mapping__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.column-mapping__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.column-mapping__constant {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.column-mapping__notes {
+  margin: 0;
+  padding: 0 var(--space-3);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.column-mapping__note {
+  margin: 0;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.column-mapping__notes .column-mapping__note {
+  padding: 0;
+}
+
+.column-mapping__note--warning {
+  color: var(--sas-warning-dark);
+}
+
+.column-mapping__note-tag {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* --- CAS run confirmation (unreadable values) --- */
+
+.batch-run__confirm {
+  margin-top: var(--space-3);
+}
+
+.batch-run__confirm-text {
+  margin: 0 0 var(--space-2) 0;
+}
+
+.batch-run__confirm-list {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+/* --- Execution modes: each body stays mounted and is hidden when inactive --- */
+
+.score-panel__mode-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The display above would otherwise win over the [hidden] attribute */
+.score-panel__mode-body[hidden] {
+  display: none;
+}
+
+/* --- Single run: a result that no longer matches the inputs --- */
+
+.score-panel__output--stale {
+  opacity: 0.6;
+}
+
+.score-panel__stale-note {
+  margin: 0 0 var(--space-3) 0;
+  color: var(--sas-warning-dark);
+  font-size: var(--font-size-sm);
+}

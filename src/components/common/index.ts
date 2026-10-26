@@ -17,3 +17,4 @@ export * from './StepNav';
 export * from './ProgressBar';
 export * from './Pagination';
 export * from './ChunkErrorBoundary';
+export * from './DownloadFallback';

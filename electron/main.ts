@@ -13,11 +13,15 @@ import {
   exchangeCodeForTokens,
   refreshAccessToken,
   PkceChallenge,
+  TokenEndpointError,
 } from './auth';
 import {
   getTokens,
+  getTokensFor,
   setTokens,
+  setTokensFor,
   clearTokens,
+  clearTokensFor,
   getConnection,
   getAllConnections,
   addConnection,
@@ -30,8 +34,78 @@ import {
 
 let mainWindow: BrowserWindow | null = null;
 
-// --- Token refresh deduplication ---
-let refreshInFlight: Promise<string | null> | null = null;
+// --- Token refresh ---
+
+// One refresh at a time per connection: concurrent requests that all find the
+// access token expired share the same refresh call.
+let refreshInFlight: { connectionId: string; promise: Promise<string | null> } | null = null;
+
+/**
+ * Renew the active connection's access token with its stored refresh token.
+ * Resolves to the new access token, or null when there is nothing to refresh
+ * with or the refresh failed.
+ *
+ * Only a rejected grant (HTTP 400/401: the refresh token has expired or was
+ * revoked) clears the stored tokens. A network error or an unavailable server
+ * (VPN not up yet, Viya restarting) keeps them, so a later attempt can still
+ * renew the session without the login window.
+ */
+function refreshSession(): Promise<string | null> {
+  const connection = getConnection();
+  const tokens = getTokens();
+  if (!connection || !tokens?.refreshToken) return Promise.resolve(null);
+
+  if (refreshInFlight && refreshInFlight.connectionId === connection.id) {
+    return refreshInFlight.promise;
+  }
+
+  const connectionId = connection.id;
+  const entry: NonNullable<typeof refreshInFlight> = { connectionId, promise: Promise.resolve(null) };
+  entry.promise = (async (): Promise<string | null> => {
+    try {
+      const newTokens = await refreshAccessToken(
+        connection.viyaUrl,
+        connection.clientId,
+        connection.clientSecret,
+        tokens.refreshToken,
+        connection.insecureSsl
+      );
+
+      // The user logged out (or logged in again) while the refresh was out:
+      // keep what is stored now rather than bringing the old session back.
+      const stored = getTokensFor(connectionId);
+      if (!stored || stored.refreshToken !== tokens.refreshToken) {
+        return stored?.accessToken ?? null;
+      }
+
+      // Written to the connection the refresh was started for, even if the
+      // user switched connection while it was out.
+      setTokensFor(connectionId, {
+        accessToken: newTokens.access_token,
+        // SASLogon may answer without rotating the refresh token.
+        refreshToken: newTokens.refresh_token || tokens.refreshToken,
+        expiresAt: Date.now() + newTokens.expires_in * 1000,
+      });
+
+      return newTokens.access_token;
+    } catch (err) {
+      if (
+        err instanceof TokenEndpointError &&
+        (err.status === 400 || err.status === 401) &&
+        getTokensFor(connectionId)?.refreshToken === tokens.refreshToken
+      ) {
+        // The refresh token is no longer accepted; the user has to log in.
+        clearTokensFor(connectionId);
+      }
+      return null;
+    } finally {
+      if (refreshInFlight === entry) refreshInFlight = null;
+    }
+  })();
+
+  refreshInFlight = entry;
+  return entry.promise;
+}
 
 // --- SSL configuration ---
 
@@ -127,7 +201,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('conn:setActive', (_event, id: string) => {
     setActiveConnection(id);
     applySslConfig();
-    refreshInFlight = null;
+    // A refresh still out for the previous connection is keyed to it and
+    // writes its tokens there, so it is left to finish.
   });
 
   // Backward-compat alias used by client.ts
@@ -137,9 +212,14 @@ function registerIpcHandlers(): void {
 
   // --- Auth Status ---
 
-  ipcMain.handle('auth:isAuthenticated', () => {
+  ipcMain.handle('auth:isAuthenticated', async () => {
     const tokens = getTokens();
-    return tokens !== null && tokens.expiresAt > Date.now();
+    if (!tokens) return false;
+    if (tokens.expiresAt > Date.now()) return true;
+    // The access token ran out while the app was closed (or idle). Renew it
+    // silently with the stored refresh token rather than reporting "Not
+    // connected" and sending the user through the login window again.
+    return (await refreshSession()) !== null;
   });
 
   // --- Get Access Token (with auto-refresh) ---
@@ -153,43 +233,8 @@ function registerIpcHandlers(): void {
       return tokens.accessToken;
     }
 
-    // Token expired or about to expire — refresh it
-    // Deduplicate concurrent refresh requests
-    if (refreshInFlight) {
-      return refreshInFlight;
-    }
-
-    refreshInFlight = (async (): Promise<string | null> => {
-      const connection = getConnection();
-      if (!connection) return null;
-
-      try {
-        const newTokens = await refreshAccessToken(
-          connection.viyaUrl,
-          connection.clientId,
-          connection.clientSecret,
-          tokens.refreshToken,
-          connection.insecureSsl
-        );
-
-        const expiresAt = Date.now() + newTokens.expires_in * 1000;
-        setTokens({
-          accessToken: newTokens.access_token,
-          refreshToken: newTokens.refresh_token,
-          expiresAt,
-        });
-
-        return newTokens.access_token;
-      } catch {
-        // Refresh failed — clear tokens, user needs to re-login
-        clearTokens();
-        return null;
-      } finally {
-        refreshInFlight = null;
-      }
-    })();
-
-    return refreshInFlight;
+    // Token expired or about to expire — refresh it (deduplicated)
+    return refreshSession();
   });
 
   // --- Login ---

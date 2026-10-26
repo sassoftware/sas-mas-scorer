@@ -384,6 +384,35 @@ td.rules-import__col-wide .rules-import__cell-input {
   flex-wrap: wrap;
 }
 
+.rules-import__result-meta {
+  font-size: var(--font-size-sm);
+}
+
+.rules-import__result-meta--warning {
+  color: var(--sas-warning-dark);
+}
+
+/* Rule chain of an imported rule set; the rule cards reuse the flow side
+   panel's .flow-sp-rule classes so both views read the same. */
+.rules-import__chain {
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--sas-white);
+}
+
+.rules-import__chain-status {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.rules-import__chain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .rules-import__result-hint {
   margin: var(--space-2) 0 0;
   font-size: var(--font-size-sm);

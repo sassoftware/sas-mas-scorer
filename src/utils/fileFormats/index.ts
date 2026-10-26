@@ -23,5 +23,8 @@ export const findAdapter = (filename: string): FileFormatAdapter | undefined => 
 export const acceptAttribute = (): string =>
   adapters.flatMap(a => a.extensions).join(',');
 
-export { convertValue } from './convert';
+export { convertValue, convertCell, isSasMissingText } from './convert';
+export type { ConvertResult, ConvertOptions, DateConversion } from './convert';
+export { scanMappedRows, convertMappedRows, describeDateConversion } from './preflight';
+export type { MappedColumn, ValueIssue, DateNote, ConversionReport } from './preflight';
 export * from './types';

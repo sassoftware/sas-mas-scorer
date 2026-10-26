@@ -8,6 +8,7 @@ import { buildTreeIndex } from '../../utils/segTree/treeIndex';
 import { leafPrefix, nextLeaf } from '../../utils/segTree/leafCounts';
 import { autoExpand, expandAll, expandOneLevel, visibleRows, withPathOpen } from '../../utils/segTree/treeView';
 import { allPathsCsv, type PathView } from '../../utils/segTree/formats';
+import { loadTestRun, saveTestRun, treeRevisionKey } from '../../utils/segTree/testRunStore';
 import { buildDeepLink } from '../../utils/deepLinks';
 import { downloadTextFile } from '../../utils/csv';
 import { formatTimestamp } from '../../utils/formatters';
@@ -79,6 +80,10 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
   const [view, setView] = useState<PathView>(loadView);
   const [testScope, setTestScope] = useState<{ title: string; leafIds: string[] } | null>(null);
   const [run, setRun] = useState<TestRunSummary | null>(null);
+  // Dismissing the banner hides the overlay; the run is kept so it can be shown again.
+  const [runHidden, setRunHidden] = useState(false);
+  // False when the last run was too large to keep for the session.
+  const [runStored, setRunStored] = useState(true);
   const [centre, setCentre] = useState<CentreView>(loadCentre);
   // Open branches per tree view. The diagram defaults to far fewer nodes than
   // the outline: a drawn tree gets hard to read much sooner than a list.
@@ -89,8 +94,15 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
     setLoading(true);
     setError('');
     setRun(null);
+    setRunHidden(false);
+    setRunStored(true);
     getSegmentationTreeById(treeId)
-      .then((t) => { if (active) setTree(t); })
+      .then((t) => {
+        if (!active) return;
+        setTree(t);
+        // The last test of this tree revision, kept for the browser session.
+        setRun(loadTestRun(t.id, treeRevisionKey(t)));
+      })
       .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -151,14 +163,23 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
     [index]
   );
 
+  /** A finished table test: show it on the tree and keep it for the session. */
+  const applyRun = useCallback((summary: TestRunSummary) => {
+    setRun(summary);
+    setRunHidden(false);
+    if (tree) setRunStored(saveTestRun(tree.id, treeRevisionKey(tree), summary));
+  }, [tree]);
+
+  const shownRun = runHidden ? null : run;
+
   const resultPrefixes = useMemo<ResultPrefixes | null>(() => {
-    if (!index || !run) return null;
-    const byPath = run.results.byPath;
+    if (!index || !shownRun) return null;
+    const byPath = shownRun.results.byPath;
     return {
       pass: leafPrefix(index, (id) => byPath.get(id)?.status === 'pass'),
       fail: leafPrefix(index, (id) => byPath.get(id)?.status === 'fail'),
     };
-  }, [index, run]);
+  }, [index, shownRun]);
 
   if (loading) return <Loading message="Loading segmentation tree..." />;
 
@@ -185,7 +206,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
   const splitId = focus ? focus.childSplitId ?? focus.splitId : index.rootSplitId;
   const activeBranchId = focus && !focus.childSplitId ? focus.id : null;
   const deepLink = buildDeepLink('segmentationTree', tree.id);
-  const failedTotal = run?.results.failed ?? 0;
+  const failedTotal = shownRun?.results.failed ?? 0;
   const focusOrdinal = focus ? (focus.childSplitId ? focus.leafStart - 1 : index.leafOrdinal.get(focus.id)!) : -1;
 
   const jumpToNext = (test: (id: string) => boolean) => {
@@ -224,6 +245,11 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           >
             Export paths (CSV)
           </Button>
+          {run && runHidden && (
+            <Button variant="secondary" size="small" onClick={() => setRunHidden(false)}>
+              Show last test results
+            </Button>
+          )}
         </div>
       </header>
 
@@ -231,22 +257,25 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
         <UnreachableBanner index={index} onNavigate={goTo} />
       </div>
 
-      {run && (
+      {shownRun && (
         <div className="segtree__notice">
           <Alert
             variant={failedTotal > 0 ? 'warning' : 'success'}
-            title={`Test "${run.testName}" — ${formatTimestamp(run.ranAt)}`}
-            onClose={() => setRun(null)}
+            title={`Test "${shownRun.testName}" — ${formatTimestamp(shownRun.ranAt)}`}
+            onClose={() => setRunHidden(true)}
             dismissible
             actions={failedTotal > 0 ? (
-              <Button variant="secondary" size="small" onClick={() => jumpToNext((id) => run.results.byPath.get(id)?.status === 'fail')}>
+              <Button variant="secondary" size="small" onClick={() => jumpToNext((id) => shownRun.results.byPath.get(id)?.status === 'fail')}>
                 Next failed path
               </Button>
             ) : undefined}
           >
-            {run.results.passed.toLocaleString()} passed · {failedTotal.toLocaleString()} failed
-            {run.results.unchecked > 0 ? ` · ${run.results.unchecked.toLocaleString()} without expected values` : ''}.
-            Output table <code>{run.outputTable}</code>.
+            {shownRun.results.passed.toLocaleString()} passed · {failedTotal.toLocaleString()} failed
+            {shownRun.results.unchecked > 0 ? ` · ${shownRun.results.unchecked.toLocaleString()} without expected values` : ''}.
+            Output table <code>{shownRun.outputTable}</code>.
+            {runStored
+              ? ' Kept for this browser session; hiding it keeps it available.'
+              : ' Too large to keep after a reload; it stays until you leave this tree.'}
           </Alert>
         </div>
       )}
@@ -257,7 +286,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
         <SegTreeOutcomeIndex
           index={index}
           focusId={focusId}
-          results={run?.results.byPath ?? null}
+          results={shownRun?.results.byPath ?? null}
           onNavigate={goTo}
           onTest={(title, leafIds) => setTestScope({ title, leafIds })}
         />
@@ -365,7 +394,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           focusId={focusId}
           view={view}
           onViewChange={changeView}
-          result={focusId ? run?.results.byPath.get(focusId) ?? null : null}
+          result={focusId ? shownRun?.results.byPath.get(focusId) ?? null : null}
           onTest={(title, leafIds) => setTestScope({ title, leafIds })}
           onNavigate={goTo}
         />
@@ -377,7 +406,12 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           title={testScope.title}
           leafIds={testScope.leafIds}
           onClose={() => setTestScope(null)}
-          onResults={setRun}
+          onResults={applyRun}
+          onShowFailure={() => {
+            // Start from the top of the tree so the first failed path is selected.
+            const id = nextLeaf(index, -1, (leaf) => run?.results.byPath.get(leaf)?.status === 'fail');
+            if (id) goTo(id);
+          }}
         />
       )}
     </div>

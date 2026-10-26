@@ -10,21 +10,17 @@ import { FolderBrowser } from './FolderBrowser';
 import { useCasCatalog } from '../../hooks/useCasCatalog';
 import {
   createScoreDefinition,
-  ScoreDefinitionMapping,
   ScoreDefinitionPayload,
 } from '../../api/scoreDefinitions';
 import { DecisionSignatureVariable } from '../../api/modules';
-import { Module, StepParameter, Variable, StepOutput } from '../../types';
-
-// --- localStorage helpers ---
-
-const STORAGE_PREFIX = 'mas-scenario:';
-
-const loadPref = (key: string): string | null =>
-  localStorage.getItem(`${STORAGE_PREFIX}${key}`);
-
-const savePref = (key: string, value: string): void =>
-  localStorage.setItem(`${STORAGE_PREFIX}${key}`, value);
+import { Module, StepParameter, StepOutput } from '../../types';
+import {
+  buildNameLookup,
+  buildScenarioMappings,
+  loadPref,
+  savePref,
+  validateName,
+} from './scoreDefinitionHelpers';
 
 // Score definitions are created through a small worker pool (the same
 // cursor-based shape as the batch scoring path) rather than one POST at a
@@ -47,86 +43,6 @@ interface SaveBatchScenariosDialogProps {
   /** Decision signature, resolved once by ScorePanel and passed down. */
   decisionSignature: DecisionSignatureVariable[];
   onClose: () => void;
-}
-
-// --- Mapping helpers (same as SaveScenarioDialog) ---
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/;
-
-function formatMappingValue(value: unknown): unknown {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    if (DATE_RE.test(value)) return { type: 'date', value };
-    if (DATETIME_RE.test(value)) return { type: 'datetime', value };
-    return value;
-  }
-  if (typeof value === 'object') {
-    if ('type' in (value as Record<string, unknown>) && 'value' in (value as Record<string, unknown>)) {
-      return value;
-    }
-    return JSON.stringify(value);
-  }
-  return value;
-}
-
-function buildNameLookup(signature: DecisionSignatureVariable[]): (masName: string) => string {
-  const lowerToOriginal = new Map<string, string>();
-  for (const v of signature) {
-    lowerToOriginal.set(v.name.toLowerCase(), v.name);
-  }
-
-  return (masName: string): string => {
-    const direct = lowerToOriginal.get(masName.toLowerCase());
-    if (direct) return direct;
-    if (masName.endsWith('_')) {
-      const stripped = masName.slice(0, -1);
-      const matched = lowerToOriginal.get(stripped.toLowerCase());
-      if (matched) return matched;
-    }
-    return masName.endsWith('_') ? masName.slice(0, -1) : masName;
-  };
-}
-
-function buildMappings(
-  inputValues: Record<string, unknown>,
-  inputParameters: StepParameter[],
-  outputValues: Variable[],
-  resolveName: (masName: string) => string
-): ScoreDefinitionMapping[] {
-  const mappings: ScoreDefinitionMapping[] = [];
-
-  for (const param of inputParameters) {
-    const rawValue = inputValues[param.name];
-    mappings.push({
-      variableName: resolveName(param.name),
-      mappingType: 'static',
-      mappingValue: formatMappingValue(rawValue),
-    });
-  }
-
-  for (const variable of outputValues) {
-    mappings.push({
-      variableName: resolveName(variable.name),
-      mappingType: 'expected',
-      mappingValue: formatMappingValue(variable.value),
-    });
-  }
-
-  return mappings;
-}
-
-// --- Name validation ---
-
-const NAME_INVALID_CHARS = /[/{}]/;
-
-function validateName(name: string): string | null {
-  if (!name.trim()) return 'Name is required';
-  if (name.length > 100) return 'Name must be 100 characters or less';
-  if (NAME_INVALID_CHARS.test(name)) return 'Name cannot contain /, {, or } characters';
-  return null;
 }
 
 // --- Component ---
@@ -229,7 +145,7 @@ export const SaveBatchScenariosDialog: React.FC<SaveBatchScenariosDialogProps> =
     const saveRow = async (i: number) => {
       const row = rows[i];
       const scenarioName = `${trimmedBase}_${i + 1}`;
-      const mappings = buildMappings(row.input, inputParameters, row.output.outputs, resolveName);
+      const mappings = buildScenarioMappings(row.input, inputParameters, row.output.outputs, resolveName);
 
       const payload: ScoreDefinitionPayload = {
         name: scenarioName,

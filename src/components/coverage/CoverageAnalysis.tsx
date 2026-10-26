@@ -12,17 +12,28 @@ import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { getSasViyaUrl } from '../../config';
 import { registerViewCache } from '../../utils/viewCaches';
+import { saveTextFile } from '../../utils/download';
+import { useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import {
   collectCoverage,
+  collectionGaps,
+  describeCollectionStatus,
   generateCoverageCSV,
   generateCoverageMarkdown,
   getContentTypeLabel,
   getDeepLink,
+  testsNotCollected,
+  type CoverageRunResult,
 } from '../../api/coverage';
-import { ContentType, CollectionProgress, CoverageResult } from '../../types/coverage';
+import { ContentType, CollectionProgress } from '../../types/coverage';
 
 type FilterType = 'all' | ContentType;
 type CoverageFilter = 'all' | 'covered' | 'uncovered';
+
+const TYPE_FILTERS = ['all', 'decision', 'businessRule', 'codeFile', 'model', 'treatment', 'segmentationTree'] as const satisfies readonly FilterType[];
+const COVERAGE_FILTERS = ['all', 'covered', 'uncovered'] as const satisfies readonly CoverageFilter[];
+/** URL defaults for the detail table; left out of the URL when unchanged. */
+const LIST_DEFAULTS = { q: '', type: 'all', coverage: 'all' };
 type SortField = 'name' | 'contentType' | 'testScenarioCount' | 'modifiedTimestamp';
 
 /** Rows rendered per page; filtering, sorting and the exports still cover every asset. */
@@ -31,7 +42,7 @@ const PAGE_SIZE = 50;
 /** One collator for every comparison — building Intl state per compare is what made sorting slow. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-let cachedResult: CoverageResult | null = null;
+let cachedResult: CoverageRunResult | null = null;
 
 export const clearCoverageAnalysisCache = (): void => {
   cachedResult = null;
@@ -42,26 +53,31 @@ export const clearCoverageAnalysisCache = (): void => {
 registerViewCache('coverage', clearCoverageAnalysisCache);
 
 export const CoverageAnalysis: React.FC = () => {
-  const [result, setResult] = useState<CoverageResult | null>(() => cachedResult);
+  const [result, setResult] = useState<CoverageRunResult | null>(() => cachedResult);
   const [progress, setProgress] = useState<CollectionProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Detail table state
-  const [typeFilter, setTypeFilter] = useState<FilterType>('all');
-  const [coverageFilter, setCoverageFilter] = useState<CoverageFilter>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // Detail table state. Search and the two filters live in the URL, so Back,
+  // a reload or a shared link shows the same rows.
+  const [listParams, updateListParams] = useListUrlParams('coverage', LIST_DEFAULTS);
+  const typeFilter: FilterType = (TYPE_FILTERS as readonly string[]).includes(listParams.type)
+    ? (listParams.type as FilterType)
+    : 'all';
+  const coverageFilter: CoverageFilter = (COVERAGE_FILTERS as readonly string[]).includes(listParams.coverage)
+    ? (listParams.coverage as CoverageFilter)
+    : 'all';
+  const setTypeFilter = (type: FilterType) => updateListParams({ type });
+  const setCoverageFilter = (coverage: CoverageFilter) => updateListParams({ coverage });
+  // The box follows typing at once; filtering waits for the URL, which is
+  // written after a pause so a keystroke does not re-sort the whole tenant.
+  const commitSearch = useCallback((q: string) => updateListParams({ q }), [updateListParams]);
+  const [searchTerm, setSearchTerm] = useDebouncedUrlText(listParams.q, commitSearch, 200);
+  const debouncedSearch = listParams.q;
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(0);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-
-  // Debounce the search box so a keystroke does not re-filter and re-sort the whole tenant.
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 200);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   // A changed filter, search term or sort order starts again from the first page.
   useEffect(() => {
@@ -150,7 +166,7 @@ export const CoverageAnalysis: React.FC = () => {
 
   const handleExportCSV = useCallback(() => {
     if (!result) return;
-    const csv = generateCoverageCSV(sortedItems);
+    const csv = generateCoverageCSV(sortedItems, !testsNotCollected(result));
     downloadFile(csv, 'test-coverage.csv', 'text/csv');
   }, [result, sortedItems]);
 
@@ -161,6 +177,16 @@ export const CoverageAnalysis: React.FC = () => {
   }, [result]);
 
   const baseUrl = getSasViyaUrl();
+
+  // Collections that were skipped or truncated. When the tests themselves
+  // could not be read, no asset's coverage is known, so the figures read
+  // "n/a" rather than a 0% that looks like a real finding.
+  const gaps = useMemo(() => (result ? collectionGaps(result) : []), [result]);
+  const noTests = result ? testsNotCollected(result) : false;
+  const skippedTypes = useMemo(
+    () => new Set(gaps.filter(g => g.status === 'skipped').map(g => g.key)),
+    [gaps],
+  );
 
   return (
     <div className="coverage-analysis">
@@ -237,6 +263,28 @@ export const CoverageAnalysis: React.FC = () => {
       {/* Results */}
       {result && (
         <>
+          {gaps.length > 0 && (
+            <Alert
+              variant="warning"
+              title={noTests
+                ? 'Test coverage could not be determined'
+                : `${gaps.length} collection${gaps.length === 1 ? ' was' : 's were'} not read completely`}
+            >
+              <p className="coverage-gaps__intro">
+                {noTests
+                  ? 'The score definitions (tests) could not be read, so coverage is shown as n/a. Asset counts are still listed.'
+                  : 'The figures below cover only what was collected; assets in these collections are missing or incomplete.'}
+              </p>
+              <ul className="coverage-gaps__list">
+                {gaps.map(g => (
+                  <li key={g.key}>
+                    <strong>{g.label}</strong>: {describeCollectionStatus(g)}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+
           {/* Summary Dashboard */}
           <div className="coverage-dashboard">
             {/* Overall coverage gauge */}
@@ -250,14 +298,16 @@ export const CoverageAnalysis: React.FC = () => {
                       className="coverage-gauge__fill"
                       style={{
                         strokeDasharray: `${2 * Math.PI * 52}`,
-                        strokeDashoffset: `${2 * Math.PI * 52 * (1 - result.stats.overall.coveragePercentage / 100)}`,
+                        strokeDashoffset: `${2 * Math.PI * 52 * (1 - (noTests ? 0 : result.stats.overall.coveragePercentage) / 100)}`,
                       }}
                     />
                   </svg>
                   <div className="coverage-gauge__value">
-                    {result.stats.overall.coveragePercentage}%
+                    {noTests ? 'n/a' : `${result.stats.overall.coveragePercentage}%`}
                   </div>
-                  <div className="coverage-gauge__label">Overall Coverage</div>
+                  <div className="coverage-gauge__label">
+                    {noTests ? 'Overall Coverage (tests not collected)' : 'Overall Coverage'}
+                  </div>
                 </div>
               </CardBody>
             </Card>
@@ -269,11 +319,11 @@ export const CoverageAnalysis: React.FC = () => {
                 <div className="sas-stat-label">Total Assets</div>
               </div>
               <div className="sas-card sas-stat-card coverage-stat--success">
-                <div className="sas-stat-value">{result.stats.overall.itemsWithTests}</div>
+                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithTests}</div>
                 <div className="sas-stat-label">With Tests</div>
               </div>
               <div className="sas-card sas-stat-card coverage-stat--error">
-                <div className="sas-stat-value">{result.stats.overall.itemsWithoutTests}</div>
+                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithoutTests}</div>
                 <div className="sas-stat-label">Without Tests</div>
               </div>
               <div className="sas-card sas-stat-card coverage-stat--date">
@@ -293,26 +343,84 @@ export const CoverageAnalysis: React.FC = () => {
             <CardBody>
               <div className="coverage-type-bars">
                 {(Object.entries(result.stats.byType) as [ContentType, typeof result.stats.byType[ContentType]][])
-                  .filter(([, s]) => s.total > 0)
+                  // A type that could not be read stays visible as "not collected".
+                  .filter(([type, s]) => s.total > 0 || skippedTypes.has(type))
                   .sort((a, b) => b[1].total - a[1].total)
-                  .map(([type, s]) => (
+                  .map(([type, s]) => skippedTypes.has(type) ? (
                     <div key={type} className="coverage-type-row">
                       <div className="coverage-type-row__label">
                         <span className="coverage-type-row__name">{getContentTypeLabel(type)}</span>
-                        <span className="coverage-type-row__count">{s.withTests} / {s.total}</span>
+                        <span className="coverage-type-row__count">not collected</span>
+                      </div>
+                      <div className="coverage-type-row__gap-note">
+                        Could not be read{(() => {
+                          const status = gaps.find(g => g.key === type)?.httpStatus;
+                          return status ? ` (HTTP ${status})` : '';
+                        })()}; not included in the totals.
+                      </div>
+                      <div className="coverage-type-row__pct">n/a</div>
+                    </div>
+                  ) : (
+                    <div key={type} className="coverage-type-row">
+                      <div className="coverage-type-row__label">
+                        <span className="coverage-type-row__name">{getContentTypeLabel(type)}</span>
+                        <span className="coverage-type-row__count">
+                          {noTests ? `${s.total} assets` : `${s.withTests} / ${s.total}`}
+                        </span>
                       </div>
                       <div className="coverage-type-row__bar-track">
-                        <div
-                          className={`coverage-type-row__bar-fill ${getCoverageClass(s.coveragePercentage)}`}
-                          style={{ width: `${s.coveragePercentage}%` }}
-                        />
+                        {!noTests && (
+                          <div
+                            className={`coverage-type-row__bar-fill ${getCoverageClass(s.coveragePercentage)}`}
+                            style={{ width: `${s.coveragePercentage}%` }}
+                          />
+                        )}
                       </div>
                       <div className="coverage-type-row__pct">
-                        {s.coveragePercentage}%
+                        {noTests ? 'n/a' : `${s.coveragePercentage}%`}
                       </div>
                     </div>
                   ))}
               </div>
+              <details className="coverage-collections">
+                <summary className="coverage-collections__summary">
+                  Data collection{gaps.length > 0 ? ` (${gaps.length} incomplete)` : ' (complete)'}
+                </summary>
+                <table className="sas-table sas-table--compact coverage-collections__table">
+                  <thead className="sas-table__head">
+                    <tr>
+                      <th scope="col" className="sas-table__th">Collection</th>
+                      <th scope="col" className="sas-table__th">Status</th>
+                      <th scope="col" className="sas-table__th">Items</th>
+                    </tr>
+                  </thead>
+                  <tbody className="sas-table__body">
+                    {result.collections.map(c => (
+                      <tr key={c.key} className="sas-table__row">
+                        <td className="sas-table__td">{c.label}</td>
+                        <td className="sas-table__td">
+                          <Badge
+                            variant={c.status === 'ok' ? 'success' : c.status === 'truncated' ? 'warning' : 'error'}
+                            size="small"
+                          >
+                            {c.status === 'ok' ? 'Complete' : c.status === 'truncated' ? 'Truncated' : 'Not collected'}
+                          </Badge>
+                        </td>
+                        <td className="sas-table__td">{describeCollectionStatus(c)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!noTests && (
+                  <p className="coverage-collections__note">
+                    Counted as coverage: {result.scoreDefinitions.tests} test
+                    {result.scoreDefinitions.tests === 1 ? '' : 's'} and {result.scoreDefinitions.scenarios} scenario
+                    {result.scoreDefinitions.scenarios === 1 ? '' : 's'} of {result.scoreDefinitions.examined} score
+                    definitions. Trashed definitions and publishing validations
+                    ({result.scoreDefinitions.publishValidations}) are not counted.
+                  </p>
+                )}
+              </details>
             </CardBody>
           </Card>
 
@@ -426,7 +534,9 @@ export const CoverageAnalysis: React.FC = () => {
                                 </Badge>
                               </td>
                               <td className="sas-table__td" style={{ textAlign: 'center' }}>
-                                {item.hasTestScenario ? (
+                                {noTests ? (
+                                  <Badge variant="default" size="small">Unknown</Badge>
+                                ) : item.hasTestScenario ? (
                                   <Badge variant="success" size="small">Covered</Badge>
                                 ) : (
                                   <Badge variant="error" size="small">No tests</Badge>
@@ -615,15 +725,7 @@ function getScenarioTypeBadgeVariant(type: string) {
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  saveTextFile(content, filename, mimeType);
 }
 
 export default CoverageAnalysis;

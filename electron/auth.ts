@@ -32,6 +32,21 @@ export interface PkceChallenge {
   codeChallenge: string;
 }
 
+/**
+ * The token endpoint answered with an HTTP error. `status` tells a rejected
+ * grant (400/401: the refresh token is expired or revoked) apart from a
+ * server that is unavailable; a network failure never produces this error.
+ */
+export class TokenEndpointError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'TokenEndpointError';
+    this.status = status;
+  }
+}
+
 // --- PKCE Generation ---
 
 const ALLOWED_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
@@ -184,7 +199,10 @@ export async function refreshAccessToken(
   });
 
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`Token refresh failed (HTTP ${response.status}): ${response.data}`);
+    throw new TokenEndpointError(
+      `Token refresh failed (HTTP ${response.status}): ${response.data}`,
+      response.status
+    );
   }
 
   return JSON.parse(response.data) as TokenResponse;

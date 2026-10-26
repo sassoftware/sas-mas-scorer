@@ -379,15 +379,23 @@
   font-size: var(--font-size-sm);
 }
 
+/* One row: the version, then the collapse control at the trailing edge. */
 .sas-sidebar__footer {
-  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-top: 1px solid var(--sas-gray-200);
 }
 
 .sas-sidebar__version {
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
-  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Page Header */
@@ -805,19 +813,47 @@
 /* Collapsible sidebar (wide layouts only). The user can fold the sidebar to an
    icon rail to give the page more room; the choice is remembered per browser.
    Below the layout breakpoint the sidebar is a drawer and this has no effect. */
+.sas-sidebar__collapse-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
 .sas-sidebar__collapse {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  width: 100%;
+  justify-content: center;
+  min-width: var(--target-min);
   min-height: var(--target-min);
   padding: var(--space-2);
-  margin-bottom: var(--space-2);
   border-radius: var(--radius-md);
   color: var(--sas-gray-600);
-  font-size: var(--font-size-sm);
-  text-align: left;
   transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+/* "Collapse" / "Expand", shown on hover or keyboard focus; Escape hides it. */
+.sas-sidebar__collapse-tip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  color: var(--sas-white);
+  background-color: var(--sas-gray-900);
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.sas-sidebar__collapse-wrap:hover .sas-sidebar__collapse-tip,
+.sas-sidebar__collapse:focus-visible + .sas-sidebar__collapse-tip {
+  opacity: 1;
+}
+
+.sas-sidebar__collapse-wrap--tip-dismissed .sas-sidebar__collapse-tip {
+  opacity: 0;
 }
 
 .sas-sidebar__collapse:hover {
@@ -849,8 +885,27 @@
     overflow-x: hidden;
   }
 
+  .sas-sidebar__nav {
+    transition: padding var(--transition-normal);
+  }
+
   .sas-sidebar--collapsed .sas-sidebar__nav {
     padding: var(--space-4) var(--space-2);
+  }
+
+  /* During the width animation text is revealed, not reflowed: one line,
+     clipped, so no row changes height until the sidebar has its width. */
+  .sas-sidebar--resizing {
+    overflow-x: hidden;
+  }
+
+  .sas-sidebar--resizing .sas-sidebar__section-title,
+  .sas-sidebar--resizing .sas-sidebar__module-name,
+  .sas-sidebar--resizing .sas-sidebar__module-id,
+  .sas-sidebar--resizing .sas-sidebar__menu-item,
+  .sas-sidebar--resizing .sas-sidebar__recent-item {
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   /* Labels stay in the accessibility tree; only the paint goes. */
@@ -858,7 +913,6 @@
   .sas-sidebar--collapsed .sas-sidebar__module-name,
   .sas-sidebar--collapsed .sas-sidebar__module-id,
   .sas-sidebar--collapsed .sas-sidebar__menu-item span,
-  .sas-sidebar--collapsed .sas-sidebar__collapse span,
   .sas-sidebar--collapsed .sas-sidebar__version {
     position: absolute;
     width: 1px;
@@ -886,12 +940,15 @@
   }
 
   .sas-sidebar--collapsed .sas-sidebar__footer {
+    justify-content: center;
     padding: var(--space-2);
   }
 
-  .sas-sidebar--collapsed .sas-sidebar__collapse {
-    justify-content: center;
-    margin-bottom: 0;
+  /* The rail is narrow: centre the label over the button. */
+  .sas-sidebar--collapsed .sas-sidebar__collapse-tip {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 

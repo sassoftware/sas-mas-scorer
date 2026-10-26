@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Module, Step, Submodule, getModuleType } from '../../types';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Badge, StatusBadge } from '../common/Badge';
@@ -24,6 +24,12 @@ interface ModuleDetailsProps {
   onDelete: (moduleId: string) => Promise<void>;
   onBuildUI?: (moduleId: string) => void;
   onViewFlow?: (flowId: string) => void;
+  /**
+   * Changes each time the page is asked to bring the Steps card into view
+   * (the sidebar's Execute Score before any step was picked); focus moves to
+   * the Steps heading.
+   */
+  focusStepsRequest?: string;
 }
 
 export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
@@ -37,7 +43,13 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   onDelete,
   onBuildUI,
   onViewFlow,
+  focusStepsRequest,
 }) => {
+  const stepsHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (focusStepsRequest) stepsHeadingRef.current?.focus();
+  }, [focusStepsRequest]);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -381,7 +393,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
         {/* Steps Section */}
         <Card className="module-details__steps-card">
           <CardHeader>
-            <h3>Steps ({steps.length})</h3>
+            <h3 ref={stepsHeadingRef} tabIndex={-1}>Steps ({steps.length})</h3>
           </CardHeader>
           <CardBody>
             {loadingSteps ? (

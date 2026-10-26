@@ -21,7 +21,7 @@ import { StepNav } from '../common/StepNav';
 import { useSasAuth } from '../../auth';
 import { RulesGrid } from './RulesGrid';
 import { ImportConfirmDialog, ConfirmEntry } from './ImportConfirmDialog';
-import { ImportResultPanel } from './ImportResultPanel';
+import { ImportResultPanel, ImportedRuleSetLink } from './ImportResultPanel';
 import { parseCsv, serializeCsv, stripBom, downloadTextFile } from '../../utils/csv';
 import {
   mapHeader,
@@ -30,7 +30,7 @@ import {
   validateRows,
   autoFixNormalizable,
 } from '../../utils/rulesImport/validate';
-import { interpretImportResponse } from '../../utils/rulesImport/multipart';
+import { acceptedRuleSetIds, interpretImportResponse } from '../../utils/rulesImport/multipart';
 import { postRulesCsv, runPreflight } from '../../api/businessRulesImport';
 import { COL, ROWS_PER_PAGE } from '../../utils/rulesImport/constants';
 import {
@@ -55,7 +55,11 @@ export const RulesImportPage: React.FC = () => {
   const [rows, setRows] = useState<string[][]>([]);
   const [fileIssues, setFileIssues] = useState<CellIssue[]>([]);
   const [preflight, setPreflight] = useState<PreflightState | null>(null);
+  // True while the server checks are re-run after an import (see handleConfirmImport).
+  const [refreshingChecks, setRefreshingChecks] = useState(false);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  // Ids from the Accepted-csv part of the last import response (key → id).
+  const [acceptedIds, setAcceptedIds] = useState<Map<string, string>>(new Map());
   const [retryScope, setRetryScope] = useState<number[] | null>(null);
   const [phase, setPhase] = useState<ImportPhase>('empty');
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -210,13 +214,15 @@ export const RulesImportPage: React.FC = () => {
     if (scopedIdConflictCount > 0)
       return `Resolve ${scopedIdConflictCount} ruleset_id conflict${scopedIdConflictCount === 1 ? '' : 's'} — use "Clear conflicting IDs" in Server Checks.`;
     if (phase === 'importing' || phase === 'preflighting') return 'Please wait…';
+    if (refreshingChecks) return 'Refreshing the server checks after the import…';
     return null;
-  }, [rows.length, scopedErrorCount, isAuthenticated, preflight, preflightStale, scopedIdConflictCount, phase]);
+  }, [rows.length, scopedErrorCount, isAuthenticated, preflight, preflightStale, scopedIdConflictCount, phase, refreshingChecks]);
 
   // ---- File loading ----
   const resetForNewFile = useCallback(() => {
     setPreflight(null);
     setOutcome(null);
+    setAcceptedIds(new Map());
     setRetryScope(null);
     setEditedRows(new Set());
     setPage(0);
@@ -461,6 +467,26 @@ export const RulesImportPage: React.FC = () => {
     });
   }, [scopeGroups, preflight]);
 
+  /**
+   * Accepted rule sets now exist on the server (or have a new revision), so
+   * the CREATE/UPDATE labels and revisions of the checks that ran before the
+   * import are out of date — a second full import would otherwise skip the
+   * update acknowledgement. Re-run the checks; they also yield the id and new
+   * revision behind each "Open in SAS Intelligent Decisioning" link. If the
+   * refresh fails the old checks are dropped, so the next import asks for a
+   * fresh run instead of trusting them.
+   */
+  const refreshChecksAfterImport = async () => {
+    setRefreshingChecks(true);
+    try {
+      setPreflight(await runPreflight(groups, groupSignature));
+    } catch {
+      setPreflight(null);
+    } finally {
+      setRefreshingChecks(false);
+    }
+  };
+
   const handleConfirmImport = async () => {
     setPhase('importing');
     setGlobalError(null);
@@ -471,14 +497,43 @@ export const RulesImportPage: React.FC = () => {
       const { raw, contentType, status } = await postRulesCsv(csv);
       const result = interpretImportResponse(raw, contentType, rows, scope, status);
       setOutcome(result);
+      setAcceptedIds(acceptedRuleSetIds(raw, contentType));
       setRetryScope(result.rejectedRowIndexes.length > 0 ? result.rejectedRowIndexes : null);
       setEditedRows(new Set());
       setPhase('imported');
+      if (result.acceptedKeys.length > 0) void refreshChecksAfterImport();
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'Import failed.');
       setPhase('ready');
     }
   };
+
+  /**
+   * Link target per accepted rule set: the id the service returned, else the
+   * id the refreshed checks found by name + folder; the revision comes from
+   * the refreshed checks. Checks older than the import are never used.
+   */
+  const importedLinks = useMemo((): Map<string, ImportedRuleSetLink> => {
+    const links = new Map<string, ImportedRuleSetLink>();
+    if (outcome === null) return links;
+    const fresh = preflight !== null && !preflightStale && preflight.timestamp >= outcome.timestamp
+      ? preflight
+      : null;
+    outcome.acceptedKeys.forEach((key) => {
+      const result = fresh?.results.find((r) => r.key === key);
+      const returnedId = acceptedIds.get(key);
+      const foundId = result?.action === 'update' ? result.existingRuleSetId : undefined;
+      const id = returnedId ?? foundId;
+      const sameSet = id !== undefined && foundId !== undefined && id.toLowerCase() === foundId.toLowerCase();
+      links.set(key, {
+        id,
+        revision: sameSet ? result?.existingRevision : undefined,
+        // Several sets share the name and the service returned no id: say so.
+        ambiguity: returnedId === undefined ? result?.checkError : undefined,
+      });
+    });
+    return links;
+  }, [outcome, preflight, preflightStale, acceptedIds]);
 
   const hasRows = rows.length > 0;
   const importing = phase === 'importing';
@@ -813,6 +868,8 @@ export const RulesImportPage: React.FC = () => {
               outcome={outcome}
               groups={groups}
               editedRows={editedRows}
+              links={importedLinks}
+              resolvingLinks={refreshingChecks}
               onRetryRejected={() => setPhase('confirming')}
               onDownloadRejected={handleDownloadRejected}
               onDownloadResponse={handleDownloadResponse}
