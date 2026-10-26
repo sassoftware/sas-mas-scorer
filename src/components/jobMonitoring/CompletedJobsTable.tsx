@@ -138,6 +138,7 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
             <button
               key={chip.value}
               type="button"
+              aria-pressed={stateFilter === chip.value}
               className={`job-monitoring__chip${stateFilter === chip.value ? ' job-monitoring__chip--active' : ''}`}
               onClick={() => onStateFilterChange(chip.value)}
             >

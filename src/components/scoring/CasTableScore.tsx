@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import axios, { CanceledError } from 'axios';
 import { StepParameter } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
+import { ProgressBar } from '../common/ProgressBar';
+import { useThrottledAnnouncement } from './useThrottledAnnouncement';
 import {
   getCasTables,
   getTableColumns,
@@ -123,19 +126,21 @@ const mappedCasColumns = (
 /**
  * Fetch the first `limit` rows of a table, page by page. Unlike a single
  * request sized to `limit`, a capped page continues from where it stopped.
+ * `signal` cancels the page request in flight (axios CanceledError).
  */
 const fetchRowsUpTo = async (
   serverName: string,
   caslibName: string,
   tableName: string,
   limit: number,
-  onProgress: (progress: FetchProgress) => void
+  onProgress: (progress: FetchProgress) => void,
+  signal?: AbortSignal
 ): Promise<unknown[][]> => {
   const rows: unknown[][] = [];
   let start = 0;
   for (let page = 0; page < LIMITED_FETCH_MAX_PAGES && rows.length < limit; page++) {
     const want = Math.min(LIMITED_FETCH_PAGE, limit - rows.length);
-    const result = await getTableRows(serverName, caslibName, tableName, start, want);
+    const result = await getTableRows(serverName, caslibName, tableName, start, want, { signal });
     if (result.rows.length === 0) break;
     for (const row of result.rows) rows.push(row);
     start += result.rows.length;
@@ -146,7 +151,9 @@ const fetchRowsUpTo = async (
     if (result.rows.length < echoedLimit) break;
     if (result.count > 0 && start >= result.count) break;
   }
-  return rows.length > limit ? rows.slice(0, limit) : rows;
+  // Trimmed in place: a copy would hold the rows twice
+  if (rows.length > limit) rows.length = limit;
+  return rows;
 };
 
 export const CasTableScore: React.FC<CasTableScoreProps> = ({
@@ -335,6 +342,24 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
   const [fetchingForScore, setFetchingForScore] = useState(false);
   const [fetchProgress, setFetchProgress] = useState<FetchProgress | null>(null);
+  // Cancels the row fetch of a run: Stop, or leaving the page mid-fetch
+  const fetchControllerRef = useRef<AbortController | null>(null);
+
+  // Stop fetching removes its own button; focus goes back to Run All
+  const refocusRunRef = useRef(false);
+
+  useEffect(() => () => fetchControllerRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (fetchingForScore || !refocusRunRef.current) return;
+    refocusRunRef.current = false;
+    document.getElementById('cas-run-all')?.focus();
+  }, [fetchingForScore]);
+
+  const handleStopFetch = useCallback(() => {
+    refocusRunRef.current = true;
+    fetchControllerRef.current?.abort();
+  }, []);
 
   const handleRunAll = useCallback(async () => {
     if (!selectedTable || columns.length === 0) return;
@@ -343,6 +368,9 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setNotice(null);
     setPendingRun(null);
     setFetchingForScore(true);
+    const controller = new AbortController();
+    fetchControllerRef.current = controller;
+    const { signal } = controller;
 
     const effectiveLimit = scoreFullTable ? totalRowCount : Math.min(rowLimit, totalRowCount);
     setFetchProgress({ loaded: 0, total: scoreFullTable ? (totalRowCount || null) : effectiveLimit });
@@ -357,7 +385,8 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           selectedServer,
           selectedCaslib,
           selectedTable,
-          progress => setFetchProgress(progress)
+          progress => setFetchProgress(progress),
+          { signal }
         );
         fetched = result.rows;
         if (result.count > 0) setTotalRowCount(result.count);
@@ -374,9 +403,12 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           selectedCaslib,
           selectedTable,
           effectiveLimit,
-          progress => setFetchProgress(progress)
+          progress => setFetchProgress(progress),
+          signal
         );
       }
+      // Stopped while the last page was being handled
+      if (signal.aborted) throw new CanceledError();
 
       if (fetched.length === 0) {
         setError('No rows returned from the table');
@@ -390,6 +422,9 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         mappedCasColumns(columns, parameters, sources),
         fixedInputValues(parameters, sources)
       );
+      // `fetched` (the raw cells) is released when this handler returns, which
+      // is before the first scoring request completes: onExecuteBatch is not
+      // awaited, so only the converted input records stay for the run.
       if (report.issueCount > 0) {
         setPendingRun({ rows, report });
         return;
@@ -397,9 +432,15 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
       onExecuteBatch(rows, concurrency);
     } catch (err: unknown) {
+      // Stopped (or the panel unmounted, where the notice goes nowhere)
+      if (axios.isCancel(err)) {
+        setNotice('Fetching stopped. Nothing was scored.');
+        return;
+      }
       const e = err as { message?: string };
       setError(e.message ?? 'Failed to fetch table rows');
     } finally {
+      if (fetchControllerRef.current === controller) fetchControllerRef.current = null;
       setFetchingForScore(false);
       setFetchProgress(null);
     }
@@ -459,6 +500,8 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   const fetchLabel = fetchProgress && fetchProgress.loaded > 0
     ? `Fetching rows... ${fetchProgress.loaded.toLocaleString()}${fetchProgress.total ? ` of ${fetchProgress.total.toLocaleString()}` : ''}`
     : 'Fetching rows...';
+  // A page lands every second or two; screen readers hear it every 10 s
+  const fetchAnnouncement = useThrottledAnnouncement(fetchingForScore ? fetchLabel : '');
 
   return (
     <Card className="cas-table-score">
@@ -720,6 +763,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                 </Button>
               )}
               <Button
+                id="cas-run-all"
                 variant="primary"
                 size="large"
                 onClick={handleRunAll}
@@ -730,9 +774,27 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
               </Button>
             </div>
           </div>
+          {fetchingForScore && (
+            <div className="cas-table-score__fetch">
+              <ProgressBar
+                value={fetchProgress?.total ? fetchProgress.loaded : undefined}
+                max={fetchProgress?.total ?? undefined}
+                label="Fetching table rows"
+                phase="Fetching rows"
+                count={fetchProgress && fetchProgress.loaded > 0
+                  ? `${fetchProgress.loaded.toLocaleString()}${fetchProgress.total ? ` of ${fetchProgress.total.toLocaleString()}` : ''}`
+                  : undefined}
+                message="Nothing is scored until every row has been fetched."
+                className="cas-table-score__fetch-progress"
+              />
+              <Button variant="danger" size="small" onClick={handleStopFetch}>
+                Stop fetching
+              </Button>
+            </div>
+          )}
           {/* Live region so the paged fetch is announced without re-reading the button */}
           <span className="sr-only" role="status" aria-live="polite">
-            {fetchingForScore ? fetchLabel : ''}
+            {fetchAnnouncement}
           </span>
           {pendingRun && (
             <div className="batch-run__confirm">

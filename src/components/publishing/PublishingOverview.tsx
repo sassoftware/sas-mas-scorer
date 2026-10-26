@@ -54,6 +54,18 @@ const LoadingProgress: React.FC<{ progress: PublishingProgress }> = ({ progress 
   );
 };
 
+// "14:05", or "12 Oct, 14:05" when the data is from an earlier day.
+const formatAsOf = (ms: number): string => {
+  const date = new Date(ms);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return date.toLocaleString(
+    undefined,
+    sameDay
+      ? { hour: '2-digit', minute: '2-digit' }
+      : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
+  );
+};
+
 interface PublishingOverviewProps {
   onNavigateToModule: (moduleId: string) => void;
   onNavigateToFlow: (flowId: string) => void;
@@ -64,8 +76,26 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
   onNavigateToFlow,
 }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
-  const { destinations, dedupedItems, stats, destinationCounts, loading, progress, error, refresh } =
-    usePublishingOverview({ enabled: isAuthenticated });
+  const {
+    destinations,
+    dedupedItems,
+    stats,
+    destinationCounts,
+    loading,
+    refreshing,
+    loadedAt,
+    progress,
+    error,
+    refresh,
+  } = usePublishingOverview({ enabled: isAuthenticated });
+
+  // Beside Refresh: how old the (session-cached) data is, or that a refresh
+  // is under way. A polite status, so the outcome of Refresh is announced.
+  const freshness = refreshing
+    ? 'Refreshing…'
+    : loadedAt !== null
+      ? `Data as of ${formatAsOf(loadedAt)}`
+      : '';
 
   if (!isAuthenticated && !authLoading) {
     return (
@@ -89,9 +119,14 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
         title="Publishing Overview"
         subtitle="Destinations, deployed models, and deployed decisions across your environment"
         actions={
-          <Button variant="secondary" onClick={refresh} loading={loading}>
-            Refresh
-          </Button>
+          <div className="publishing__header-actions">
+            <span className="publishing__freshness" role="status" aria-live="polite">
+              {freshness}
+            </span>
+            <Button variant="secondary" onClick={refresh} loading={loading || refreshing}>
+              Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -113,7 +148,11 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
       {error && (
         <Alert
           variant="error"
-          title="Failed to load publishing overview"
+          title={
+            loadedAt !== null
+              ? 'Failed to refresh publishing overview'
+              : 'Failed to load publishing overview'
+          }
           actions={
             <Button variant="tertiary" size="small" onClick={refresh}>
               Retry
@@ -121,6 +160,7 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
           }
         >
           {error}
+          {loadedAt !== null && ` Still showing the data as of ${formatAsOf(loadedAt)}.`}
         </Alert>
       )}
 
@@ -128,6 +168,8 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
         <LoadingProgress progress={progress} />
       ) : (
         <>
+          {/* Kept mounted through a refresh, so the table keeps its search,
+              filters and page; the data is swapped in when it arrives. */}
           <section className="publishing__section" aria-label="Publishing destinations">
             <h2 className="publishing__section-title">Destinations</h2>
             <DestinationsPanel destinations={destinations} counts={destinationCounts} />

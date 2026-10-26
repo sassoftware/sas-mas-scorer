@@ -138,6 +138,11 @@ function createWindow(): void {
     minHeight: 600,
     title: 'SAS MAS Scorer',
     icon: iconPath,
+    // Shown on ready-to-show (below), over the app's page colour
+    // (--sas-gray-100), so the window never flashes white while the renderer
+    // loads.
+    show: false,
+    backgroundColor: '#F4F4F4',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -147,6 +152,19 @@ function createWindow(): void {
       webSecurity: false,
     },
   });
+
+  // Show the window once the renderer has painted its first frame. If the page
+  // fails to load (dev server not up yet), or ready-to-show never fires, show
+  // it anyway rather than leaving the app running without a window.
+  const win = mainWindow;
+  const showWindow = () => {
+    if (!win.isDestroyed() && !win.isVisible()) win.show();
+  };
+  win.once('ready-to-show', showWindow);
+  win.webContents.once('did-fail-load', showWindow);
+  const showFallback = setTimeout(showWindow, 5000);
+  win.once('show', () => clearTimeout(showFallback));
+  win.once('closed', () => clearTimeout(showFallback));
 
   // In development, load from Vite dev server
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {

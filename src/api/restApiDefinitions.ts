@@ -12,6 +12,7 @@
  */
 
 import { sasViyaClient } from './client';
+import { cachedRequest, sidDocumentPolicy, type RequestOptions } from './requestCache';
 import type { SidLink, StepMapping } from '../types/sid';
 
 const DEFINITION_ACCEPT = 'application/vnd.sas.decision.rest.api.definition+json';
@@ -89,11 +90,25 @@ export function authTypeLabel(type?: string): string {
   return AUTH_TYPE_LABELS[type] ?? type;
 }
 
-export async function getRestApiDefinitionByUri(uri: string): Promise<RestApiDefinitionDetail> {
-  const response = await sasViyaClient.get<RestApiDefinitionDetail>(uri, {
-    headers: { Accept: DEFINITION_ACCEPT },
-  });
-  return response.data;
+/** Request-cache key of a definition by the URI it is read from. */
+export const restApiDefinitionCacheKey = (uri: string): string => `restApiDefinition:${uri}`;
+
+/** Cached for the session, see requestCache.ts (a locked revision is kept, anything else re-checked). */
+export async function getRestApiDefinitionByUri(
+  uri: string,
+  options?: RequestOptions,
+): Promise<RestApiDefinitionDetail> {
+  return cachedRequest(
+    restApiDefinitionCacheKey(uri),
+    async () => {
+      const response = await sasViyaClient.get<RestApiDefinitionDetail>(uri, {
+        headers: { Accept: DEFINITION_ACCEPT },
+      });
+      return response.data;
+    },
+    sidDocumentPolicy<RestApiDefinitionDetail>(uri),
+    options,
+  );
 }
 
 /** Names inside `{...}` placeholders — each binds a signature term into the request. */

@@ -1,6 +1,14 @@
 /* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+/* Under the run's progress bar: which results are on screen meanwhile, and
+ * that the run survives leaving the page. */
+.coverage-run-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
 /* Test Coverage Analysis Styles */
 
 /* The page container owns the vertical rhythm (like .publishing and

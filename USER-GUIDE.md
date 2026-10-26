@@ -88,6 +88,18 @@ When embedded in a SAS Visual Analytics report via a Job Definition, the applica
 
 **Downloads inside SAS Visual Analytics:** the report can show the app in a frame that does not allow downloads. Every export in the app (batch results CSV, coverage CSV and Markdown, flow Markdown, path CSV, job log and code, Rules Import files, the Schema → Code `.py`, UI App export) then shows a notice instead of doing nothing: **Download blocked** when the frame is known to block downloads, or **Did the download start?** when the app cannot tell. Click **Copy contents** and paste the text into a file. If the clipboard is blocked as well, the notice shows the text so you can select it and copy it with **Ctrl+C** (**⌘C** on a Mac).
 
+### When Your Session Expires
+
+When the SAS Viya session ends while you work — a request answered with HTTP 401, or the SAS Logon page answering in place of the service, which is how cookie sessions expire in the web and Visual Analytics versions — the app first checks the session again; if it is still valid, the request is simply retried. Otherwise it shows one **Your session has expired** prompt, however many requests were affected:
+
+- **Sign in** — signs you in again (the desktop app's login window, or a SAS Logon popup in the browser) and then retries what was waiting, so you carry on where you were without losing what you had entered. If no popup opens in the browser, it has probably been blocked: allow pop-ups for the site and try again.
+- **Not now** — closes the prompt and the waiting requests fail. In the desktop and web versions the header then shows **Login**, so you can sign in when you are ready.
+- **Job Execution / Visual Analytics** — sign in through the popup, or click **Reload page** if the popup does not open. Anything you have not saved on the page is lost when it reloads.
+
+### Copying Error Details
+
+An error message caused by a failed SAS Viya request has a **Copy details** button. It copies a short report, ready for an administrator or a support ticket: the message, the HTTP status, the SAS error code, the request (method and path), the time, the app version and build, the page you were on and the browser. The button reads **Details copied** once it has worked.
+
 ---
 
 ## 3. Navigating the Application
@@ -117,7 +129,11 @@ When you select a module, two additional navigation items appear:
 
 ### Lists Keep Their View
 
-The search, filters, sort order and page of the **All Modules**, **View Flows** and **Segmentation Trees** lists and of the Job Monitoring history, and the search, type and coverage filters of the **Test Coverage** table, are kept in the page link. The browser's **Back** button, a reload and a copied link therefore bring back the same view, and going back to View Flows or Segmentation Trees does not reload the whole list. Choosing the page in the sidebar starts a fresh, unfiltered list. The open tab of a job's detail page is kept the same way (`?tab=…`).
+The search, filters, sort order and page of the **All Modules**, **View Flows** and **Segmentation Trees** lists and of the Job Monitoring history, and the search, type and coverage filters of the **Test Coverage** table, are kept in the page link (as is the Job Monitoring statistics period, `?period=`). The browser's **Back** button, a reload and a copied link therefore bring back the same view, and going back to View Flows or Segmentation Trees does not reload the whole list. Choosing the page in the sidebar starts a fresh, unfiltered list. The open tab of a job's detail page is kept the same way (`?tab=…`).
+
+### Pages Reopen From Memory
+
+Decision flows, sub-decisions, rule sets, REST API and treatment definitions, segmentation trees and module details are kept for the session once loaded, so going back to one opens it at once while the app checks for changes in the background. If a newer version was saved in SAS Intelligent Decisioning in the meantime, it replaces the one on screen. Logging out, switching connection or importing rules clears the affected copies.
 
 ### Recent Items
 
@@ -318,7 +334,11 @@ A preview table shows the first few rows of your data so you can verify it looks
 
 ### Running the Batch
 
-Click **Run All** to start. A progress bar shows how many rows have been processed. You can click **Stop** at any time — partial results are kept and displayed immediately.
+Click **Run All** to start. A progress card shows how the run is going: a progress bar with rows done of the total, **Succeeded** and **Failed** counts, **Automatic retries** (once there are any), **Throughput** in rows per second, **Time left**, and the **Last error**. You can click **Stop** at any time — partial results are kept and displayed immediately.
+
+**Temporary errors are retried automatically.** A row that fails with HTTP 429, 502, 503 or 504, or whose connection dropped, is sent again up to twice, with a short wait in between, before it is recorded as failed. Other errors (for example an error in the module's own code) fail at once.
+
+**A run of failures pauses the batch.** If 20 rows in a row fail — typically an expired session, a removed module or a service outage — no more rows are sent and the card shows **Run paused: the last 20 rows failed**, with the most common message. **Continue** resumes and stops pausing for that message (a different failure pauses again); **Stop** ends the run and keeps the rows scored so far.
 
 ### Batch Results
 
@@ -340,7 +360,15 @@ After the run completes (or is stopped), the results are displayed in a detailed
 
 Each row shows the row number, status badge, output values, and runtime. Click **Show** on any row to expand it and see the full input and output JSON.
 
-The table shows 100 rows per page (switch to 500 with the page-size selector); **Showing 1–100 of N** and the **Previous** / **Next** controls sit below it. Sorting, selection and export always apply to the whole result set, not just the visible page.
+- **Status filter** — the chips **All**, **Succeeded** and **Failed** (each with its count) above the table narrow it to those rows; the line next to them says what is shown (e.g. *Showing 12 failed of 5,000 rows*), and **Show all rows** clears the filter.
+- **Sorting** — click the **Row**, **Status**, any output or the **Runtime** header to sort; click again to reverse. Missing values always sort last.
+- **Paging** — 100 rows per page by default (switch to 500 or 1,000 with **Rows per page**); **Showing 1-100 of N** and the **Previous** / **Next** controls sit below the table.
+
+Sorting, filtering and selection apply to the whole result set, not just the visible page. **Download CSV** and **Upload to CAS** always include every row, whatever the filter.
+
+**Errors by message:** when rows failed, a list above the table groups them by message, most frequent first (e.g. *10 × The step … was not found*); the first five kinds are shown, **Show all N kinds** lists the rest. **Show these rows** filters the table to the rows with that error, and **Go to row N** opens the first row with it.
+
+**Retry failed rows:** **Retry failed rows (N)** in the card header scores only the failed rows again, with the inputs they were sent with, and puts the new results in their places; successful rows are kept. A note then says how many now succeeded and how many still failed.
 
 If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)** link instead of the raw structure — click it to open the grid in a modal viewer with sticky headers, paging at 200 rows, and a **Copy JSON** button.
 
@@ -348,6 +376,7 @@ If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)**
 
 | Button | What It Does |
 |--------|--------------|
+| **Retry failed rows (N)** | Score only the failed rows again (shown when rows failed) |
 | **Save as Scenarios** | Save selected rows as test scenarios (select rows using checkboxes first) |
 | **Upload to CAS** | Upload the results as a new CAS table |
 | **Download CSV** | Export results as a CSV file including inputs, outputs, runtime, status, and errors |
@@ -355,7 +384,7 @@ If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)**
 
 ### Selecting Rows
 
-Click the checkbox next to any successful row to select it (or Tab to it and press **Space**). Use **Shift+Click** to select a range. Use the header checkbox to select or deselect all successful rows across every page — the **Save as Scenarios** button shows the full count. Only successful rows can be selected.
+Click the checkbox next to any successful row to select it (or Tab to it and press **Space**). Use **Shift+Click** to select a range of the rows as shown (filtered and sorted). Use the header checkbox to select or deselect all successful rows across every page — or, with a filter on, all successful rows it shows — and the **Save as Scenarios** button shows the full count. Only successful rows can be selected.
 
 ---
 
@@ -389,8 +418,10 @@ A 5-row preview of the table is shown so you can verify the data and column type
 
 ### Configuring the Run
 
-- **Score full table** — Check this to score every row in the table. The rows are fetched from CAS page by page and the **Run All** button reports progress (*Fetching rows… 12,000 of 150,000*) before scoring starts, so the count you see in the results is the count that was actually scored. Tables over 50,000 rows show a warning but still run. When unchecked, a **Row Limit** field lets you cap how many rows to score (default: 1,000); exactly that many rows are fetched and scored.
+- **Score full table** — Check this to score every row in the table. The rows are fetched from CAS page by page before scoring starts, so the count you see in the results is the count that was actually scored. Tables over 50,000 rows show a warning but still run. When unchecked, a **Row Limit** field lets you cap how many rows to score (default: 1,000); exactly that many rows are fetched and scored.
 - **Parallel Requests** — Same concurrency control as the file upload mode.
+
+**While rows are fetched:** a progress bar under **Run All** shows the rows fetched of the total (*Fetching rows... 12,000 of 150,000*); nothing is scored until every row has been fetched. **Stop fetching** cancels the fetch — *Fetching stopped. Nothing was scored.* — and focus returns to **Run All**.
 
 Switching table or caslib while data is still loading discards the earlier load — the mapping and preview always belong to the table currently selected.
 
@@ -400,7 +431,7 @@ For Decision modules, a **Save as Test** button appears next to **Run All**. Thi
 
 ### Running and Results
 
-Click **Run All** to start the batch. The results interface is identical to the file upload mode, with the same statistics, table, selection, and export capabilities.
+Click **Run All** to start the batch. Once the rows are fetched, the run and its results work exactly as in the file upload mode: the same progress card, automatic retries and pause after repeated failures, and the same statistics, status filter, **Errors by message**, **Retry failed rows**, selection, and export capabilities.
 
 ---
 
@@ -804,6 +835,8 @@ The **Test Coverage** page helps you understand which of your SAS Intelligent De
 4. It then cross-references these against Score Definitions to determine which assets have test scenarios.
 5. A progress indicator shows the current phase and item count.
 
+**While it runs:** you can leave the page — the analysis carries on and is shown again when you come back to **Test Coverage**. **Cancel** stops it (*Analysis cancelled.*). During a re-run, the previous results stay on screen below the progress indicator until the new run finishes; if the re-run fails or is cancelled, they stay, marked as the results of the previous analysis.
+
 **What counts as a test:** a score definition counts when SAS Intelligent Decisioning marks it as a test (the `test` property) or a scenario (`inputData.type = Scenario`); its name does not count. Score definitions in the trash do not count, and publishing validations are never counted. The **Data collection** section (below) states how many tests and scenarios were counted, out of how many score definitions.
 
 ### Reading the Results
@@ -863,7 +896,7 @@ The table lists every completed publish, deduplicated to the latest version of e
 - **Search** filters by name; **Kind**, **Destination** and **Code Type** narrow the list. Any filter returns you to page 1, and **Showing X of Y** always counts the whole filtered list.
 - The table is paginated (25 rows per page) with **Previous** / **Page X of Y** / **Next**.
 - A deployed **model** links to its Module Details page in this app; a deployed **decision** links to the in-app flow viewer, so you can go from "it is deployed" to "what does it do" in one click.
-- **Refresh** in the page header re-reads everything; the data is otherwise cached for the session and cleared when you switch connections.
+- **Refresh** in the page header re-reads everything; the data is otherwise cached for the session and cleared when you switch connections. While it reloads, the figures and the table — with its search, filters and page — stay on screen, and the text beside the button reads **Refreshing…**, then **Data as of 14:05** (the time the data was loaded).
 
 ---
 
@@ -873,15 +906,15 @@ The **Job Monitoring** page gives you a live view of every job executed by the S
 
 ### The Overview Page
 
-**KPI Cards** sit at the top:
+**KPI Cards** sit at the top. Except **Active**, they cover the period chosen with the **Statistics for** chips above them: **24 hours**, **7 days** (the default), **30 days** or **All**. The period is kept in the page link (`?period=30d`, for example), and switching back to a period already counted this session is instant.
 
-- **Total Jobs** — every job the scan window has seen. Shows a `+` suffix when there are more than 10,000 in the tenant.
+- **Total Jobs** — every job created in the period. Shows a `+` suffix (and *most recent*) when the count stopped at its cap of the 10,000 most recent jobs.
 - **Active** — currently running and pending jobs. Always live (updates every 5 seconds with the running panel).
 - **Completed** — successful jobs.
 - **Failed / Other** — failures plus cancelled, timed-out, and other terminal states.
-- **Avg Runtime** — average elapsed time across the most recent 50 completed jobs.
+- **Avg Runtime** — average elapsed time of the completed jobs counted in the period.
 
-When you open the page (or click Refresh), a "Loading jobs…" banner under the header shows the scan progress, and the counts tick up as each page of jobs is processed.
+When you open the page, choose a period or click Refresh, a **Counting jobs…** banner next to the chips shows how far the count has got (e.g. *Counting jobs in the last 30 days… 1,200 so far, back to 14 Oct, 09:30*). Several pages of jobs are read at a time, and the counts tick up as they arrive.
 
 **Running Panel** shows one card per active job with:
 
@@ -904,13 +937,15 @@ When you're on page 1 with no filter or search, the history table also auto-refr
 
 Click **Refresh** in the page header to force-update all three sections. Stats refresh is **incremental** — it walks pages from the top and stops at the first full page where every job's ID and state match what was scanned previously. In the steady state, a refresh is just one HTTP call.
 
+Automatic refreshing stops while the browser tab is in the background. Coming back to the tab refreshes the page at once (the statistics only when they are more than a minute old).
+
 ### Error Backoff
 
-If the Viya gateway returns server errors (502 / 503), each section's background polling pauses and the page shows a single banner:
+If a request to SAS Viya fails, that section retries by itself — after 5 seconds, 10 seconds, 30 seconds, then every minute — and returns to its normal refresh as soon as a request succeeds. Meanwhile the page shows a single banner:
 
-> *Auto-refresh paused due to errors from SAS Viya. Last error: …*
+> *Some data could not be refreshed from SAS Viya. Retrying automatically in 8 s. Last error: …*
 
-Click **Retry** in the banner (or the page-level **Refresh**) to resume polling.
+Click **Retry now** in the banner (or the page-level **Refresh**) to try at once.
 
 ### Job Detail Page
 
@@ -919,6 +954,7 @@ Selecting a job opens its detail page at `/jobs/<id>`. The header shows:
 - Job name and a state badge.
 - Creator, type, start time, ID, and a live elapsed counter (running jobs).
 - End timestamp and final elapsed (terminal jobs).
+- For a failed job, the first error of its log: **First error (line N):** followed by the error text.
 - A **← Back to Job Monitoring** link.
 - A **Refresh** button that re-fetches the job record and log/listing for this one job.
 - A red **Cancel Job** or **Delete Job** button (see *Cancelling or Deleting a Job* below).
@@ -954,8 +990,9 @@ The page has four tabs:
 
 Shows the SAS log output:
 
-- **While the job is running** — live tail via the Compute API every 3 seconds. The viewer drains up to 5 pages per tick to absorb bursty output. Auto-scroll keeps you pinned to the bottom; scroll up to read older lines and auto-scroll pauses, scroll back near the bottom and it resumes.
-- **Once the job finishes** — the saved `.log.txt` file from the Files service is shown instead.
+- **While the job is running** — live tail via the Compute API every 3 seconds. Only the tab you are looking at (Log or Listing) is fetched, and only while the browser tab is visible; a long backlog (opening a job that has already written thousands of lines, or coming back to the tab) is read straight through until it catches up. Auto-scroll keeps you pinned to the bottom; scroll up to read older lines and auto-scroll pauses, scroll back near the bottom and it resumes.
+- **Once the job finishes** — the saved `.log.txt` file from the Files service is shown instead. The lines already on screen stay until the file has arrived.
+- **A failed job** opens at its first error rather than at the end of the log.
 
 Each line is colour-coded by type, with a tinted background and a coloured left border:
 
@@ -972,13 +1009,19 @@ Each line is colour-coded by type, with a tinted background and a coloured left 
 Toolbar buttons:
 
 - **Pause auto-scroll** / **Resume auto-scroll** — toggle whether new lines auto-scroll you to the bottom.
-- **Copy** — copies the visible log text to the clipboard (no type prefixes — just the SAS content).
+- **Copy** — copies the whole log text to the clipboard (no type prefixes — just the SAS content), whatever filter is set.
 - **Download** — saves the log as `<JobName>-<8charId>.log`.
-- **Refresh now** — force-fetch the latest log content.
+- **Refresh now** — force-fetch the latest log content. The lines already shown stay on screen while it loads.
+
+**Finding errors:** the toolbar counts the lines, errors and warnings (e.g. *4,210 lines · 3 errors · 12 warnings*). Below it:
+
+- **Show** — **All lines**, **Errors and warnings**, or **Errors only**. While filtering, each line keeps its line number.
+- **Search the log…** — searches the whole log (within the current **Show** filter) and moves to the first match as you type. **Enter** goes to the next match, **Shift+Enter** to the previous one.
+- **Previous** / **Next** — step through the search matches, or, without a search, through the errors (the warnings when the log has none). The position is shown beside them, e.g. *Error 2 of 10* or *Match 3 of 41*, and stepping wraps around at either end.
 
 #### Listing
 
-The Compute listing output (procedure output and the like). Same controls as the Log tab. The listing has its own type hierarchy: **title** lines render largest, **highlighted** lines (column headers, summary rows) at a medium size, normal lines at the base size. **Download** saves as `<JobName>-<8charId>.lst`.
+The Compute listing output (procedure output and the like). Same controls as the Log tab, except the error and warning tools (only the search and **Previous** / **Next** through its matches). The listing has its own type hierarchy: **title** lines render largest, **highlighted** lines (column headers, summary rows) at a medium size, normal lines at the base size. **Download** saves as `<JobName>-<8charId>.lst`.
 
 #### Code
 
@@ -1143,6 +1186,7 @@ The application meets **WCAG 2.1 AA**: every control can be reached and operated
 - Severity and status are never conveyed by colour alone — error rows carry a **×** marker and a red bar, badges carry text, and log lines carry a glyph.
 - With the operating system's **reduce motion** setting on, nothing in the app animates or spins.
 - **Shift+Click** on batch result checkboxes to select a range of rows.
+- In a job's log or listing search, **Enter** goes to the next match and **Shift+Enter** to the previous one.
 - The scoring panel **remembers your last-used folder and CAS library** when saving scenarios and tests, so you do not need to re-select them each time.
 - Switching between Single Execution, Parallel (File Upload), and Parallel (CAS Table) modes **keeps your work**: each mode keeps its uploaded file, delimiter, sheet, column mapping, selected CAS table and results, and the single-run result stays too. Clicking the tab you are already on does nothing.
 - In the folder browser dialogs, you must click the **"Select current folder"** link at the bottom to confirm your folder choice. Simply navigating into a folder does not select it.

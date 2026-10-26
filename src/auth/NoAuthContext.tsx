@@ -2,11 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { createContext, useContext, ReactNode } from 'react';
+import { CookieAuthenticationCredential } from '@sassoftware/sas-auth-browser';
+import { clearCsrfToken } from '../api/client';
+import { getSasViyaUrl } from '../config';
+import { isCookieSessionValid, signInWithCookiePopup } from './cookieSignIn';
+import { useSessionExpiryPrompt } from './useSessionExpiryPrompt';
 
 /**
  * No-auth implementation for job definition builds.
  * Assumes user is already authenticated via SAS Viya session cookies.
  * API calls work because the client uses withCredentials: true.
+ *
+ * The session can still end while the page is open (SAS Job Execution / VA
+ * session timeout). The API client notices the redirect to SASLogon, and this
+ * provider then offers to sign in again in a popup — the page is same-origin
+ * with SAS Viya, so the popup's new session cookie applies here — or to
+ * reload the page.
  */
 
 interface SasAuthContextType {
@@ -20,11 +31,31 @@ interface SasAuthContextType {
 
 const SasAuthContext = createContext<SasAuthContextType | null>(null);
 
+// Only used to sign in again after the session has ended.
+let authInstance: CookieAuthenticationCredential | null = null;
+const getCookieCredential = (): CookieAuthenticationCredential => {
+  if (!authInstance) {
+    authInstance = new CookieAuthenticationCredential({ url: getSasViyaUrl() });
+  }
+  return authInstance;
+};
+
 interface SasAuthProviderProps {
   children: ReactNode;
 }
 
 export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) => {
+  const sessionPrompt = useSessionExpiryPrompt({
+    canPrompt: () => true,
+    confirmSession: () => isCookieSessionValid(getCookieCredential()),
+    signIn: async () => {
+      await signInWithCookiePopup(getCookieCredential());
+      // A new session comes with a new CSRF token.
+      clearCsrfToken();
+    },
+    onReload: () => window.location.reload(),
+  });
+
   // In no-auth mode, we always assume authenticated (session cookies handle auth)
   const value: SasAuthContextType = {
     isAuthenticated: true,
@@ -45,6 +76,7 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
   return (
     <SasAuthContext.Provider value={value}>
       {children}
+      {sessionPrompt}
     </SasAuthContext.Provider>
   );
 };

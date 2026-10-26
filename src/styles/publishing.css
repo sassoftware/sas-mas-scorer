@@ -21,6 +21,20 @@
   text-align: center;
 }
 
+/* Header: data age / "Refreshing…" beside the Refresh button. */
+.publishing__header-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.publishing__freshness {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  white-space: nowrap;
+}
+
 /* Stats */
 .publishing__stats {
   display: grid;

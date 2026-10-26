@@ -3,18 +3,32 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Module, Step, ModuleSource, StepOutput, getModuleType } from '../../types';
+import { Module, Step, ModuleSource, getModuleType } from '../../types';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Loading } from '../common/Loading';
-import { ProgressBar } from '../common/ProgressBar';
 import { PageHeader } from '../layout/Layout';
 import { InputForm } from './InputForm';
 import { OutputDisplay } from './OutputDisplay';
 import { FileUpload } from './FileUpload';
 import { CasTableScore, CasTableTestInfo } from './CasTableScore';
-import { BatchResults } from './BatchResults';
+import { BatchResults, RetryOutcome } from './BatchResults';
+import { BatchProgressCard } from './BatchProgressCard';
+import {
+  BatchProgress,
+  BatchResult,
+  BatchStats,
+  BreakerTrip,
+  CircuitBreaker,
+  MAX_TRANSIENT_RETRIES,
+  ThroughputMeter,
+  backoffDelay,
+  computeBatchStats,
+  emptyProgress,
+  isTransientFailure,
+  sleep,
+} from './batchRunner';
 import { CasUploadDialog } from './CasUploadDialog';
 import { SaveScenarioDialog } from './SaveScenarioDialog';
 import { SaveBatchScenariosDialog } from './SaveBatchScenariosDialog';
@@ -36,31 +50,13 @@ interface ScorePanelProps {
 type ExecutionMode = 'single' | 'batch' | 'casTable';
 type BatchMode = Exclude<ExecutionMode, 'single'>;
 
-interface BatchResult {
-  rowIndex: number;
-  input: Record<string, unknown>;
-  output: StepOutput | null;
-  error: string | null;
-  executionTime: number; // in milliseconds
-}
-
-interface BatchStats {
-  totalRuntime: number;
-  avgRequestTime: number;
-  successRate: number;
-  fastestResponse: number;
-  slowestResponse: number;
-  medianResponse: number;
-  totalRequests: number;
-  successCount: number;
-  errorCount: number;
-}
-
 // The results of the last run of one batch mode. Each mode keeps its own, so
 // switching tabs neither discards a run nor shows it under the other mode.
 interface BatchRun {
   results: BatchResult[];
   stats: BatchStats | null;
+  /** Outcome of the last "Retry failed rows" on these results */
+  retry?: RetryOutcome;
 }
 
 // Stable empty values so "no signature" / "no datagrid params" keep their
@@ -110,10 +106,18 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   // The batch mode whose run is in progress (one at a time), or null
   const [runningBatchMode, setRunningBatchMode] = useState<BatchMode | null>(null);
   const batchExecuting = runningBatchMode !== null;
-  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>(() => emptyProgress(0));
+  // A fresh run, or "Retry failed rows" on the last one
+  const [batchPhase, setBatchPhase] = useState<'run' | 'retry'>('run');
+  // Set while the circuit breaker holds the running batch
+  const [breakerTrip, setBreakerTrip] = useState<BreakerTrip | null>(null);
+  // Releases a paused batch: 'continue' resumes it, 'stop' ends it
+  const resumeBatchRef = useRef<((choice: 'continue' | 'stop') => void) | null>(null);
   const batchAbortRef = useRef(false);
   // Aborts the HTTP requests of the running batch; fired only on unmount.
   const batchAbortControllerRef = useRef<AbortController | null>(null);
+  // Parallel requests of each mode's last run, reused by "Retry failed rows"
+  const lastConcurrencyRef = useRef<Record<BatchMode, number>>({ batch: 2, casTable: 2 });
   const [showCasUpload, setShowCasUpload] = useState(false);
   const [showSaveScenario, setShowSaveScenario] = useState(false);
   const [showLoadScenario, setShowLoadScenario] = useState(false);
@@ -364,157 +368,190 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     return normalized;
   }, [datagridParams]);
 
-  // Execute a single row and return the result
+  // Execute a single row and return the result. A transient failure (429,
+  // 502/503/504, no response) is sent again up to MAX_TRANSIENT_RETRIES times
+  // with backoff before the row is recorded as failed; Stop ends the retrying.
   const executeRow = useCallback(async (
     rowIndex: number,
     rawInput: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onRetry?: () => void
   ): Promise<BatchResult | undefined> => {
-    const requestStartTime = performance.now();
     const input = normalizeDatagridInputs(rawInput);
+    let retries = 0;
 
-    try {
-      const stepInput = buildStepInput(step, input);
-      const output = await executeStep(module.id, step.id, stepInput, { signal });
-      const requestEndTime = performance.now();
-      return {
-        rowIndex,
-        input,
-        output,
-        error: null,
-        executionTime: requestEndTime - requestStartTime,
-      };
-    } catch (err) {
-      // An aborted request is the panel unmounting mid-batch, not a scoring
-      // failure — return nothing so the row is dropped instead of recorded as
-      // an error. Tested before the message is read: a CanceledError's message
-      // ("canceled") would otherwise land in the results table.
-      if (axios.isCancel(err)) return undefined;
-      const requestEndTime = performance.now();
-      return {
-        rowIndex,
-        input,
-        output: null,
-        error: err instanceof Error ? err.message : 'Unknown error',
-        executionTime: requestEndTime - requestStartTime,
-      };
+    for (;;) {
+      const requestStartTime = performance.now();
+      try {
+        const stepInput = buildStepInput(step, input);
+        const output = await executeStep(module.id, step.id, stepInput, { signal });
+        const requestEndTime = performance.now();
+        return {
+          rowIndex,
+          input,
+          output,
+          error: null,
+          executionTime: requestEndTime - requestStartTime,
+          ...(retries > 0 ? { retries } : {}),
+        };
+      } catch (err) {
+        // An aborted request is the panel unmounting mid-batch, not a scoring
+        // failure — return nothing so the row is dropped instead of recorded as
+        // an error. Tested before the message is read: a CanceledError's message
+        // ("canceled") would otherwise land in the results table.
+        if (axios.isCancel(err)) return undefined;
+        const requestEndTime = performance.now();
+        if (retries < MAX_TRANSIENT_RETRIES && !batchAbortRef.current && isTransientFailure(err)) {
+          await sleep(backoffDelay(retries), signal);
+          if (signal?.aborted) return undefined;
+          retries++;
+          onRetry?.();
+          continue;
+        }
+        return {
+          rowIndex,
+          input,
+          output: null,
+          error: err instanceof Error ? err.message : 'Unknown error',
+          executionTime: requestEndTime - requestStartTime,
+          ...(retries > 0 ? { retries } : {}),
+        };
+      }
     }
   }, [module.id, step, normalizeDatagridInputs]);
 
-  // Batch execution handler with configurable concurrency. The results are
-  // stored under the mode that started the run.
-  const handleBatchExecute = useCallback(async (
-    mode: BatchMode,
-    rows: Record<string, unknown>[],
+  // The worker pool shared by a fresh run and "Retry failed rows". Scores
+  // `inputs` with `concurrency` workers and returns one slot per input
+  // (undefined for a row not reached: Stop, or the panel unmounting). Progress
+  // (counts, throughput, time left, last error) is published at most every
+  // PROGRESS_INTERVAL_MS; the results table is not rendered while it runs.
+  // When BREAKER_THRESHOLD rows in a row fail, the workers wait at the gate
+  // until the user chooses Continue or Stop.
+  const runBatch = useCallback(async (
+    inputs: Record<string, unknown>[],
+    rowIndexOf: (slot: number) => number,
     concurrency: number
-  ) => {
+  ): Promise<{ results: (BatchResult | undefined)[]; runtime: number }> => {
     batchAbortRef.current = false;
     // One controller per batch. Stop does NOT abort it (in-flight rows are
     // allowed to land and be counted); only the unmount cleanup does.
     const controller = new AbortController();
     batchAbortControllerRef.current = controller;
+
+    const total = inputs.length;
+    const results: (BatchResult | undefined)[] = new Array(total);
+    let next = 0;
+    let done = 0;
+    let succeeded = 0;
+    let failed = 0;
+    let retries = 0;
+    let lastError: string | null = null;
+    let lastProgressAt = 0;
+    const startTime = performance.now();
+    const meter = new ThroughputMeter();
+    meter.restart(startTime, 0);
+    const breaker = new CircuitBreaker();
+    // Pending while the breaker holds the run
+    let gate: Promise<void> | null = null;
+
+    const publish = (force: boolean) => {
+      const now = performance.now();
+      if (!force && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+      lastProgressAt = now;
+      meter.sample(now, done);
+      setBatchProgress({
+        current: done,
+        total,
+        succeeded,
+        failed,
+        retries,
+        rate: meter.rate(),
+        etaMs: meter.etaMs(total - done),
+        lastError,
+      });
+    };
+
+    const pause = (trip: BreakerTrip) => {
+      if (gate) return;
+      gate = new Promise<void>(resolve => {
+        resumeBatchRef.current = (choice) => {
+          resumeBatchRef.current = null;
+          if (choice === 'stop') batchAbortRef.current = true;
+          else breaker.acknowledge(trip);
+          // Paused time is not scoring time
+          meter.restart(performance.now(), done);
+          gate = null;
+          setBreakerTrip(null);
+          resolve();
+        };
+      });
+      setBreakerTrip(trip);
+    };
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        while (gate) await gate;
+        if (batchAbortRef.current || next >= total) return;
+        const slot = next++;
+        const result = await executeRow(rowIndexOf(slot), inputs[slot], controller.signal, () => {
+          retries++;
+        });
+        // Cancelled: the panel is unmounting, so this worker stops rather
+        // than recording a row nobody will see.
+        if (!result) return;
+        results[slot] = result;
+        done++;
+        if (result.error) {
+          failed++;
+          lastError = result.error;
+        } else if (result.output) {
+          succeeded++;
+        }
+        const trip = breaker.record(result.error);
+        if (trip) pause(trip);
+        publish(done === total || trip !== null);
+      }
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(Math.max(1, concurrency), total) }, () => worker())
+      );
+    } finally {
+      // A gate left open by an unmount mid-pause must not hold anything
+      resumeBatchRef.current = null;
+      if (batchAbortControllerRef.current === controller) {
+        batchAbortControllerRef.current = null;
+      }
+    }
+    return { results, runtime: performance.now() - startTime };
+  }, [executeRow]);
+
+  // A fresh run of one mode. Its results replace that mode's last run.
+  const handleBatchExecute = useCallback(async (
+    mode: BatchMode,
+    rows: Record<string, unknown>[],
+    concurrency: number
+  ) => {
+    lastConcurrencyRef.current[mode] = concurrency;
     setRunningBatchMode(mode);
-    setBatchProgress({ current: 0, total: rows.length });
+    setBatchPhase('run');
+    setBreakerTrip(null);
+    setBatchProgress(emptyProgress(rows.length));
     setBatchRuns(prev => ({ ...prev, [mode]: EMPTY_BATCH_RUN }));
 
     // Whatever happens below, the progress card must not outlive the run
     try {
-      const results: BatchResult[] = new Array(rows.length);
-      let completedCount = 0;
-      let lastProgressAt = 0;
-      const batchStartTime = performance.now();
-
-      // Process rows with concurrency limit
-      const processWithConcurrency = async () => {
-        let currentIndex = 0;
-
-        const processNext = async (): Promise<void> => {
-          while (currentIndex < rows.length && !batchAbortRef.current) {
-            const index = currentIndex++;
-            const input = rows[index];
-
-            const result = await executeRow(index, input, controller.signal);
-            // Cancelled: the panel is unmounting, so this worker stops rather
-            // than recording a row nobody will see.
-            if (!result) return;
-            results[index] = result;
-            completedCount++;
-
-            // Only the progress is published while running, and at most every
-            // PROGRESS_INTERVAL_MS (plus the last row). The results table is
-            // not rendered while the batch runs, so the array is published once below.
-            const now = performance.now();
-            if (now - lastProgressAt >= PROGRESS_INTERVAL_MS || completedCount === rows.length) {
-              lastProgressAt = now;
-              setBatchProgress({ current: completedCount, total: rows.length });
-            }
-          }
-        };
-
-        // Start concurrent workers
-        const workers = Array(Math.min(concurrency, rows.length))
-          .fill(null)
-          .map(() => processNext());
-
-        await Promise.all(workers);
-      };
-
-      await processWithConcurrency();
-
-      if (batchAbortControllerRef.current === controller) {
-        batchAbortControllerRef.current = null;
-      }
-
-      const batchEndTime = performance.now();
-      const totalRuntime = batchEndTime - batchStartTime;
-
+      const { results, runtime } = await runBatch(rows, slot => slot, concurrency);
       // Each result sits at its own row index, so the filtered array is already
       // in rowIndex order (it may be partial if stopped early).
-      const sortedResults = results.filter(r => r !== undefined);
-
-      // Statistics in one pass: Math.min(...times) / Math.max(...times) spread
-      // every row onto the call stack and throw a RangeError on very large runs.
-      let stats: BatchStats | null = null;
-      if (sortedResults.length > 0) {
-        const executionTimes = new Float64Array(sortedResults.length);
-        let sum = 0;
-        let fastest = Infinity;
-        let slowest = -Infinity;
-        let successCount = 0;
-        let errorCount = 0;
-        sortedResults.forEach((r, i) => {
-          const time = r.executionTime;
-          executionTimes[i] = time;
-          sum += time;
-          if (time < fastest) fastest = time;
-          if (time > slowest) slowest = time;
-          if (r.error) errorCount++;
-          else if (r.output) successCount++;
-        });
-        // A typed-array sort is numeric and allocates no per-element boxes
-        const sortedTimes = executionTimes.sort();
-        const mid = Math.floor(sortedTimes.length / 2);
-
-        stats = {
-          totalRuntime,
-          avgRequestTime: sum / sortedTimes.length,
-          successRate: (successCount / sortedResults.length) * 100,
-          fastestResponse: fastest,
-          slowestResponse: slowest,
-          medianResponse: sortedTimes.length % 2 === 0
-            ? (sortedTimes[mid - 1] + sortedTimes[mid]) / 2
-            : sortedTimes[mid],
-          totalRequests: sortedResults.length,
-          successCount,
-          errorCount,
-        };
-      }
-
-      setBatchRuns(prev => ({ ...prev, [mode]: { results: sortedResults, stats } }));
+      const finished = results.filter((r): r is BatchResult => r !== undefined);
+      setBatchRuns(prev => ({ ...prev, [mode]: { results: finished, stats: computeBatchStats(finished, runtime) } }));
     } finally {
       setRunningBatchMode(null);
+      setBreakerTrip(null);
     }
-  }, [executeRow]);
+  }, [runBatch]);
 
   const handleBatchExecuteFile = useCallback(
     (rows: Record<string, unknown>[], concurrency: number) => handleBatchExecute('batch', rows, concurrency),
@@ -525,19 +562,79 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     [handleBatchExecute]
   );
 
+  // Re-run only the failed rows of a mode's last run, from the inputs each
+  // result kept, and put the new results in their places. Rows the retry does
+  // not reach (Stop) keep their failure.
+  const handleRetryFailed = useCallback(async (mode: BatchMode) => {
+    if (runningBatchMode) return;
+    const run = batchRuns[mode];
+    const slots: number[] = [];
+    run.results.forEach((r, i) => {
+      if (r.error) slots.push(i);
+    });
+    if (slots.length === 0) return;
+
+    setRunningBatchMode(mode);
+    setBatchPhase('retry');
+    setBreakerTrip(null);
+    setBatchProgress(emptyProgress(slots.length));
+    try {
+      const { results, runtime } = await runBatch(
+        slots.map(i => run.results[i].input),
+        k => run.results[slots[k]].rowIndex,
+        lastConcurrencyRef.current[mode]
+      );
+      setBatchRuns(prev => {
+        // Cleared or replaced meanwhile: there is nothing to merge into
+        if (prev[mode] !== run) return prev;
+        const merged = run.results.slice();
+        let attempted = 0;
+        let recovered = 0;
+        results.forEach((r, k) => {
+          if (!r) return;
+          attempted++;
+          if (!r.error && r.output) recovered++;
+          merged[slots[k]] = r;
+        });
+        const totalRuntime = (run.stats?.totalRuntime ?? 0) + runtime;
+        return {
+          ...prev,
+          [mode]: {
+            results: merged,
+            stats: computeBatchStats(merged, totalRuntime),
+            retry: { failed: slots.length, attempted, recovered },
+          },
+        };
+      });
+    } finally {
+      setRunningBatchMode(null);
+      setBreakerTrip(null);
+    }
+  }, [runningBatchMode, batchRuns, runBatch]);
+
+  const handleRetryFailedFile = useCallback(() => handleRetryFailed('batch'), [handleRetryFailed]);
+  const handleRetryFailedCas = useCallback(() => handleRetryFailed('casTable'), [handleRetryFailed]);
+
   const handleStopBatch = useCallback(() => {
     batchAbortRef.current = true;
+    resumeBatchRef.current?.('stop');
+  }, []);
+
+  const handleContinueBatch = useCallback(() => {
+    resumeBatchRef.current?.('continue');
   }, []);
 
   // Leaving the panel mid-batch (breadcrumb, "Select Different Step") must not
   // keep issuing scoring requests nobody will see: stop the worker loop AND
-  // abort the requests already in flight (up to `concurrency`). Stop only sets
-  // the flag, so a user-requested stop still keeps the rows it already has.
+  // abort the requests already in flight (up to `concurrency`), and release a
+  // run held by the circuit breaker. Stop only sets the flag, so a
+  // user-requested stop still keeps the rows it already has.
   useEffect(() => {
     return () => {
       batchAbortRef.current = true;
       batchAbortControllerRef.current?.abort();
       batchAbortControllerRef.current = null;
+      resumeBatchRef.current?.('stop');
     };
   }, []);
 
@@ -1466,23 +1563,13 @@ title;`;
 
             {/* Batch Progress */}
             {runningBatchMode === 'batch' && (
-              <Card className="score-panel__progress-card">
-                <CardBody>
-                  <div className="score-panel__progress">
-                    <ProgressBar
-                      value={batchProgress.current}
-                      max={batchProgress.total}
-                      label="Batch scoring progress"
-                      phase="Scoring rows"
-                      count={`${batchProgress.current} of ${batchProgress.total}`}
-                      className="score-panel__progress-track"
-                    />
-                    <Button variant="danger" size="small" onClick={handleStopBatch}>
-                      Stop
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
+              <BatchProgressCard
+                progress={batchProgress}
+                phase={batchPhase}
+                trip={breakerTrip}
+                onStop={handleStopBatch}
+                onContinue={handleContinueBatch}
+              />
             )}
 
             {/* Batch Results */}
@@ -1491,6 +1578,9 @@ title;`;
                 results={batchRuns.batch.results}
                 parameters={step.outputs ?? []}
                 stats={batchRuns.batch.stats}
+                retryOutcome={batchRuns.batch.retry}
+                onRetryFailed={handleRetryFailedFile}
+                retryDisabled={batchExecuting}
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
                 onUploadToCas={() => setShowCasUpload(true)}
@@ -1512,23 +1602,13 @@ title;`;
 
             {/* Batch Progress */}
             {runningBatchMode === 'casTable' && (
-              <Card className="score-panel__progress-card">
-                <CardBody>
-                  <div className="score-panel__progress">
-                    <ProgressBar
-                      value={batchProgress.current}
-                      max={batchProgress.total}
-                      label="Batch scoring progress"
-                      phase="Scoring rows"
-                      count={`${batchProgress.current} of ${batchProgress.total}`}
-                      className="score-panel__progress-track"
-                    />
-                    <Button variant="danger" size="small" onClick={handleStopBatch}>
-                      Stop
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
+              <BatchProgressCard
+                progress={batchProgress}
+                phase={batchPhase}
+                trip={breakerTrip}
+                onStop={handleStopBatch}
+                onContinue={handleContinueBatch}
+              />
             )}
 
             {/* Batch Results */}
@@ -1537,6 +1617,9 @@ title;`;
                 results={batchRuns.casTable.results}
                 parameters={step.outputs ?? []}
                 stats={batchRuns.casTable.stats}
+                retryOutcome={batchRuns.casTable.retry}
+                onRetryFailed={handleRetryFailedCas}
+                retryDisabled={batchExecuting}
                 onClear={handleClearBatchResults}
                 onDownload={handleDownloadResults}
                 onUploadToCas={() => setShowCasUpload(true)}

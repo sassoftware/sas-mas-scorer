@@ -7,9 +7,11 @@
  * downstream components work unchanged.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { clearCsrfToken } from '../api/client';
 import { AuthErrorModal, OPEN_SETTINGS_EVENT } from '../components/common/AuthErrorModal';
+import { markSessionActive } from './sessionExpiry';
+import { useSessionExpiryPrompt } from './useSessionExpiryPrompt';
 
 interface SasAuthContextType {
   isAuthenticated: boolean;
@@ -60,12 +62,14 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
       const alreadyAuthed = await window.electronAPI.isAuthenticated();
       if (alreadyAuthed) {
         setIsAuthenticated(true);
+        markSessionActive();
         return;
       }
 
       // Start OAuth login flow (opens auth window in main process)
       await window.electronAPI.startLogin();
       setIsAuthenticated(true);
+      markSessionActive();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       console.error('Login failed:', err);
@@ -108,6 +112,27 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
     initAuth();
   }, [checkAuth]);
 
+  // A request found the session has ended (the access token was rejected, or
+  // the refresh token expired and the main process cleared the tokens): one
+  // prompt to sign in again, then the waiting requests retry.
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  isAuthenticatedRef.current = isAuthenticated;
+  const sessionPrompt = useSessionExpiryPrompt({
+    canPrompt: () => isAuthenticatedRef.current,
+    // Renews silently with the refresh token when it still can.
+    confirmSession: async () => (window.electronAPI ? window.electronAPI.isAuthenticated() : false),
+    signIn: async () => {
+      if (!window.electronAPI) throw new Error('Not running in Electron');
+      await window.electronAPI.startLogin();
+      clearCsrfToken();
+      setIsAuthenticated(true);
+      setError(null);
+    },
+    // Closed without signing in: show the signed-out state (header Login
+    // button, the views' sign-in prompts) instead of a stale "Connected".
+    onDismiss: () => setIsAuthenticated(false),
+  });
+
   const value: SasAuthContextType = {
     isAuthenticated,
     isLoading,
@@ -120,6 +145,7 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
   return (
     <SasAuthContext.Provider value={value}>
       {children}
+      {sessionPrompt}
       {authFailure && (
         <AuthErrorModal
           error={authFailure.message}

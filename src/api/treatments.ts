@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { sasViyaClient } from './client';
+import { cachedRequest, sidDocumentPolicy, type RequestOptions } from './requestCache';
 
 export interface TreatmentAttributeConstraints {
   dataType: string;
@@ -73,37 +74,50 @@ export interface TreatmentGroupDetail {
   [key: string]: unknown;
 }
 
-export async function getTreatmentDefinition(id: string): Promise<TreatmentDefinitionDetail> {
-  const response = await sasViyaClient.get<TreatmentDefinitionDetail>(
-    `/treatmentDefinitions/definitions/${id}`,
-    { headers: { Accept: 'application/vnd.sas.treatment.definition+json' } },
+const DEFINITION_ACCEPT = 'application/vnd.sas.treatment.definition+json';
+const GROUP_ACCEPT = 'application/vnd.sas.treatment.definition.group+json';
+
+/**
+ * One cached GET per URI and media type (see requestCache.ts). A locked
+ * revision is kept for the session, anything else is re-checked after a
+ * minute.
+ */
+function getTreatmentDocument<T>(kind: string, uri: string, accept: string, options?: RequestOptions): Promise<T> {
+  return cachedRequest(
+    `${kind}:${uri}`,
+    async () => {
+      const response = await sasViyaClient.get<T>(uri, { headers: { Accept: accept } });
+      return response.data;
+    },
+    sidDocumentPolicy<T>(uri),
+    options,
   );
-  return response.data;
+}
+
+export async function getTreatmentDefinition(
+  id: string,
+  options?: RequestOptions,
+): Promise<TreatmentDefinitionDetail> {
+  return getTreatmentDocument('treatmentDefinition', `/treatmentDefinitions/definitions/${id}`, DEFINITION_ACCEPT, options);
 }
 
 export async function getTreatmentDefinitionByRevision(
   definitionId: string,
   revisionId: string,
+  options?: RequestOptions,
 ): Promise<TreatmentDefinitionDetail> {
-  const response = await sasViyaClient.get<TreatmentDefinitionDetail>(
+  return getTreatmentDocument(
+    'treatmentDefinition',
     `/treatmentDefinitions/definitions/${definitionId}/revisions/${revisionId}`,
-    { headers: { Accept: 'application/vnd.sas.treatment.definition+json' } },
+    DEFINITION_ACCEPT,
+    options,
   );
-  return response.data;
 }
 
-export async function getTreatmentGroup(id: string): Promise<TreatmentGroupDetail> {
-  const response = await sasViyaClient.get<TreatmentGroupDetail>(
-    `/treatmentDefinitions/definitionGroups/${id}`,
-    { headers: { Accept: 'application/vnd.sas.treatment.definition.group+json' } },
-  );
-  return response.data;
+export async function getTreatmentGroup(id: string, options?: RequestOptions): Promise<TreatmentGroupDetail> {
+  return getTreatmentDocument('treatmentGroup', `/treatmentDefinitions/definitionGroups/${id}`, GROUP_ACCEPT, options);
 }
 
-export async function getTreatmentGroupByUri(uri: string): Promise<TreatmentGroupDetail> {
-  const response = await sasViyaClient.get<TreatmentGroupDetail>(
-    uri,
-    { headers: { Accept: 'application/vnd.sas.treatment.definition.group+json' } },
-  );
-  return response.data;
+export async function getTreatmentGroupByUri(uri: string, options?: RequestOptions): Promise<TreatmentGroupDetail> {
+  return getTreatmentDocument('treatmentGroup', uri, GROUP_ACCEPT, options);
 }

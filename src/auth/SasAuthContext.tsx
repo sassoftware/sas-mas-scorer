@@ -1,10 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { CookieAuthenticationCredential } from '@sassoftware/sas-auth-browser';
 import { clearCsrfToken } from '../api/client';
 import { getSasViyaUrl } from '../config';
+import { isCookieSessionValid, signInWithCookiePopup } from './cookieSignIn';
+import { markSessionActive } from './sessionExpiry';
+import { useSessionExpiryPrompt } from './useSessionExpiryPrompt';
 
 interface SasAuthContextType {
   isAuthenticated: boolean;
@@ -57,10 +60,13 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
     setError(null);
 
     try {
-      // First check if already authenticated
+      // First check if already authenticated. The check caches its answer;
+      // drop it so a session that has since ended is not read as signed in.
+      auth.invalidateCache();
       try {
         await auth.checkAuthenticated();
         setIsAuthenticated(true);
+        markSessionActive();
         return;
       } catch {
         // Not authenticated, proceed with login
@@ -69,6 +75,7 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
       // Open login popup
       await auth.loginPopup();
       setIsAuthenticated(true);
+      markSessionActive();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -109,6 +116,25 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
     initAuth();
   }, [checkAuth]);
 
+  // A request found the session has ended (SAS Viya redirected it to
+  // SASLogon): one prompt to sign in again, then the waiting requests retry.
+  const isAuthenticatedRef = useRef(isAuthenticated);
+  isAuthenticatedRef.current = isAuthenticated;
+  const sessionPrompt = useSessionExpiryPrompt({
+    canPrompt: () => isAuthenticatedRef.current,
+    confirmSession: () => isCookieSessionValid(getAuthInstance()),
+    signIn: async () => {
+      await signInWithCookiePopup(getAuthInstance());
+      // A new session comes with a new CSRF token.
+      clearCsrfToken();
+      setIsAuthenticated(true);
+      setError(null);
+    },
+    // Closed without signing in: show the signed-out state (header Login
+    // button, the views' sign-in prompts) instead of a stale "Connected".
+    onDismiss: () => setIsAuthenticated(false),
+  });
+
   const value: SasAuthContextType = {
     isAuthenticated,
     isLoading,
@@ -121,6 +147,7 @@ export const SasAuthProvider: React.FC<SasAuthProviderProps> = ({ children }) =>
   return (
     <SasAuthContext.Provider value={value}>
       {children}
+      {sessionPrompt}
     </SasAuthContext.Provider>
   );
 };

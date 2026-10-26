@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getAllDestinations,
   getAllCompletedPublishedItems,
@@ -44,7 +44,12 @@ interface UsePublishingOverviewReturn {
   dedupedItems: PublishedItem[];
   stats: PublishingStats;
   destinationCounts: Record<string, DestinationCounts>;
+  /** First load: nothing to show yet. */
   loading: boolean;
+  /** A reload while the previous data stays on screen. */
+  refreshing: boolean;
+  /** When the data on screen was read from SAS Viya (epoch ms), or null. */
+  loadedAt: number | null;
   progress: PublishingProgress;
   error: string | null;
   refresh: () => Promise<void>;
@@ -57,12 +62,18 @@ interface UsePublishingOverviewOptions {
 interface PublishingCache {
   destinations: PublishDestination[];
   rawItems: PublishedItem[];
+  loadedAt: number;
 }
 
 let cachedData: PublishingCache | null = null;
 
+// Bumped on every clear, so a load that was running when the session changed
+// (logout, connection switch) does not store the old server's answer.
+let cacheGeneration = 0;
+
 export const clearPublishingOverviewCache = (): void => {
   cachedData = null;
+  cacheGeneration += 1;
 };
 
 // The shell clears this through the registry, so Header/App never import the
@@ -80,56 +91,100 @@ export const usePublishingOverview = (
   const [rawItems, setRawItems] = useState<PublishedItem[]>(
     () => cachedData?.rawItems ?? []
   );
+  const [loadedAt, setLoadedAt] = useState<number | null>(() => cachedData?.loadedAt ?? null);
   const [loading, setLoading] = useState<boolean>(enabled && cachedData === null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<PublishingProgress>(EMPTY_PROGRESS);
 
+  // Whether data is on screen, read by fetchAll without re-creating it.
+  const loadedAtRef = useRef<number | null>(loadedAt);
+  loadedAtRef.current = loadedAt;
+  // The generation this page's data belongs to, and the load in flight.
+  const generationRef = useRef<number>(cacheGeneration);
+  const loadTokenRef = useRef(0);
+
+  // Stale-while-revalidate: the first load shows the progress card; a
+  // refresh keeps the stats, destinations and table (with its search,
+  // filters and page) on screen and swaps the data in when it arrives. A
+  // failed refresh keeps the previous data and reports the error.
   const fetchAll = useCallback(async () => {
     if (!enabled) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (generationRef.current !== cacheGeneration) {
+      // The session changed under this page: what it shows is the previous
+      // server's, so this load starts from nothing.
+      generationRef.current = cacheGeneration;
+      setDestinations([]);
+      setRawItems([]);
+      setLoadedAt(null);
+      loadedAtRef.current = null;
+    }
+    const generation = cacheGeneration;
+    const token = ++loadTokenRef.current;
+    const isCurrent = (): boolean =>
+      token === loadTokenRef.current && generation === cacheGeneration;
+    const isRefresh = loadedAtRef.current !== null;
+
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     setProgress(EMPTY_PROGRESS);
 
     try {
       const [dests, items] = await Promise.all([
         getAllDestinations((page) => {
+          if (!isCurrent()) return;
           setProgress((prev) => ({ ...prev, destinationsLoaded: page.loaded }));
         }).then((result) => {
-          setProgress((prev) => ({
-            ...prev,
-            destinationsLoaded: result.length,
-            destinationsComplete: true,
-          }));
+          if (isCurrent()) {
+            setProgress((prev) => ({
+              ...prev,
+              destinationsLoaded: result.length,
+              destinationsComplete: true,
+            }));
+          }
           return result;
         }),
         getAllCompletedPublishedItems((page) => {
+          if (!isCurrent()) return;
           setProgress((prev) => ({
             ...prev,
             itemsLoaded: page.loaded,
             itemPages: page.page,
           }));
         }).then((result) => {
-          setProgress((prev) => ({
-            ...prev,
-            itemsLoaded: result.length,
-            itemsComplete: true,
-          }));
+          if (isCurrent()) {
+            setProgress((prev) => ({
+              ...prev,
+              itemsLoaded: result.length,
+              itemsComplete: true,
+            }));
+          }
           return result;
         }),
       ]);
+      if (!isCurrent()) return;
+      const now = Date.now();
       setDestinations(dests);
       setRawItems(items);
-      cachedData = { destinations: dests, rawItems: items };
+      setLoadedAt(now);
+      cachedData = { destinations: dests, rawItems: items, loadedAt: now };
     } catch (err) {
+      if (!isCurrent()) return;
       setError(err instanceof Error ? err.message : 'Failed to load publishing overview');
-      setDestinations([]);
-      setRawItems([]);
-      cachedData = null;
+      if (!isRefresh) {
+        setDestinations([]);
+        setRawItems([]);
+        cachedData = null;
+      }
     } finally {
-      setLoading(false);
+      if (token === loadTokenRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [enabled]);
 
@@ -177,6 +232,8 @@ export const usePublishingOverview = (
     stats,
     destinationCounts,
     loading,
+    refreshing,
+    loadedAt,
     progress,
     error,
     refresh: fetchAll,

@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../layout/Layout';
 import { Alert } from '../common/Alert';
@@ -9,7 +9,7 @@ import { Button } from '../common/Button';
 import { EmptyState } from '../common/EmptyState';
 import { Loading } from '../common/Loading';
 import { useSasAuth } from '../../auth';
-import { useJobDetail } from '../../hooks/useJobDetail';
+import { JobOutputKind, useJobDetail } from '../../hooks/useJobDetail';
 import {
   removeJobFromCache,
   updateJobStateInCache,
@@ -22,6 +22,8 @@ import { JobCodePanel } from './JobCodePanel';
 import { JobParametersPanel } from './JobParametersPanel';
 import { ConfirmDialog } from './ConfirmDialog';
 import { elapsedSince, formatDuration, formatTimestamp, sanitizeFilename } from './utils';
+import { firstErrorLine } from './logSearch';
+import { useNowTick } from './useNowTick';
 
 type Tab = 'log' | 'listing' | 'code' | 'parameters';
 
@@ -39,25 +41,17 @@ const TABS: { value: Tab; label: string }[] = [
 
 const BREADCRUMB_ROOT = 'Job Monitoring';
 
-// Live elapsed ticker — used in the header while the job is running.
-const useNowTick = (intervalMs: number, enabled: boolean): number => {
-  const [now, setNow] = useState<number>(() => Date.now());
-  useEffect(() => {
-    if (!enabled) return;
-    const handle = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(handle);
-  }, [intervalMs, enabled]);
-  return now;
-};
-
 export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) => {
   const { isAuthenticated } = useSasAuth();
-  const detail = useJobDetail(jobId, { enabled: isAuthenticated });
   // The open tab lives in the URL (#/jobs/{id}?tab=code) so a reload, Back or
   // a shared link opens the same tab; the default Log tab keeps a clean URL.
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const activeTab: Tab = TABS.find((tab) => tab.value === tabParam)?.value ?? 'log';
+  // Only the output on screen is fetched while the job runs.
+  const activeOutput: JobOutputKind | null =
+    activeTab === 'log' || activeTab === 'listing' ? activeTab : null;
+  const detail = useJobDetail(jobId, { enabled: isAuthenticated, activeOutput });
   const setActiveTab = (tab: Tab) => {
     setSearchParams(tab === 'log' ? {} : { tab }, { replace: true });
   };
@@ -76,6 +70,13 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
   const job = detail.job;
   const isTerminal = job ? isTerminalState(job.state) : false;
   const now = useNowTick(1000, !isTerminal && !!job);
+
+  // A failed job's first ERROR line, shown in the header as the reason.
+  const failedJob = job?.state === 'failed';
+  const failureReason = useMemo(
+    () => (failedJob ? firstErrorLine(detail.logLines) : null),
+    [failedJob, detail.logLines]
+  );
 
   const handleConfirmCancel = async () => {
     if (!job) return;
@@ -202,24 +203,30 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
       case 'log':
         return (
           <JobLogViewer
+            // A fresh viewer per job, so a failed job opens at its first error.
+            key={`log-${job.id}`}
             lines={detail.logLines}
             loading={detail.logLoading}
             error={detail.logError}
             isLive={!isTerminal}
-            onRefresh={detail.refresh}
+            onRefresh={() => detail.refreshOutput('log')}
             downloadFilename={logFilename}
+            startAtFirstError={failedJob}
           />
         );
       case 'listing':
         return (
           <JobLogViewer
+            key={`listing-${job.id}`}
             lines={detail.listingLines}
             loading={detail.listingLoading}
             error={detail.listingError}
             isLive={!isTerminal}
-            onRefresh={detail.refresh}
+            onRefresh={() => detail.refreshOutput('listing')}
             emptyMessage="No listing output."
             downloadFilename={listingFilename}
+            outputName="listing"
+            showProblems={false}
           />
         );
       case 'code':
@@ -283,6 +290,16 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
           )}
           <span><strong>ID:</strong> {job.id}</span>
         </div>
+        {failureReason && (
+          <p className="job-detail__failure">
+            <strong>
+              First error (line {(failureReason.index + 1).toLocaleString()}):
+            </strong>{' '}
+            <span className="job-detail__failure-text" title={failureReason.text}>
+              {failureReason.text}
+            </span>
+          </p>
+        )}
       </div>
 
       <div
