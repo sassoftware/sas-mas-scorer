@@ -1,6 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CanceledError } from 'axios';
 import { sasViyaClient } from './client';
 import { fetchAllPaginated, paginateCollection } from './paginate';
 
@@ -150,28 +151,78 @@ const ROWS_MIN_CHUNK = 500;
 const ROWS_MAX_CHUNK = 10_000;
 // 1000 pages × ≥500 rows is well past anything MAS scoring will consume.
 const ROWS_MAX_PAGES = 1000;
+// Row pages are large (up to ROWS_CELL_BUDGET cells each), so only one is
+// read ahead: enough to hide the round trip without holding several in
+// flight on the CAS server and in browser memory.
+const ROWS_CONCURRENCY = 2;
+
+export interface CasRowsOptions {
+  /**
+   * Stops the fetch. The call then rejects with an axios `CanceledError`
+   * (test with `axios.isCancel`), and the rows fetched so far are dropped.
+   */
+  signal?: AbortSignal;
+}
+
+const canceled = () => new CanceledError();
+
+/**
+ * Settle with `work`, or reject with a CanceledError as soon as `signal`
+ * aborts, without waiting for the walker to notice (it aborts its own page
+ * requests through the same signal).
+ */
+const raceAbort = <T>(work: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(canceled());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(canceled());
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      }
+    );
+  });
+};
 
 /**
  * Fetch every row of a CAS table through rowSets, page by page. A one-row
  * probe measures the table width and total, the chunk size follows from it,
  * and the shared walker then honours whatever limit the service actually
  * applies to each page. `onProgress` fires after every page.
+ *
+ * Each page is trimmed as it arrives and its raw items are let go, so the
+ * fetch holds one copy of the rows rather than the raw and trimmed copies of
+ * the whole table. `options.signal` aborts the page requests in flight and
+ * rejects at once with a CanceledError.
  */
 export const getAllTableRows = async (
   serverName: string,
   caslibName: string,
   tableName: string,
-  onProgress?: (progress: CasRowsProgress) => void
+  onProgress?: (progress: CasRowsProgress) => void,
+  options: CasRowsOptions = {}
 ): Promise<CasTableAllRows> => {
+  const { signal } = options;
+  if (signal?.aborted) throw canceled();
   const tableRef = `cas~fs~${encodeURIComponent(serverName)}~fs~${encodeURIComponent(caslibName)}~fs~${encodeURIComponent(tableName)}`;
   const url = `/rowSets/tables/${tableRef}/rows`;
 
-  const probe = await paginateCollection<CasRowItem>(url, {
-    headers: { Accept: 'application/json' },
-    pageSize: 1,
-    maxPages: 1,
-    timeout: 120000,
-  });
+  const probe = await raceAbort(
+    paginateCollection<CasRowItem>(url, {
+      headers: { Accept: 'application/json' },
+      pageSize: 1,
+      maxPages: 1,
+      timeout: 120000,
+      signal,
+    }),
+    signal
+  );
   if (probe.items.length === 0) {
     return { rows: [], count: probe.total ?? 0, truncated: false };
   }
@@ -182,19 +233,30 @@ export const getAllTableRows = async (
     Math.max(ROWS_MIN_CHUNK, Math.floor(ROWS_CELL_BUDGET / width))
   );
 
-  const result = await paginateCollection<CasRowItem>(url, {
-    headers: { Accept: 'application/json' },
-    pageSize: chunk,
-    maxPages: ROWS_MAX_PAGES,
-    timeout: 120000,
-    onPage: (page) => {
-      onProgress?.({ loaded: page.loaded, total: page.total });
-    },
-  });
+  const rows: unknown[][] = [];
+  const result = await raceAbort(
+    paginateCollection<CasRowItem>(url, {
+      headers: { Accept: 'application/json' },
+      pageSize: chunk,
+      maxPages: ROWS_MAX_PAGES,
+      concurrency: ROWS_CONCURRENCY,
+      timeout: 120000,
+      accumulate: false,
+      signal,
+      onPage: (page) => {
+        // Stopped: end the walk here rather than request another page
+        if (signal?.aborted) return false;
+        for (const item of page.items) rows.push(trimCells(item));
+        onProgress?.({ loaded: page.loaded, total: page.total });
+      },
+    }),
+    signal
+  );
+  if (result.cancelled) throw canceled();
 
   return {
-    rows: result.items.map(trimCells),
-    count: result.total ?? result.items.length,
+    rows,
+    count: result.total ?? rows.length,
     truncated: result.truncated,
   };
 };
@@ -211,15 +273,18 @@ export const getTableRows = async (
   caslibName: string,
   tableName: string,
   start = 0,
-  limit = 1000
+  limit = 1000,
+  options: CasRowsOptions = {}
 ): Promise<CasTableRowsResponse> => {
   const tableRef = `cas~fs~${encodeURIComponent(serverName)}~fs~${encodeURIComponent(caslibName)}~fs~${encodeURIComponent(tableName)}`;
+  // An aborted signal cancels the request itself (axios CanceledError)
   const response = await sasViyaClient.get(
     `/rowSets/tables/${tableRef}/rows`,
     {
       params: { start, limit },
       headers: { Accept: 'application/json' },
       timeout: 120000,
+      signal: options.signal,
     }
   );
   // Response is { items: [{ cells: [val, val, ...] }, ...], count, start, limit }

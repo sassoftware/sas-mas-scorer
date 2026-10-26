@@ -1,30 +1,52 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useId } from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 import { useSasAuth } from '../../auth';
-import { CompletedStateFilter, useJobMonitoring } from '../../hooks/useJobMonitoring';
+import {
+  CompletedStateFilter,
+  DEFAULT_JOB_STATS_WINDOW,
+  JOB_STATS_WINDOWS,
+  JobStatsWindow,
+  useJobMonitoring,
+} from '../../hooks/useJobMonitoring';
 import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import { JobStatsCards } from './JobStatsCards';
 import { RunningJobsPanel } from './RunningJobsPanel';
 import { CompletedJobsTable } from './CompletedJobsTable';
+import { STATS_WINDOW_LABELS } from './utils';
+import { useNowTick } from './useNowTick';
 
 interface JobMonitoringPageProps {
   onOpenJob: (jobId: string) => void;
 }
 
-// The history's search, state filter and page live in the URL
-// (#/jobs?q=…&state=failed&page=2), so Back from a job, a reload or a shared
-// link shows the same history view.
-const HISTORY_DEFAULTS = { q: '', state: 'all', page: '1' };
+// The history's search, state filter and page, and the statistics window,
+// live in the URL (#/jobs?q=…&state=failed&page=2&period=30d), so Back from a
+// job, a reload or a shared link shows the same view.
+const HISTORY_DEFAULTS = { q: '', state: 'all', page: '1', period: DEFAULT_JOB_STATS_WINDOW };
 
 const STATE_FILTERS: readonly CompletedStateFilter[] = ['all', 'completed', 'failed', 'canceled', 'timedOut'];
 
 const toStateFilter = (value: string): CompletedStateFilter =>
   (STATE_FILTERS as readonly string[]).includes(value) ? (value as CompletedStateFilter) : 'all';
+
+const toStatsWindow = (value: string): JobStatsWindow =>
+  (JOB_STATS_WINDOWS as readonly string[]).includes(value)
+    ? (value as JobStatsWindow)
+    : DEFAULT_JOB_STATS_WINDOW;
+
+// "14 Oct, 09:30" — how far back a running stats walk has got.
+const formatReached = (ms: number): string =>
+  new Date(ms).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob }) => {
   const { isAuthenticated, login, isLoading: authLoading } = useSasAuth();
@@ -43,13 +65,24 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
   const setStateFilter = (next: CompletedStateFilter) =>
     updateParams({ state: next, page: HISTORY_DEFAULTS.page });
   const setPage = (next: number) => updateParams({ page: String(next + 1) });
+  const statsWindow = toStatsWindow(params.period);
+  const periodLabelId = useId();
+  const setStatsWindow = (next: JobStatsWindow) => updateParams({ period: next });
 
   const monitor = useJobMonitoring({
     enabled: isAuthenticated,
     search: params.q,
     stateFilter,
     page,
+    statsWindow,
   });
+
+  // Seconds until the next automatic retry, for the recovery banner.
+  const now = useNowTick(1000, monitor.pollingRetryAt !== null);
+  const retryInSec =
+    monitor.pollingRetryAt === null
+      ? 0
+      : Math.max(0, Math.ceil((monitor.pollingRetryAt - now) / 1000));
 
   if (!isAuthenticated && !authLoading) {
     return (
@@ -84,38 +117,71 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
         }
       />
 
-      {monitor.statsScanning && (
+      <div className="job-monitoring__stats-bar">
         <div
-          className="job-monitoring__scanning"
-          role="status"
-          aria-live="polite"
+          className="job-monitoring__chips"
+          role="group"
+          aria-labelledby={periodLabelId}
         >
-          <span className="sas-spinner sas-spinner--small" aria-hidden="true" />
-          <span>
-            Loading jobs…
-            {monitor.stats && monitor.stats.scanned > 0
-              ? ` ${monitor.stats.scanned.toLocaleString()} so far`
-              : ''}
+          <span className="job-monitoring__chips-label" id={periodLabelId}>
+            Statistics for
           </span>
+          {JOB_STATS_WINDOWS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={statsWindow === value}
+              className={`job-monitoring__chip${statsWindow === value ? ' job-monitoring__chip--active' : ''}`}
+              onClick={() => setStatsWindow(value)}
+            >
+              {STATS_WINDOW_LABELS[value].chip}
+            </button>
+          ))}
         </div>
-      )}
+        {monitor.statsScanning && (
+          <div
+            className="job-monitoring__scanning"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="sas-spinner sas-spinner--small" aria-hidden="true" />
+            <span>
+              Counting jobs
+              {statsWindow === 'all' ? '' : ` ${STATS_WINDOW_LABELS[statsWindow].phrase}`}…
+              {monitor.stats && monitor.stats.window === statsWindow && monitor.stats.scanned > 0
+                ? ` ${monitor.stats.scanned.toLocaleString()} so far`
+                : ''}
+              {monitor.statsReachedMs !== null
+                ? `, back to ${formatReached(monitor.statsReachedMs)}`
+                : ''}
+            </span>
+          </div>
+        )}
+      </div>
 
-      <JobStatsCards stats={monitor.stats} loading={monitor.statsLoading} />
+      <JobStatsCards
+        stats={monitor.stats}
+        loading={monitor.statsLoading}
+        window={statsWindow}
+      />
 
-
-      {monitor.pollingPaused && (
+      {monitor.pollingRetryAt !== null && (
         <Alert
-          variant="error"
+          variant="warning"
           actions={
             <Button variant="tertiary" size="small" onClick={monitor.refresh}>
-              Retry
+              Retry now
             </Button>
           }
         >
-          Auto-refresh paused due to errors from SAS Viya.
-          {monitor.statsError || monitor.runningError || monitor.completedError
-            ? ` Last error: ${monitor.statsError ?? monitor.runningError ?? monitor.completedError}`
-            : ''}
+          Some data could not be refreshed from SAS Viya. Retrying automatically
+          {/* The countdown ticks every second; it is hidden from screen
+              readers so the alert is not re-read each tick. */}
+          <span aria-hidden="true">
+            {retryInSec > 0 ? ` in ${retryInSec} s` : ' now'}
+          </span>
+          .
+          {monitor.pollingError ? ` Last error: ${monitor.pollingError}` : ''}
         </Alert>
       )}
 

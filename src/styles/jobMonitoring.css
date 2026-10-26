@@ -14,6 +14,22 @@
   padding: var(--space-8);
 }
 
+/* Statistics period chips, with the walk's progress beside them. */
+.job-monitoring__stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.job-monitoring__chips-label {
+  align-self: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
 .job-monitoring__scanning {
   display: inline-flex;
   align-items: center;
@@ -23,7 +39,6 @@
   color: var(--sas-blue-primary);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
-  align-self: flex-start;
 }
 
 /* Stats — the tiles are `.sas-card .sas-stat-card` with `.sas-stat-value` /
@@ -341,6 +356,30 @@
   font-weight: var(--font-weight-medium);
 }
 
+/* A failed job's first ERROR line, as the reason it failed. One line,
+ * clipped; the full text is in the title and in the log. */
+.job-detail__failure {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-error-light);
+  border-left: 4px solid var(--sas-error);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-detail__failure strong {
+  color: var(--sas-error-dark);
+  font-weight: var(--font-weight-semibold);
+}
+
+.job-detail__failure-text {
+  font-family: var(--font-family-mono);
+}
+
 .job-detail__tabs {
   display: flex;
   gap: var(--space-1);
@@ -400,6 +439,73 @@
 .job-code__toolbar-actions {
   display: inline-flex;
   gap: var(--space-2);
+}
+
+/* Error / warning counts beside the line count. Dark tones keep the text at
+ * AA contrast on the gray toolbar; the words carry the meaning, not colour. */
+.job-log__count--error {
+  color: var(--sas-error-dark);
+  font-weight: var(--font-weight-semibold);
+}
+
+.job-log__count--warning {
+  color: var(--sas-warning-dark);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Severity filter, in-log search and Previous / Next. */
+.job-log__findbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.job-log__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.job-log__filter-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+/* Border at gray-400 so the control's edge meets the 3:1 non-text minimum. */
+.job-log__select {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--sas-gray-400);
+  border-radius: var(--radius-md);
+  background-color: var(--sas-white);
+  color: var(--sas-gray-900);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.job-log__select:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.job-log__search {
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.job-log__stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.job-log__position {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  white-space: nowrap;
 }
 
 /* Every line is one fixed-height, non-wrapping row, which is what lets
@@ -503,6 +609,28 @@
   background-color: rgba(253, 224, 71, 0.08);
   border-left-color: #facc15;
   font-weight: var(--font-weight-semibold);
+}
+
+/* The line Previous / Next or a search landed on: a light ring that stands
+ * out from every type tint on the dark background. */
+.job-log__line--current {
+  outline: 2px solid #f8fafc;
+  outline-offset: -2px;
+}
+
+/* Search hits: dark text on yellow (well above 4.5:1), whatever the line's
+ * own colour. */
+.job-log__match {
+  background-color: #fde047;
+  color: #1a1a1a;
+  border-radius: 2px;
+}
+
+/* Source line numbers, shown while the log is filtered so each kept line
+ * can be found again in the full log. */
+.job-log__lineno {
+  color: #a3a3a3;
+  user-select: none;
 }
 
 /* Code panel */

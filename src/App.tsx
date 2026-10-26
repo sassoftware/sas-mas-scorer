@@ -7,18 +7,11 @@ import { Module, ModuleType, Step } from './types';
 import { UIDefinition, UIDefinitionSummary } from './types/uiBuilder';
 import { Layout, ViewType } from './components/layout';
 import { ModuleList } from './components/modules/ModuleList';
-import { ModuleDetails } from './components/modules/ModuleDetails';
-import { ScorePanel } from './components/scoring/ScorePanel';
-import { UIAppsList } from './components/uiApps/UIAppsList';
-import { UIBuilder } from './components/uiBuilder/UIBuilder';
-import { UIRunner } from './components/uiRunner/UIRunner';
-import { CoverageAnalysis } from './components/coverage/CoverageAnalysis';
-import { PublishingOverview } from './components/publishing';
-import { RulesImportPage } from './components/rulesImport/RulesImportPage';
 import { Loading } from './components/common/Loading';
 import { Modal } from './components/common/Modal';
 import { Button } from './components/common/Button';
 import { EmptyState } from './components/common/EmptyState';
+import { CopyFailureDetails } from './components/common/Alert';
 import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
 import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
@@ -26,7 +19,6 @@ import { deleteModule, getModule } from './api/modules';
 import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
 import { decodeUIDefinition } from './utils/shareLink';
 import { initViyaUrl } from './config';
-import { ConnectionSettings } from './components/settings/ConnectionSettings';
 import { applyEnvironmentColor } from './utils/envColor';
 import { clearAllViewCaches } from './utils/viewCaches';
 import { buildListSearch, parsePageParam, readListParams, RESET_LIST_STATE } from './utils/listUrlState';
@@ -35,10 +27,37 @@ import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
 import { DownloadFallback } from './components/common/DownloadFallback';
 import './styles/index.css';
 
-// The views that carry the heavy vendor code (@xyflow/react + dagre for the
-// flow diagram, prismjs for the code panels) load on first visit instead of
-// riding in the entry chunk. The jobdef build inlines these chunks back into
-// its single HTML file (inlineDynamicImports in vite.config.ts).
+// Every view except the module list (the start page) loads on first visit
+// instead of riding in the entry chunk: the flow diagram (@xyflow/react +
+// dagre), prismjs for the code panels, the scoring dialogs, the UI builder,
+// the rules parsers. The jobdef build inlines these chunks back into its single
+// HTML file (inlineDynamicImports in vite.config.ts).
+const loadModuleDetails = () => import('./components/modules/ModuleDetails');
+const loadScorePanel = () => import('./components/scoring/ScorePanel');
+const ModuleDetails = lazy(() => loadModuleDetails().then((m) => ({ default: m.ModuleDetails })));
+const ScorePanel = lazy(() => loadScorePanel().then((m) => ({ default: m.ScorePanel })));
+const UIAppsList = lazy(() =>
+  import('./components/uiApps/UIAppsList').then((m) => ({ default: m.UIAppsList }))
+);
+const UIBuilder = lazy(() =>
+  import('./components/uiBuilder/UIBuilder').then((m) => ({ default: m.UIBuilder }))
+);
+const UIRunner = lazy(() =>
+  import('./components/uiRunner/UIRunner').then((m) => ({ default: m.UIRunner }))
+);
+const CoverageAnalysis = lazy(() =>
+  import('./components/coverage/CoverageAnalysis').then((m) => ({ default: m.CoverageAnalysis }))
+);
+const PublishingOverview = lazy(() =>
+  import('./components/publishing/PublishingOverview').then((m) => ({ default: m.PublishingOverview }))
+);
+const RulesImportPage = lazy(() =>
+  import('./components/rulesImport/RulesImportPage').then((m) => ({ default: m.RulesImportPage }))
+);
+// Electron only: the web and jobdef builds never render it.
+const ConnectionSettings = lazy(() =>
+  import('./components/settings/ConnectionSettings').then((m) => ({ default: m.ConnectionSettings }))
+);
 const FlowListPage = lazy(() => import('./components/flows/FlowListPage'));
 const FlowDetailPage = lazy(() => import('./components/flows/FlowDetailPage'));
 const SegTreeListPage = lazy(() => import('./components/segTrees/SegTreeListPage'));
@@ -208,7 +227,12 @@ function App() {
   // kept while another view is open, so the loaded page survives a visit to a
   // module and the breadcrumb or Back button can return to the same list.
   const moduleListSearchRef = useRef('');
+  // The module list is fetched from its first showing on, not at start-up: a
+  // deep link to a flow, a job or a standalone UI App never shows it. Once
+  // shown it stays enabled, so its page survives a visit to another view.
+  const moduleListShownRef = useRef(false);
   if (getActiveView() === 'modules') {
+    moduleListShownRef.current = true;
     moduleListSearchRef.current = buildListSearch(readModuleListSearch(location.search), MODULE_LIST_DEFAULTS);
   }
   const moduleListParams = readModuleListSearch(moduleListSearchRef.current);
@@ -228,7 +252,7 @@ function App() {
     filteredCount,
     displayModules,
   } = useModules({
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && moduleListShownRef.current,
     filter: escapedModuleSearch ? `contains(name,'${escapedModuleSearch}')` : '',
     sortBy: moduleListParams.sort,
     typeFilter: toModuleTypeFilter(moduleListParams.type),
@@ -265,6 +289,25 @@ function App() {
   useEffect(() => {
     loadRecentUIApps();
   }, [loadRecentUIApps]);
+
+  // Once the first view is up and the browser is idle, fetch the code of the
+  // next steps on the main path (module details, then scoring) so opening a
+  // module does not wait on a chunk. Not the flow or tree views: their
+  // diagram libraries load only when one is opened. A failed prefetch is
+  // ignored; the view retries the import when it is opened.
+  useEffect(() => {
+    if (__BUILD_MODE__ === 'jobdef') return; // one file: everything is already loaded
+    const prefetch = () => {
+      loadModuleDetails().catch(() => undefined);
+      loadScorePanel().catch(() => undefined);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(prefetch, { timeout: 5000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(prefetch, 2000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Use a ref to check selectedModule inside the effect without it being a dependency.
   const selectedModuleRef = useRef<Module | null>(null);
@@ -726,7 +769,12 @@ function App() {
         <EmptyState
           title="This module could not be loaded"
           hint={moduleError}
-          action={<Button variant="secondary" onClick={handleBackToModules}>Back to Modules</Button>}
+          action={
+            <>
+              <Button variant="secondary" onClick={handleBackToModules}>Back to Modules</Button>
+              <CopyFailureDetails message={moduleError} />
+            </>
+          }
         />
       );
     }
@@ -811,10 +859,14 @@ function App() {
     return (
       <div className="sas-connection-page">
         <div className="sas-connection-page__inner">
-          <ConnectionSettings
-            onSave={() => loadActiveConnection()}
-            onConnectionSwitch={handleConnectionSwitch}
-          />
+          <ChunkErrorBoundary>
+            <Suspense fallback={<Loading message="Loading..." />}>
+              <ConnectionSettings
+                onSave={() => loadActiveConnection()}
+                onConnectionSwitch={handleConnectionSwitch}
+              />
+            </Suspense>
+          </ChunkErrorBoundary>
         </div>
       </div>
     );
@@ -849,17 +901,23 @@ function App() {
       {/* Electron: connection settings dialog. ConnectionSettings supplies the
           title/actions/footer for its current view; Modal owns the chrome. */}
       {showSettings && (
-        <ConnectionSettings
-          onSave={closeSettings}
-          onCancel={closeSettings}
-          onConnectionSwitch={handleConnectionSwitch}
-          frame={({ title, actions, children, footer }) => (
-            <Modal title={title} onClose={closeSettings} footer={footer}>
-              {actions && <div className="connection-settings__toolbar">{actions}</div>}
-              {children}
-            </Modal>
-          )}
-        />
+        // No visible fallback: the settings chunk is small and local, and a
+        // spinner outside the dialog would flash in the corner of the page.
+        <ChunkErrorBoundary title="Connection settings could not be loaded">
+          <Suspense fallback={null}>
+            <ConnectionSettings
+              onSave={closeSettings}
+              onCancel={closeSettings}
+              onConnectionSwitch={handleConnectionSwitch}
+              frame={({ title, actions, children, footer }) => (
+                <Modal title={title} onClose={closeSettings} footer={footer}>
+                  {actions && <div className="connection-settings__toolbar">{actions}</div>}
+                  {children}
+                </Modal>
+              )}
+            />
+          </Suspense>
+        </ChunkErrorBoundary>
       )}
     </>
   );

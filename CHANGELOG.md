@@ -2,6 +2,34 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.11.0] - 2026-10-26
+
+Fast and at scale: pages you return to open from memory, long lists and job statistics load in parallel, batch runs show how they are going and recover from failures, and an expired session no longer leaves the app silently failing.
+
+### Added
+
+- **Find failed rows fast** — batch results can be filtered to All, Succeeded or Failed and sorted by row, status, any output or runtime. **Errors by message** groups failures ("10 × The step … was not found") with **Show these rows** and a jump to the first row with each error
+- **Retry failed rows** — after a run, **Retry failed rows (N)** scores only the failed rows again and puts the new results in place. During a run, rows that fail with a temporary error (HTTP 429, 502, 503, 504 or a dropped connection) are retried automatically up to twice
+- **See how a batch is going while it runs** — the progress card shows succeeded and failed rows, rows per second and the time left, plus the last error. If 20 rows in a row fail (an expired session, a removed module, a service outage) the run pauses and asks **Continue** or **Stop** instead of sending every remaining row into the same error
+- **Stop a CAS table fetch** — Parallel (CAS Table) shows rows fetched of the total while it reads the table, and **Stop fetching** cancels it without scoring anything; large tables use less memory while they are read
+- **Job log tools** — error and warning counts, Previous / Next through errors, a filter for errors and warnings only, and search across the whole log; a failed job opens at its first error, which is also shown in the job header
+- **Job statistics for a period** — Job Monitoring counts the jobs of the last 24 hours, 7 days (default), 30 days or all, several pages at a time, and switching back to a period already counted is instant. The banner shows how far back the count has got
+- **Session expiry prompt** — when the SAS Viya session ends (a 401, or the SAS Logon page answering in place of the service, which is how cookie sessions expire in the web and VA versions) the app shows one "Your session has expired" prompt. Sign in and what was waiting is retried; **Not now** shows Login in the header
+- **Copy details on errors** — error messages from SAS Viya get a **Copy details** button that copies the HTTP status, SAS error code, request, time, app version and build, ready for an administrator or a support ticket
+- **Cancel a coverage run** — Test Coverage has a **Cancel** button
+
+### Changed
+
+- **Pages you return to open from memory** — decision flows, sub-decisions, rule sets, REST API and treatment definitions, segmentation trees (about 1 MB each) and module details are kept for the session and refreshed quietly in the background. Re-opening a tree no longer downloads it again (5.1 s → 0.7 s for a 2,687-path tree); a version saved in SAS Intelligent Decisioning in the meantime replaces the old one on screen. Logging out, switching connection or importing rules clears the affected copies
+- **Long lists load several pages at once** — Decision Flows, Segmentation Trees, Publishing, Test Coverage and CAS tables request a few pages in parallel once the total is known; rule sets are read 1,000 rules per request
+- **Faster full flow diagram** — rule sets and REST definitions load while sub-decisions are still arriving, the diagram fits itself again after expanding (unless you have moved it), badges appear without re-laying out the graph, and diagrams with over 100 nodes draw only what is in view
+- **Smaller, faster start** — the flow-diagram library loads only when a flow or tree is opened, and scoring, the UI builder, Rules Import, Test Coverage, Publishing and Connection Settings load when first opened (web entry 400 kB → 120 kB). The Job Execution / Visual Analytics version is compressed: 1.75 MB → 0.64 MB, so it is sent and started in about half the time (first request to SAS Viya after 1.2 s instead of 2.3 s), and it still runs where eval is blocked
+- **Open Sans ships with the app** — no Google Fonts request and the right font on networks without internet access. The Job Execution / VA version gets it too (registered from script, because Job Execution's Content-Security-Policy blocks inlined fonts); until now it fell back to Arial there. The desktop app no longer flashes white on start
+- **Job Monitoring recovers by itself** — after a failed request each section retries (5 s, 10 s, 30 s, then every minute) and resumes on success; coming back to the browser tab refreshes at once
+- **Live logs catch up faster** — while a job runs only the visible tab (log or listing) is fetched, a long backlog is read straight through, and **Refresh now** keeps the lines already shown
+- **Coverage runs survive navigation** — a running analysis keeps going when you leave Test Coverage and is shown again when you return; a re-run keeps the previous results on screen
+- **Publishing Overview stays put on Refresh** — figures and the table, with its search, filters and page, stay on screen while the data reloads ("Refreshing…", then "Data as of 14:05")
+
 ## [2.10.0] - 2026-10-24
 
 Nothing lost, nothing wrong: this release fixes the places where the app silently dropped work or scored, saved or counted the wrong thing, and makes lists and pages remember where you were.

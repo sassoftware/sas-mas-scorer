@@ -7,7 +7,6 @@
 // CSRF token handling needed beyond what the shared interceptor already does.
 
 import { sasViyaClient, SAS_CONTENT_TYPES } from './client';
-import { paginateCollection } from './paginate';
 import {
   ExecutionJob,
   ExecutionJobCollection,
@@ -115,39 +114,100 @@ export interface WalkJobsOptions {
   // i.e. 10k jobs when the service honours the requested page size, fewer
   // when it caps the page.
   maxPages?: number;
+  // Extra filter clause, e.g. jobsCreatedSinceFilter(…) for a time window.
+  filter?: string;
+  // Page requests kept in flight at once, counting the one being processed.
+  // 1 walks strictly page by page; more reads ahead while the caller works
+  // through the current page.
+  concurrency?: number;
 }
 
+// Filter clause for jobs created at or after `sinceMs` (epoch ms).
+export const jobsCreatedSinceFilter = (sinceMs: number): string =>
+  `ge(creationTimeStamp,'${new Date(sinceMs).toISOString()}')`;
+
 // Walks /jobExecution/jobs page by page (newest-first), invoking `onPage`
-// after each fetch. The walk stops when:
+// for each page in order. The walk stops when:
 //   - the callback returns `false` (cooperative cancellation), or
 //   - a page comes back shorter than the limit the service echoed (end of list), or
 //   - `maxPages` is reached (safety cap).
-// The envelope `count` is deliberately ignored (`trustCount: false`) so a
-// degraded gateway that omits or misreports it still produces accurate
-// numbers up to the cap. Callers should treat `hasMore === true` on the final
-// page as a signal that more jobs exist beyond what was scanned.
+// The envelope `count` is deliberately ignored: the job collections send none
+// (filtered or not), and a degraded gateway may misreport it. Callers should
+// treat `hasMore === true` on the final page as a signal that more jobs exist
+// beyond what was scanned.
+//
+// With `concurrency` > 1 the next pages are requested while the current one
+// is processed. Page 0 always goes alone: the limit it echoes is the stride
+// for the rest (start = k × echoed limit). A page is about 1 MB because every
+// job embeds its job definition and code, so the read-ahead is where a cold
+// walk saves its time. Pages are still handed over strictly in order, and
+// read-ahead requests still in flight when the walk stops are aborted.
 export const walkJobs = async (
   onPage: (page: JobPage) => boolean | void | Promise<boolean | void>,
   options: WalkJobsOptions = {}
 ): Promise<void> => {
   const pageSize = options.pageSize ?? 100;
   const maxPages = options.maxPages ?? 100;
-  await paginateCollection<ExecutionJob>('/jobExecution/jobs', {
-    params: { sortBy: DEFAULT_SORT },
-    headers: { Accept: COLLECTION_ACCEPT },
-    pageSize,
-    maxPages,
-    trustCount: false,
-    accumulate: false,
-    onPage: (page) =>
-      onPage({
-        items: page.items,
-        pageIndex: page.pageIndex,
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? 1));
+  const controller = new AbortController();
+
+  const requests = new Map<number, Promise<ExecutionJobCollection>>();
+  let stride = pageSize;
+  const request = (pageIndex: number): void => {
+    if (pageIndex >= maxPages || requests.has(pageIndex)) return;
+    const pending = sasViyaClient
+      .get<ExecutionJobCollection>('/jobExecution/jobs', {
+        params: {
+          start: pageIndex * stride,
+          limit: pageSize,
+          sortBy: DEFAULT_SORT,
+          filter: options.filter,
+        },
+        headers: { Accept: COLLECTION_ACCEPT },
+        signal: controller.signal,
+      })
+      .then((response) => response.data);
+    // A read-ahead page that is never awaited (the walk stopped first) must
+    // not surface as an unhandled rejection; the awaited copy still throws.
+    pending.catch(() => undefined);
+    requests.set(pageIndex, pending);
+  };
+
+  let cumulativeCount = 0;
+  request(0);
+  try {
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+      const pending = requests.get(pageIndex);
+      if (!pending) break;
+      const data = await pending;
+      // Processed pages are not needed again; drop them so the ~1 MB
+      // payloads can be collected during a long walk.
+      requests.delete(pageIndex);
+      const items = data.items ?? [];
+      const effectiveLimit =
+        typeof data.limit === 'number' && data.limit > 0 ? data.limit : pageSize;
+      if (pageIndex === 0) stride = effectiveLimit;
+      const hasMore = items.length > 0 && items.length >= effectiveLimit;
+      cumulativeCount += items.length;
+
+      // Keep the read-ahead going while the caller processes this page.
+      if (hasMore) {
+        for (let ahead = 1; ahead < concurrency; ahead++) request(pageIndex + ahead);
+      }
+
+      const cont = await onPage({
+        items,
+        pageIndex,
         pageSize,
-        hasMore: page.hasMore,
-        cumulativeCount: page.loaded,
-      }),
-  });
+        hasMore,
+        cumulativeCount,
+      });
+      if (cont === false || !hasMore) break;
+      request(pageIndex + 1);
+    }
+  } finally {
+    controller.abort();
+  }
 };
 
 // --- Live log / listing for running jobs --------------------------------

@@ -1794,3 +1794,201 @@
   color: var(--sas-warning-dark);
   font-size: var(--font-size-sm);
 }
+
+/* --- CAS table: row fetch before a run (progress + Stop fetching) --- */
+
+.cas-table-score__fetch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.cas-table-score__fetch-progress {
+  flex: 1 1 280px;
+}
+
+/* --- Live batch feedback (BatchProgressCard) --- */
+
+.batch-progress__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
+.batch-progress__stat {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.batch-progress__stat dt {
+  color: var(--sas-gray-600);
+}
+
+.batch-progress__stat dt::after {
+  content: ':';
+}
+
+.batch-progress__stat dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--sas-gray-900);
+}
+
+/* The label "Failed" carries the meaning; the colour only reinforces it */
+.batch-progress__stat--error dd {
+  color: var(--sas-error-dark);
+}
+
+.batch-progress__last-error {
+  align-self: stretch;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  overflow-wrap: anywhere;
+}
+
+.batch-progress__last-error-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-error-dark);
+}
+
+.batch-progress__paused {
+  align-self: stretch;
+}
+
+.batch-progress__paused-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- Batch results triage: error groups, status filter --- */
+
+.batch-results__errors {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.batch-results__errors-title {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-700);
+}
+
+.batch-results__error-list {
+  margin: 0 0 var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.batch-results__error-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-gray-50);
+  border-left: 3px solid var(--sas-error-dark);
+  border-radius: var(--radius-md);
+}
+
+.batch-results__error-count {
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--sas-error-dark);
+  white-space: nowrap;
+}
+
+.batch-results__error-message {
+  flex: 1 1 240px;
+  min-width: 0;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.batch-results__error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.batch-results__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.batch-results__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.batch-results__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-full);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.batch-results__chip:hover {
+  background-color: var(--sas-gray-100);
+}
+
+.batch-results__chip:focus-visible {
+  outline: 2px solid var(--sas-blue-primary);
+  outline-offset: 2px;
+}
+
+/* Pressed is shown by a check mark and weight as well as the fill */
+.batch-results__chip--active,
+.batch-results__chip--active:hover {
+  background-color: var(--sas-blue-primary);
+  border-color: var(--sas-blue-primary);
+  color: var(--sas-white);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Decorative: aria-pressed already tells assistive tech (empty alt text) */
+.batch-results__chip--active::before {
+  content: '\2713';
+  content: '\2713' / '';
+}
+
+.batch-results__view-count {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  overflow-wrap: anywhere;
+}
+
+.batch-results__empty {
+  text-align: center;
+  color: var(--sas-gray-600);
+}
+
+.batch-results__retry-note {
+  margin: var(--space-3) 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}

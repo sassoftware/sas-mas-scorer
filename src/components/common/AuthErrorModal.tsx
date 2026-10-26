@@ -89,4 +89,68 @@ export const AuthErrorModal: React.FC<AuthErrorModalProps> = ({
   );
 };
 
+interface SessionExpiredModalProps {
+  /** Starts the sign-in (popup or login window). Called from the click, so a popup is not blocked. */
+  onSignIn: () => void;
+  /** Closes the prompt without signing in; the waiting requests fail. */
+  onClose: () => void;
+  /** A sign-in is in progress. */
+  busy: boolean;
+  /** Why the last sign-in attempt did not complete. */
+  error?: string | null;
+  /** When provided, offers a page reload (jobdef: the page came from SAS Job Execution). */
+  onReload?: () => void;
+}
+
+/**
+ * Shown once when a request finds the SAS Viya session has ended. Signing in
+ * again retries the requests that were waiting, so the user carries on where
+ * they were instead of reloading and losing what they had entered.
+ */
+export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
+  onSignIn,
+  onClose,
+  busy,
+  error,
+  onReload,
+}) => (
+  <Modal
+    title="Your session has expired"
+    onClose={onClose}
+    elevated
+    closeOnBackdropClick={false}
+    footer={
+      <>
+        <Button variant="tertiary" onClick={onClose} disabled={busy}>
+          Not now
+        </Button>
+        {onReload && (
+          <Button variant="secondary" onClick={onReload} disabled={busy}>
+            Reload page
+          </Button>
+        )}
+        <Button variant="primary" onClick={onSignIn} loading={busy}>
+          Sign in
+        </Button>
+      </>
+    }
+  >
+    <p style={{ margin: 0 }}>
+      Your SAS Viya session has ended, so the app could not load or save data. Sign in again to
+      continue where you left off: what was waiting is retried once you are signed in.
+    </p>
+    {onReload && (
+      <p style={{ margin: '12px 0 0' }}>
+        If the sign-in window does not open, reload the page instead. Anything you have not saved
+        on this page is lost when it reloads.
+      </p>
+    )}
+    {error && (
+      <div style={{ marginTop: '12px' }}>
+        <Alert variant="error">{error}</Alert>
+      </div>
+    )}
+  </Modal>
+);
+
 export default AuthErrorModal;

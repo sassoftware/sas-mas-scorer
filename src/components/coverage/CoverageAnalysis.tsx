@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -17,6 +17,7 @@ import { useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState'
 import {
   collectCoverage,
   collectionGaps,
+  COVERAGE_TOTAL_STEPS,
   describeCollectionStatus,
   generateCoverageCSV,
   generateCoverageMarkdown,
@@ -42,10 +43,106 @@ const PAGE_SIZE = 50;
 /** One collator for every comparison — building Intl state per compare is what made sorting slow. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-let cachedResult: CoverageRunResult | null = null;
+// --- The analysis run, kept outside the component ---------------------------
+//
+// A run takes minutes, so it lives at module level: leaving the page does not
+// stop it or lose its progress, and coming back re-attaches to it (no second,
+// duplicate run). `result` is the last good result; it stays on screen while
+// a re-run is in progress and after a re-run fails or is cancelled.
+
+interface CoverageRunState {
+  running: boolean;
+  progress: CollectionProgress | null;
+  result: CoverageRunResult | null;
+  error: string | null;
+  /** Set when the user cancelled the last run (cleared by the next run). */
+  cancelled: boolean;
+}
+
+const IDLE_RUN: CoverageRunState = {
+  running: false,
+  progress: null,
+  result: null,
+  error: null,
+  cancelled: false,
+};
+
+let runState: CoverageRunState = IDLE_RUN;
+// Bumped by every start, cancel and clear; a run whose id is no longer
+// current writes nothing (a cancelled run, or one from before a logout).
+let runId = 0;
+let runController: AbortController | null = null;
+const runListeners = new Set<() => void>();
+
+const setRunState = (patch: Partial<CoverageRunState>): void => {
+  runState = { ...runState, ...patch };
+  runListeners.forEach(listener => listener());
+};
+
+const subscribeRun = (listener: () => void): (() => void) => {
+  runListeners.add(listener);
+  return () => {
+    runListeners.delete(listener);
+  };
+};
+
+const getRunState = (): CoverageRunState => runState;
+
+const startCoverageRun = async (): Promise<void> => {
+  if (runState.running) return;
+  const id = ++runId;
+  const controller = new AbortController();
+  runController = controller;
+  setRunState({
+    running: true,
+    error: null,
+    cancelled: false,
+    progress: {
+      phase: 'starting',
+      currentStep: 0,
+      totalSteps: COVERAGE_TOTAL_STEPS,
+      message: 'Starting collection...',
+      itemsCollected: 0,
+    },
+  });
+  try {
+    const result = await collectCoverage(
+      (p) => {
+        if (id === runId) setRunState({ progress: { ...p } });
+      },
+      { signal: controller.signal },
+    );
+    if (id !== runId) return;
+    setRunState({ running: false, progress: null, result, error: null });
+  } catch (err) {
+    if (id !== runId) return;
+    // The previous result (if any) stays; the error is shown above it.
+    setRunState({
+      running: false,
+      progress: null,
+      error: err instanceof Error ? err.message : 'Failed to collect coverage data',
+    });
+  } finally {
+    if (runController === controller) runController = null;
+  }
+};
+
+/** Stop the run in flight; its walks end at their next page. */
+const cancelCoverageRun = (): void => {
+  if (!runState.running) return;
+  runId += 1;
+  runController?.abort();
+  runController = null;
+  setRunState({ running: false, progress: null, cancelled: true });
+};
 
 export const clearCoverageAnalysisCache = (): void => {
-  cachedResult = null;
+  // A run started for the previous session must not keep walking the old
+  // server or write its result after the switch.
+  runId += 1;
+  runController?.abort();
+  runController = null;
+  setRunState(IDLE_RUN);
 };
 
 // The shell clears this through the registry, so Header/App never import the
@@ -53,10 +150,11 @@ export const clearCoverageAnalysisCache = (): void => {
 registerViewCache('coverage', clearCoverageAnalysisCache);
 
 export const CoverageAnalysis: React.FC = () => {
-  const [result, setResult] = useState<CoverageRunResult | null>(() => cachedResult);
-  const [progress, setProgress] = useState<CollectionProgress | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { running: loading, progress, result, error, cancelled } = useSyncExternalStore(
+    subscribeRun,
+    getRunState,
+  );
+  const setError = (next: null) => setRunState({ error: next });
 
   // Detail table state. Search and the two filters live in the URL, so Back,
   // a reload or a shared link shows the same rows.
@@ -93,23 +191,8 @@ export const CoverageAnalysis: React.FC = () => {
     });
   }, []);
 
-  const handleRunAnalysis = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setProgress({ phase: 'starting', currentStep: 0, totalSteps: 7, message: 'Starting collection...', itemsCollected: 0 });
-
-    try {
-      const coverageResult = await collectCoverage((p) => setProgress({ ...p }));
-      setResult(coverageResult);
-      cachedResult = coverageResult;
-      setProgress(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to collect coverage data');
-      setProgress(null);
-    } finally {
-      setLoading(false);
-    }
+  const handleRunAnalysis = useCallback(() => {
+    void startCoverageRun();
   }, []);
 
   const filteredItems = useMemo(() => {
@@ -205,6 +288,11 @@ export const CoverageAnalysis: React.FC = () => {
                 </Button>
               </>
             )}
+            {loading && (
+              <Button variant="secondary" onClick={cancelCoverageRun}>
+                Cancel
+              </Button>
+            )}
             <Button variant="primary" onClick={handleRunAnalysis} loading={loading}>
               {result ? 'Re-run Analysis' : 'Run Analysis'}
             </Button>
@@ -215,10 +303,23 @@ export const CoverageAnalysis: React.FC = () => {
       {error && (
         <Alert variant="error" title="Analysis Failed" dismissible onClose={() => setError(null)}>
           {error}
+          {result && ' The results below are from the previous analysis.'}
         </Alert>
       )}
 
-      {/* Progress indicator */}
+      {cancelled && !loading && (
+        <Alert
+          variant="info"
+          dismissible
+          onClose={() => setRunState({ cancelled: false })}
+        >
+          Analysis cancelled.
+          {result && ' The results below are from the previous analysis.'}
+        </Alert>
+      )}
+
+      {/* Progress indicator — above the previous results during a re-run.
+          The run carries on if you leave the page; coming back shows it. */}
       {loading && progress && (
         <Card>
           <CardBody>
@@ -226,11 +327,17 @@ export const CoverageAnalysis: React.FC = () => {
               label="Coverage collection progress"
               value={progress.currentStep}
               max={progress.totalSteps}
-              phase={progress.phase === 'collecting' ? 'Collecting data' : 'Analyzing coverage'}
+              phase={progress.phase === 'analyzing' ? 'Analyzing coverage' : 'Collecting data'}
               count={`${progress.itemsCollected} items collected`}
               message={progress.message}
               steps={<span>Step {progress.currentStep} of {progress.totalSteps}</span>}
             />
+            <p className="coverage-run-note">
+              {result
+                ? `The results below are from ${new Date(result.collectionDate).toLocaleString()} and are replaced when this run finishes. `
+                : ''}
+              You can leave this page; the analysis carries on and is shown here when you come back.
+            </p>
           </CardBody>
         </Card>
       )}

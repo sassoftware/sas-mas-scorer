@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { JobMonitoringStats } from '../../hooks/useJobMonitoring';
-import { formatDuration } from './utils';
+import { JobMonitoringStats, JobStatsWindow } from '../../hooks/useJobMonitoring';
+import { STATS_WINDOW_LABELS, formatDuration } from './utils';
 
 interface JobStatsCardsProps {
   stats: JobMonitoringStats | null;
   loading: boolean;
+  // The window the figures cover (Active is always "now").
+  window: JobStatsWindow;
 }
 
 // Renders a number when known. While the walk is in progress, partial values
@@ -22,25 +24,33 @@ const Stat: React.FC<{ value: number | null; suffix?: string }> = ({ value, suff
 // the accent modifier that colours each tile's left border.
 const CARD = 'sas-card sas-stat-card';
 
-export const JobStatsCards: React.FC<JobStatsCardsProps> = ({ stats }) => {
-  const counts = stats?.counts;
-  const avg = stats?.averageRuntime;
-  const truncatedSuffix = stats?.truncated ? '+' : '';
+export const JobStatsCards: React.FC<JobStatsCardsProps> = ({ stats, window: statsWindow }) => {
+  // Figures from another window (the moment after a switch) are not shown.
+  const current = stats && stats.window === statsWindow ? stats : null;
+  const counts = current?.counts;
+  const active = stats?.counts.active ?? null;
+  const avg = current?.averageRuntime;
+  const truncatedSuffix = current?.truncated ? '+' : '';
+  const phrase = STATS_WINDOW_LABELS[statsWindow].phrase;
 
   return (
-    <section className="job-monitoring__stats" aria-label="Job summary statistics">
+    <section className="job-monitoring__stats" aria-label={`Job summary statistics, ${phrase}`}>
       <div className={`${CARD} job-monitoring__stat-card--total`}>
         <Stat value={counts?.total ?? null} suffix={truncatedSuffix} />
         <div className="sas-stat-label">Total Jobs</div>
+        <div className="job-monitoring__stat-sub">
+          {current?.truncated ? `most recent, ${phrase}` : phrase}
+        </div>
       </div>
       <div className={`${CARD} job-monitoring__stat-card--running`}>
-        <Stat value={counts?.active ?? null} />
+        <Stat value={active} />
         <div className="sas-stat-label">Active</div>
-        <div className="job-monitoring__stat-sub">running &amp; pending</div>
+        <div className="job-monitoring__stat-sub">running &amp; pending now</div>
       </div>
       <div className={`${CARD} job-monitoring__stat-card--completed`}>
         <Stat value={counts?.completed ?? null} />
         <div className="sas-stat-label">Completed</div>
+        <div className="job-monitoring__stat-sub">{phrase}</div>
       </div>
       <div className={`${CARD} job-monitoring__stat-card--failed`}>
         <Stat

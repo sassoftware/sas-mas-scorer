@@ -3,6 +3,7 @@
 
 import { ExecutionJobState } from '../../types/jobExecution';
 import { saveTextFile } from '../../utils/download';
+import type { JobStatsWindow } from '../../hooks/useJobMonitoring';
 
 // Display labels for job states. The API values are camelCase ('timedOut')
 // and US-spelled ('canceled'); the badge, the filter chips and the stats
@@ -16,6 +17,14 @@ export const STATE_LABELS: Record<ExecutionJobState, string> = {
   failed: 'Failed',
   canceled: 'Canceled',
   timedOut: 'Timed Out',
+};
+
+// The statistics window, as the chips name it and as the figures describe it.
+export const STATS_WINDOW_LABELS: Record<JobStatsWindow, { chip: string; phrase: string }> = {
+  '24h': { chip: '24 hours', phrase: 'in the last 24 hours' },
+  '7d': { chip: '7 days', phrase: 'in the last 7 days' },
+  '30d': { chip: '30 days', phrase: 'in the last 30 days' },
+  all: { chip: 'All', phrase: 'all time' },
 };
 
 // Label for a state, falling back to the raw value for anything unexpected.

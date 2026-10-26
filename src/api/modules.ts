@@ -3,6 +3,13 @@
 
 import { apiClient, sasViyaClient, SAS_CONTENT_TYPES } from './client';
 import { fetchAllPaginated, paginateCollection } from './paginate';
+import { getDecision, getDecisionRevision } from './decisions';
+import {
+  cachedRequest,
+  CACHE_FRESH_MS,
+  invalidateRequestCache,
+  type RequestOptions,
+} from './requestCache';
 import {
   Module,
   ModuleCollection,
@@ -64,13 +71,37 @@ export const getAllModules = async (
   });
 };
 
-export const getModule = async (moduleId: string): Promise<Module> => {
-  const response = await apiClient.get<Module>(`/modules/${moduleId}`, {
-    headers: {
-      Accept: SAS_CONTENT_TYPES.MODULE,
+/**
+ * Module metadata is small, so it is kept only briefly: long enough that the
+ * module page, a step page and the UI builder opened from it share one read,
+ * short enough that a module republished from elsewhere shows up quickly.
+ * No stale answers are served (see requestCache.ts).
+ */
+const MODULE_METADATA_POLICY = { freshMs: CACHE_FRESH_MS, maxEntries: 100 };
+
+const moduleCacheKey = (moduleId: string): string => `module:${moduleId}`;
+
+/** Forget the cached copy of a module (and its publish record lookups). */
+export const invalidateModuleCache = (moduleId?: string): void => {
+  invalidateRequestCache(moduleId ? moduleCacheKey(moduleId) : 'module:');
+  invalidateRequestCache('publishedModel:');
+};
+
+/** The module. Cached for a minute, see requestCache.ts; `{ refresh: true }` skips that. */
+export const getModule = async (moduleId: string, options?: RequestOptions): Promise<Module> => {
+  return cachedRequest(
+    moduleCacheKey(moduleId),
+    async () => {
+      const response = await apiClient.get<Module>(`/modules/${moduleId}`, {
+        headers: {
+          Accept: SAS_CONTENT_TYPES.MODULE,
+        },
+      });
+      return response.data;
     },
-  });
-  return response.data;
+    MODULE_METADATA_POLICY,
+    options
+  );
 };
 
 export const createModule = async (definition: ModuleDefinition): Promise<Module> => {
@@ -80,6 +111,8 @@ export const createModule = async (definition: ModuleDefinition): Promise<Module
       Accept: SAS_CONTENT_TYPES.MODULE,
     },
   });
+  // A module created under an existing id replaces it.
+  invalidateModuleCache(response.data?.id);
   return response.data;
 };
 
@@ -96,12 +129,20 @@ export const updateModule = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await apiClient.put<Module>(`/modules/${moduleId}`, module, { headers });
-  return response.data;
+  try {
+    const response = await apiClient.put<Module>(`/modules/${moduleId}`, module, { headers });
+    return response.data;
+  } finally {
+    invalidateModuleCache(moduleId);
+  }
 };
 
 export const deleteModule = async (moduleId: string): Promise<void> => {
-  await apiClient.delete(`/modules/${moduleId}`);
+  try {
+    await apiClient.delete(`/modules/${moduleId}`);
+  } finally {
+    invalidateModuleCache(moduleId);
+  }
 };
 
 export const getModuleSource = async (moduleId: string): Promise<ModuleSource> => {
@@ -126,12 +167,17 @@ export const updateModuleSource = async (
     headers['If-Match'] = etag;
   }
 
-  const response = await apiClient.put<ModuleSource>(
-    `/modules/${moduleId}/source`,
-    source,
-    { headers }
-  );
-  return response.data;
+  try {
+    const response = await apiClient.put<ModuleSource>(
+      `/modules/${moduleId}/source`,
+      source,
+      { headers }
+    );
+    return response.data;
+  } finally {
+    // New source recompiles the module: its steps and signature change.
+    invalidateModuleCache(moduleId);
+  }
 };
 
 export const getSubmodules = async (
@@ -200,16 +246,20 @@ export interface DecisionSourceInfo {
   description?: string;
 }
 
-export const getDecisionSourceInfo = async (sourceURI: string): Promise<DecisionSourceInfo> => {
-  const response = await sasViyaClient.get<DecisionSourceInfo>(sourceURI, {
-    headers: {
-      Accept: 'application/vnd.sas.decision+json',
-    },
-  });
+// The published revision document, shared through the request cache with
+// every other read of the same URI (Module Details and the step page both
+// ask; the second asks no server). This is a different document from the
+// current flow that getDecisionSignature reads — the two can disagree once the
+// flow has been edited since publishing, so they are never merged.
+export const getDecisionSourceInfo = async (
+  sourceURI: string,
+  options?: RequestOptions
+): Promise<DecisionSourceInfo> => {
+  const revision = await getDecisionRevision(sourceURI, options);
   return {
-    majorRevision: response.data.majorRevision,
-    minorRevision: response.data.minorRevision,
-    description: response.data.description,
+    majorRevision: revision.majorRevision,
+    minorRevision: revision.minorRevision,
+    description: revision.description,
   };
 };
 
@@ -233,20 +283,21 @@ export interface DecisionSignatureVariable {
   generateDataGridColumns?: boolean;
 }
 
-export const getDecisionSignature = async (sourceURI: string): Promise<DecisionSignatureVariable[]> => {
+export const getDecisionSignature = async (
+  sourceURI: string,
+  options?: RequestOptions
+): Promise<DecisionSignatureVariable[]> => {
   // sourceURI is like /decisions/flows/{id}/revisions/{revId} — extract the flow ID
   const flowMatch = sourceURI.match(/\/decisions\/flows\/([a-f0-9-]+)/);
   if (!flowMatch) return [];
 
+  // The current flow (not the published revision), through the request cache
+  // it shares with the Flows view.
   const flowId = flowMatch[1];
-  const response = await sasViyaClient.get(`/decisions/flows/${flowId}`, {
-    headers: {
-      Accept: 'application/vnd.sas.decision+json',
-    },
-  });
+  const flow = await getDecision(flowId, options);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (response.data.signature ?? []).map((s: any) => ({
+  return ((flow.signature ?? []) as any[]).map((s: any) => ({
     name: s.name,
     direction: s.direction,
     dataType: s.dataType,
@@ -285,7 +336,21 @@ const PUBLISH_FALLBACK_LIMIT = 50;
 // narrowed to the one whose name matches ignoring case — never a substring.
 // Single quotes are doubled for the filter language: an unescaped "o'brien"
 // is a 400, not an empty result.
-export const getPublishedModelInfo = async (publishName: string): Promise<PublishedModelInfo | null> => {
+//
+// Kept for a minute like the module itself (see requestCache.ts), so Module
+// Details and the step page opened from it share one lookup.
+export const getPublishedModelInfo = async (
+  publishName: string,
+  options?: RequestOptions
+): Promise<PublishedModelInfo | null> =>
+  cachedRequest(
+    `publishedModel:${publishName}`,
+    () => findPublishedModelInfo(publishName),
+    MODULE_METADATA_POLICY,
+    options
+  );
+
+const findPublishedModelInfo = async (publishName: string): Promise<PublishedModelInfo | null> => {
   const quoted = `'${publishName.replace(/'/g, "''")}'`;
   const fetchRecords = async (nameFilter: string, limit: number) => {
     const response = await sasViyaClient.get('/modelPublish/models', {

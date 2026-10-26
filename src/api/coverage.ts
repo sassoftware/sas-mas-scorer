@@ -121,6 +121,26 @@ const CONTENT_ENDPOINTS: Record<ContentType, { path: string; accept: string; acc
 
 const COVERAGE_PAGE_SIZE = 100;
 
+/** Progress steps of one run: each content type, the score definitions, then the analysis. */
+export const COVERAGE_TOTAL_STEPS = Object.keys(CONTENT_ENDPOINTS).length + 2;
+
+/** Thrown by collectCoverage when its signal aborts the run. */
+export class CoverageRunCancelledError extends Error {
+  constructor() {
+    super('The coverage analysis was cancelled.');
+    this.name = 'CoverageRunCancelledError';
+  }
+}
+
+export interface CollectCoverageOptions {
+  /**
+   * Stops the run: each walk ends at its next page boundary (requests
+   * already sent still complete) and collectCoverage throws
+   * CoverageRunCancelledError instead of returning a partial result.
+   */
+  signal?: AbortSignal;
+}
+
 /**
  * Score definitions in the trash still point at live assets; the same filter
  * listDecisionScenarios uses keeps them out. Live definitions carry no
@@ -137,6 +157,7 @@ function fetchCollection(
   accept: string,
   acceptItem?: string,
   params?: Record<string, string>,
+  signal?: AbortSignal,
 ) {
   const headers: Record<string, string> = { Accept: accept };
   if (acceptItem) {
@@ -146,11 +167,16 @@ function fetchCollection(
     headers,
     params,
     pageSize: COVERAGE_PAGE_SIZE,
+    // A cancelled run stops asking for further pages.
+    onPage: signal ? () => !signal.aborted : undefined,
   });
 }
 
 /** The HTTP status behind a failed walk, read from the error or its message. */
 function httpStatusOf(err: unknown): number | undefined {
+  // ViyaApiError (src/utils/apiErrors.ts) carries the status itself.
+  const own = (err as { status?: unknown } | null)?.status;
+  if (typeof own === 'number') return own;
   const status = (err as { response?: { status?: unknown } })?.response?.status;
   if (typeof status === 'number') return status;
   const match = err instanceof Error ? err.message.match(/\b([45]\d\d)\b/) : null;
@@ -324,10 +350,12 @@ function calculateStats(items: ContentItem[]): CoverageStats {
 
 export async function collectCoverage(
   onProgress: (progress: CollectionProgress) => void,
+  options: CollectCoverageOptions = {},
 ): Promise<CoverageRunResult> {
+  const { signal } = options;
   const contentTypes = Object.keys(CONTENT_ENDPOINTS) as ContentType[];
-  const collectionSteps = contentTypes.length + 1; // +1 for score definitions
-  const totalSteps = collectionSteps + 1; // +1 for analysis
+  // Each content type + score definitions + analysis.
+  const totalSteps = COVERAGE_TOTAL_STEPS;
   // The seven walks are independent of each other, so they run concurrently
   // and progress counts completed collections rather than a sequential index.
   let completedSteps = 0;
@@ -373,7 +401,7 @@ export async function collectCoverage(
   ): Promise<{ items: ContentItem[]; status: CoverageCollectionStatus }> => {
     const endpoint = CONTENT_ENDPOINTS[contentType];
     try {
-      const walk = await fetchCollection(endpoint.path, endpoint.accept);
+      const walk = await fetchCollection(endpoint.path, endpoint.accept, undefined, undefined, signal);
       const items = walk.items.map(raw => mapToContentItem(raw, contentType));
       itemsCollected += items.length;
       completedSteps++;
@@ -398,6 +426,7 @@ export async function collectCoverage(
       'application/vnd.sas.collection+json, application/json',
       'application/vnd.sas.score.definition+json', // Accept-Item: get full details with objectDescriptor
       params,
+      signal,
     );
     try {
       let walk;
@@ -432,6 +461,8 @@ export async function collectCoverage(
     Promise.all(contentTypes.map(collectContentType)),
     collectScoreDefinitions(),
   ]);
+  // A cancelled run's walks ended early and look complete; never report them.
+  if (signal?.aborted) throw new CoverageRunCancelledError();
   const allItems: ContentItem[] = contentResults.flatMap(r => r.items);
   const collections = [...contentResults.map(r => r.status), scoreDefResult.status];
 

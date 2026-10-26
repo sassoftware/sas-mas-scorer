@@ -3,8 +3,25 @@
 
 import { sasViyaClient } from './client';
 import { fetchAllPaginated } from './paginate';
+import { cachedRequest, IN_FLIGHT_ONLY, sidDocumentPolicy, type RequestOptions } from './requestCache';
 
 const TREE_MEDIA_TYPE = 'application/vnd.sas.decision.segmentation.tree+json';
+
+/**
+ * Trees kept for the session. A large tree is about 1 MB of uncompressed JSON
+ * (and takes about 0.4 s on a LAN), so a handful is enough to make going back
+ * and forth instant without holding much memory.
+ */
+const MAX_CACHED_TREES = 5;
+
+const TREES_PAGE_SIZE = 200;
+
+/** Request-cache key of a tree by the URI it is read from. */
+export const segmentationTreeCacheKey = (uri: string): string => `segTree:${uri}`;
+
+/** The current tree behind an id, as `getSegmentationTreeById` reads it. */
+export const segmentationTreeUri = (id: string): string =>
+  `/decisions/segmentationTrees/${encodeURIComponent(id)}`;
 
 export interface SegTreeSignatureVar {
   id: string;
@@ -89,27 +106,58 @@ export interface SegmentationTreeSummary {
   modifiedTimeStamp?: string;
 }
 
-export async function getSegmentationTree(uri: string): Promise<SegmentationTreeDetail> {
-  const response = await sasViyaClient.get<SegmentationTreeDetail>(
-    uri,
-    { headers: { Accept: TREE_MEDIA_TYPE } },
+function getTreeDocument(
+  uri: string,
+  timeout: number | undefined,
+  options?: RequestOptions,
+): Promise<SegmentationTreeDetail> {
+  return cachedRequest(
+    segmentationTreeCacheKey(uri),
+    async () => {
+      const response = await sasViyaClient.get<SegmentationTreeDetail>(uri, {
+        headers: { Accept: TREE_MEDIA_TYPE },
+        ...(timeout !== undefined ? { timeout } : {}),
+      });
+      return response.data;
+    },
+    sidDocumentPolicy<SegmentationTreeDetail>(uri, MAX_CACHED_TREES),
+    options,
   );
-  return response.data;
 }
 
-/** The current revision of a tree. A large tree is around 1 MB of JSON. */
-export async function getSegmentationTreeById(id: string): Promise<SegmentationTreeDetail> {
-  const response = await sasViyaClient.get<SegmentationTreeDetail>(
-    `/decisions/segmentationTrees/${encodeURIComponent(id)}`,
-    { headers: { Accept: TREE_MEDIA_TYPE }, timeout: 120000 },
-  );
-  return response.data;
+/** A tree (or tree revision) by URI. Cached for the session, see requestCache.ts. */
+export async function getSegmentationTree(
+  uri: string,
+  options?: RequestOptions,
+): Promise<SegmentationTreeDetail> {
+  return getTreeDocument(uri, undefined, options);
 }
 
-/** Every segmentation tree, name ascending. */
+/**
+ * The current revision of a tree. A large tree is around 1 MB of JSON.
+ * Cached for the session, see requestCache.ts; pass `{ refresh: true }` to
+ * skip the stored copy.
+ */
+export async function getSegmentationTreeById(
+  id: string,
+  options?: RequestOptions,
+): Promise<SegmentationTreeDetail> {
+  return getTreeDocument(segmentationTreeUri(id), 120000, options);
+}
+
+/**
+ * Every segmentation tree, name ascending. Identical calls running at the
+ * same time share one walk; the result is not kept here (the list page keeps
+ * its own copy).
+ */
 export async function listAllSegmentationTrees(): Promise<SegmentationTreeSummary[]> {
-  return fetchAllPaginated<SegmentationTreeSummary>('/decisions/segmentationTrees', {
-    params: { sortBy: 'name:ascending' },
-    pageSize: 100,
-  });
+  return cachedRequest(
+    'segTreeList:',
+    () =>
+      fetchAllPaginated<SegmentationTreeSummary>('/decisions/segmentationTrees', {
+        params: { sortBy: 'name:ascending' },
+        pageSize: TREES_PAGE_SIZE,
+      }),
+    IN_FLIGHT_ONLY,
+  );
 }

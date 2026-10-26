@@ -3,7 +3,13 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getSegmentationTreeById, type SegmentationTreeDetail } from '../../api/segmentationTrees';
+import {
+  getSegmentationTreeById,
+  segmentationTreeCacheKey,
+  segmentationTreeUri,
+  type SegmentationTreeDetail,
+} from '../../api/segmentationTrees';
+import { subscribeRequestCache } from '../../api/requestCache';
 import { buildTreeIndex } from '../../utils/segTree/treeIndex';
 import { leafPrefix, nextLeaf } from '../../utils/segTree/leafCounts';
 import { autoExpand, expandAll, expandOneLevel, visibleRows, withPathOpen } from '../../utils/segTree/treeView';
@@ -107,6 +113,16 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [treeId, reloadToken]);
+
+  // The tree may come from the session cache; when its background refresh
+  // finds a newer revision (re-saved in SID), show that one instead.
+  useEffect(() => {
+    if (!treeId) return;
+    const key = segmentationTreeCacheKey(segmentationTreeUri(treeId));
+    return subscribeRequestCache((changedKey, value) => {
+      if (changedKey === key && value) setTree(value as SegmentationTreeDetail);
+    });
+  }, [treeId]);
 
   const index = useMemo(() => (tree ? buildTreeIndex(tree) : null), [tree]);
 

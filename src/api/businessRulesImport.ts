@@ -11,6 +11,7 @@
 
 import { sasViyaClient } from './client';
 import { getFolderByPath, SasFolder } from './folders';
+import { invalidateRuleSetCache } from './rulesets';
 import {
   CellIssue,
   PreflightRuleSetResult,
@@ -27,6 +28,21 @@ export interface RuleSetSummary {
 }
 
 export const postRulesCsv = async (
+  csv: string
+): Promise<{ raw: string; contentType?: string; status: number }> => {
+  // The import creates and rewrites rule sets, so whatever the outcome (a
+  // rejected import can still have written some), cached copies are stale:
+  // drop them now and again once the service has answered, so a read that
+  // ran during the import is not kept either.
+  invalidateRuleSetCache();
+  try {
+    return await sendRulesCsv(csv);
+  } finally {
+    invalidateRuleSetCache();
+  }
+};
+
+const sendRulesCsv = async (
   csv: string
 ): Promise<{ raw: string; contentType?: string; status: number }> => {
   const response = await sasViyaClient.post('/businessRules/rules', csv, {

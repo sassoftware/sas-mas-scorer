@@ -3,9 +3,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDecision, getDecisionRevision } from '../../api/decisions';
-import { getRestApiDefinitionByUri, REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail } from '../../api/restApiDefinitions';
-import { getRuleSetBundle, type RuleSetBundle } from '../../api/rulesets';
+import { decisionCacheKey, decisionUri, getDecision, getDecisionRevision } from '../../api/decisions';
+import {
+  getRestApiDefinitionByUri, restApiDefinitionCacheKey, REST_API_DEFINITION_TYPE, type RestApiDefinitionDetail,
+} from '../../api/restApiDefinitions';
+import { getRuleSetBundle, ruleSetBundleCacheKey, type RuleSetBundle } from '../../api/rulesets';
+import { subscribeRequestCache } from '../../api/requestCache';
 import { collectCustomObjectUris, collectRuleSetIds } from '../../utils/classify';
 import type { DecisionFlow, SidNodeData, Step } from '../../types/sid';
 import { Alert, Button, Loading } from '../common';
@@ -37,9 +40,12 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
 
   // The three caches are mutable Maps with stable identity. They are filled
   // in the background after the decision itself has rendered, and
-  // `cacheVersion` is bumped exactly once when all of them are complete, so
-  // the diagram converts and lays out the graph once per load rather than
-  // once per fetch phase.
+  // `cacheVersion` is bumped when the sub-decisions are all in (the diagram
+  // lays out the expanded graph once) and again only if rule set or REST API
+  // badges arrive after that (the diagram patches them in without a new
+  // layout). The reads behind them go through the session request cache, so
+  // opening a flow again, or a flow sharing sub-decisions and rule sets with
+  // one opened before, is served from memory.
   const [subDecisionCache] = useState<Map<string, DecisionFlow>>(new Map());
   const [restApiCache] = useState<Map<string, RestApiDefinitionDetail>>(new Map());
   const [ruleSetCache] = useState<Map<string, RuleSetBundle>>(new Map());
@@ -58,42 +64,100 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
   // Fetch main decision
   useEffect(() => {
     if (!id) return;
+    let active = true;
     setLoading(true);
     setError('');
     setSelectedNode(null);
 
     getDecision(id)
       .then((data) => {
+        if (!active) return;
         setFlow(data);
-        void loadReferences(data);
+        void loadReferences(data, () => active);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false));
+      .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A document shown from the session cache is refreshed in the background
+  // once it is older than a minute; when SAS Intelligent Decisioning has a
+  // newer version, put it on screen.
+  useEffect(() => {
+    if (!id) return;
+    const flowKey = decisionCacheKey(decisionUri(id));
+    return subscribeRequestCache((key, value) => {
+      if (key === flowKey) {
+        const updated = value as DecisionFlow;
+        setFlow(updated);
+        void loadReferences(updated, () => true);
+        return;
+      }
+      let changed = false;
+      for (const uri of subDecisionCache.keys()) {
+        if (key === decisionCacheKey(uri)) {
+          subDecisionCache.set(uri, value as DecisionFlow);
+          changed = true;
+        }
+      }
+      for (const rsId of ruleSetCache.keys()) {
+        if (key === ruleSetBundleCacheKey(rsId)) {
+          ruleSetCache.set(rsId, value as RuleSetBundle);
+          changed = true;
+        }
+      }
+      for (const uri of restApiCache.keys()) {
+        if (key === restApiDefinitionCacheKey(uri)) {
+          restApiCache.set(uri, value as RestApiDefinitionDetail);
+          changed = true;
+        }
+      }
+      if (changed) setCacheVersion((v) => v + 1);
+    });
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * Sub-decisions first (the other two collect references from them), then
-   * REST API definitions and rule sets together; publish the caches once.
-   * The `finally` runs even if one tail rejects, so the other's cache still
-   * reaches the diagram.
+   * Pipelined: the sub-decisions are read breadth-first, and the rule sets and
+   * REST API definitions of every level are requested as soon as that level
+   * has arrived instead of after the last one. The expanded structure is
+   * published once when the sub-decisions are complete; badges that arrive
+   * later are published with one more bump. The `finally` runs even if a
+   * request rejects, so whatever did load still reaches the diagram.
    */
-  async function loadReferences(decision: DecisionFlow) {
+  async function loadReferences(decision: DecisionFlow, isActive: () => boolean) {
     setReferencesLoading(true);
+    const tails: Promise<void>[] = [];
+    // Set when a badge lands in a cache the diagram has not been told about.
+    let badgesPending = false;
+    const markBadge = () => { badgesPending = true; };
+    const startTails = (flows: DecisionFlow[]) => {
+      tails.push(fetchRestApiDefinitions(flows, markBadge), fetchRuleSets(flows, markBadge));
+    };
     try {
-      await fetchSubDecisions(decision);
-      await Promise.allSettled([fetchRestApiDefinitions(decision), fetchRuleSets(decision)]);
+      startTails([decision]);
+      await fetchSubDecisions(decision, startTails);
     } finally {
-      setReferencesLoading(false);
-      setCacheVersion((v) => v + 1);
+      if (isActive()) {
+        badgesPending = false;
+        setCacheVersion((v) => v + 1);
+      }
+    }
+    try {
+      await Promise.allSettled(tails);
+    } finally {
+      if (isActive()) {
+        setReferencesLoading(false);
+        if (badgesPending) setCacheVersion((v) => v + 1);
+      }
     }
   }
 
   /**
    * Breadth-first: one request burst per nesting level, deduplicated against
    * the cache, so sibling subtrees load together and a grandchild shared by
-   * two children is fetched once.
+   * two children is fetched once. `onLevel` gets every level as it arrives.
    */
-  async function fetchSubDecisions(decision: DecisionFlow) {
+  async function fetchSubDecisions(decision: DecisionFlow, onLevel: (flows: DecisionFlow[]) => void) {
     let frontier: DecisionFlow[] = [decision];
     for (let depth = 0; depth < MAX_SUB_DECISION_DEPTH && frontier.length > 0; depth++) {
       const uris = new Set<string>();
@@ -113,38 +177,47 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
           frontier.push(result.value);
         }
       });
+      if (frontier.length > 0) onLevel(frontier);
     }
   }
 
-  /** Fetch the REST API definitions used by the decision and its sub-decisions. */
-  async function fetchRestApiDefinitions(decision: DecisionFlow) {
-    const uris = new Set(collectCustomObjectUris(decision.flow?.steps ?? [], REST_API_DEFINITION_TYPE));
-    for (const sub of subDecisionCache.values()) {
-      for (const uri of collectCustomObjectUris(sub.flow?.steps ?? [], REST_API_DEFINITION_TYPE)) {
-        uris.add(uri);
+  /** Fetch the REST API definitions used by these flows. */
+  async function fetchRestApiDefinitions(flows: DecisionFlow[], onLoaded: () => void) {
+    const uris = new Set<string>();
+    for (const f of flows) {
+      for (const uri of collectCustomObjectUris(f.flow?.steps ?? [], REST_API_DEFINITION_TYPE)) {
+        if (!restApiCache.has(uri)) uris.add(uri);
       }
     }
-    const newUris = [...uris].filter((uri) => !restApiCache.has(uri));
+    const newUris = [...uris];
     if (newUris.length === 0) return;
 
     const results = await Promise.allSettled(newUris.map((uri) => getRestApiDefinitionByUri(uri)));
     results.forEach((result, i) => {
-      if (result.status === 'fulfilled') restApiCache.set(newUris[i], result.value);
+      if (result.status === 'fulfilled') {
+        restApiCache.set(newUris[i], result.value);
+        onLoaded();
+      }
     });
   }
 
-  /** Fetch the rule sets used by the decision and its sub-decisions. */
-  async function fetchRuleSets(decision: DecisionFlow) {
-    const ids = new Set(collectRuleSetIds(decision.flow?.steps ?? []));
-    for (const sub of subDecisionCache.values()) {
-      for (const rsId of collectRuleSetIds(sub.flow?.steps ?? [])) ids.add(rsId);
+  /** Fetch the rule sets used by these flows. */
+  async function fetchRuleSets(flows: DecisionFlow[], onLoaded: () => void) {
+    const ids = new Set<string>();
+    for (const f of flows) {
+      for (const rsId of collectRuleSetIds(f.flow?.steps ?? [])) {
+        if (!ruleSetCache.has(rsId)) ids.add(rsId);
+      }
     }
-    const newIds = [...ids].filter((rsId) => !ruleSetCache.has(rsId));
+    const newIds = [...ids];
     if (newIds.length === 0) return;
 
     const results = await Promise.allSettled(newIds.map((rsId) => getRuleSetBundle(rsId)));
     results.forEach((result, i) => {
-      if (result.status === 'fulfilled') ruleSetCache.set(newIds[i], result.value);
+      if (result.status === 'fulfilled') {
+        ruleSetCache.set(newIds[i], result.value);
+        onLoaded();
+      }
     });
   }
 

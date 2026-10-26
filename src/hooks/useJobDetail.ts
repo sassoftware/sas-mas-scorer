@@ -16,13 +16,26 @@ import {
   LogLineType,
   isTerminalState,
 } from '../types/jobExecution';
-import { useDocumentVisibility } from './useDocumentVisibility';
+import { useDocumentVisibility, useOnBecameVisible } from './useDocumentVisibility';
 
-// While a job is running, refresh its overall record + log + listing fast
-// enough that the user perceives a live tail.
+// While a job is running, refresh its overall record and the visible output
+// (log or listing) fast enough that the user perceives a live tail.
 const JOB_POLL_MS = 5_000;
 const LOG_POLL_MS = 3_000;
+// Lines per request. The Compute log endpoint is only known to honour 100;
+// a larger limit is unverified, so catch-up gets faster by paging back to
+// back instead (see drainLive).
 const LOG_PAGE_SIZE = 100;
+// One drain pages until it reaches the tail, up to this many pages (20 000
+// lines) — a safety belt against a service that ignores `start`. A longer
+// backlog continues on the next tick.
+const LIVE_MAX_PAGES_PER_DRAIN = 200;
+// While catching up, lines are handed to React every this many pages, so a
+// 30 000-line backlog is not 300 re-renders of a growing array.
+const LIVE_PAGES_PER_APPEND = 10;
+
+/** Which output a caller is showing; only that one is fetched live. */
+export type JobOutputKind = 'log' | 'listing';
 
 // All LogLineType values that we expect to find as a `<type>: ` prefix in
 // the file-stored log/listing payload. Anything else falls back to the
@@ -80,6 +93,13 @@ const splitTextToLogLines = (text: string): LogLine[] => {
 
 export interface UseJobDetailOptions {
   enabled?: boolean;
+  /**
+   * The output on screen. While the job runs only this one is polled; the
+   * other catches up from its own cursor when it is shown. For a finished
+   * job the saved log is always loaded (it names the failure) and the saved
+   * listing only once it is shown. null (Code, Parameters) polls neither.
+   */
+  activeOutput?: JobOutputKind | null;
 }
 
 export interface UseJobDetailReturn {
@@ -95,14 +115,21 @@ export interface UseJobDetailReturn {
   listingLoading: boolean;
   listingError: string | null;
 
+  /** Reload everything from scratch (the header's Refresh). */
   refresh: () => void;
+  /**
+   * Bring one output up to date without dropping what is shown: a running
+   * job continues from the current cursor, a finished one reloads only that
+   * saved file. The log viewer's "Refresh now" and Retry.
+   */
+  refreshOutput: (kind: JobOutputKind) => void;
 }
 
 export const useJobDetail = (
   jobId: string | null,
   options: UseJobDetailOptions = {}
 ): UseJobDetailReturn => {
-  const { enabled = true } = options;
+  const { enabled = true, activeOutput = 'log' } = options;
   const visible = useDocumentVisibility();
 
   const [job, setJob] = useState<ExecutionJob | null>(null);
@@ -140,11 +167,22 @@ export const useJobDetail = (
   // we don't re-fetch them every poll tick once the job has finished.
   const terminalLogFetchedRef = useRef(false);
   const terminalListingFetchedRef = useRef(false);
+  // A saved file download already under way, so a re-render (the tab
+  // switched, the record re-polled) does not start a second one.
+  const terminalInFlightRef = useRef<{ log: boolean; listing: boolean }>({
+    log: false,
+    listing: false,
+  });
+
+  // The latest record, for callbacks that must not be re-created per poll.
+  const jobRef = useRef<ExecutionJob | null>(job);
+  jobRef.current = job;
 
   const resetDrainState = useCallback((): void => {
     nextLogStartRef.current = 0;
     nextListingStartRef.current = 0;
     drainInFlightRef.current = { log: false, listing: false };
+    terminalInFlightRef.current = { log: false, listing: false };
     drainEpochRef.current += 1;
   }, []);
 
@@ -164,6 +202,8 @@ export const useJobDetail = (
     setLogError(null);
     setListingLines([]);
     setListingError(null);
+    setLogLoading(false);
+    setListingLoading(false);
     resetDrainState();
     terminalLogFetchedRef.current = false;
     terminalListingFetchedRef.current = false;
@@ -191,16 +231,17 @@ export const useJobDetail = (
   );
 
   // Drain as many live log/listing pages as exist beyond our current cursor.
-  // The compute API caps each call at 100 lines; if a job spits out a backlog
-  // faster than our 3 s tick, we keep paging until we catch up. The cap (5
-  // pages = 500 lines per tick) is a safety belt against runaway loops.
-  // Skipped entirely when a drain of the same kind is still in flight (a
-  // slow /compute call that outlasts the 3 s tick).
+  // The compute API returns at most 100 lines a call, so a backlog (opening
+  // a job that has already written 30 000 lines, or coming back to the tab)
+  // is paged back to back until a short page says we reached the tail —
+  // instead of 500 lines per 3 s tick. Lines are appended in batches while
+  // catching up. Skipped entirely when a drain of the same kind is still in
+  // flight (a slow /compute call or a long catch-up outlasting the tick).
   const drainLive = useCallback(
     async (
       sessionId: string,
       computeJobId: string,
-      kind: 'log' | 'listing'
+      kind: JobOutputKind
     ): Promise<void> => {
       if (drainInFlightRef.current[kind]) return;
       drainInFlightRef.current[kind] = true;
@@ -209,20 +250,39 @@ export const useJobDetail = (
       const setLines = kind === 'log' ? setLogLines : setListingLines;
       const setErr = kind === 'log' ? setLogError : setListingError;
       const fetcher = kind === 'log' ? getComputeLog : getComputeListing;
+      // Lines received but not yet handed to React. The cursor has already
+      // moved past them, so they must reach the state even if a later page
+      // fails.
+      let pending: LogLine[] = [];
+      const flush = (): void => {
+        if (pending.length === 0) return;
+        const chunk = pending;
+        pending = [];
+        setLines((prev) => prev.concat(chunk));
+      };
+      const isCurrent = (): boolean =>
+        mountedRef.current && epoch === drainEpochRef.current;
       try {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < LIVE_MAX_PAGES_PER_DRAIN; i++) {
           const start = cursorRef.current;
           const page = await fetcher(sessionId, computeJobId, start, LOG_PAGE_SIZE);
-          if (!mountedRef.current || epoch !== drainEpochRef.current) return;
+          if (!isCurrent()) return;
           const items = page.items ?? [];
           if (items.length === 0) break;
           cursorRef.current = start + items.length;
-          setLines((prev) => [...prev, ...items]);
-          if (items.length < LOG_PAGE_SIZE) break;
+          pending.push(...items);
+          if ((i + 1) % LIVE_PAGES_PER_APPEND === 0) flush();
+          // Compare against the limit the service applied, so a service
+          // that caps the page below 100 is not mistaken for the tail.
+          const appliedLimit =
+            typeof page.limit === 'number' && page.limit > 0 ? page.limit : LOG_PAGE_SIZE;
+          if (items.length < Math.min(appliedLimit, LOG_PAGE_SIZE)) break;
         }
+        flush();
         setErr(null);
       } catch (err) {
-        if (!mountedRef.current || epoch !== drainEpochRef.current) return;
+        if (!isCurrent()) return;
+        flush();
         setErr(err instanceof Error ? err.message : `Failed to load ${kind}`);
       } finally {
         // A reset (new job / refresh) already cleared the flags for the new
@@ -234,11 +294,13 @@ export const useJobDetail = (
   );
 
   // Fetch the .log.txt or .listing.txt file once per job for terminal state.
+  // The lines on screen stay until the file has arrived and replace them.
   const fetchTerminalFile = useCallback(
     async (
       currentJob: ExecutionJob,
-      kind: 'log' | 'listing'
+      kind: JobOutputKind
     ): Promise<void> => {
+      if (terminalInFlightRef.current[kind]) return;
       const suffix = kind === 'log' ? '.log.txt' : '.listing.txt';
       const setLines = kind === 'log' ? setLogLines : setListingLines;
       const setErr = kind === 'log' ? setLogError : setListingError;
@@ -253,18 +315,25 @@ export const useJobDetail = (
         fetchedRef.current = true;
         return;
       }
+      const epoch = drainEpochRef.current;
+      const isCurrent = (): boolean =>
+        mountedRef.current && epoch === drainEpochRef.current;
+      terminalInFlightRef.current[kind] = true;
       setLoading(true);
       setErr(null);
       try {
         const text = await getFileContentText(uri);
-        if (!mountedRef.current) return;
+        if (!isCurrent()) return;
         setLines(splitTextToLogLines(text));
         fetchedRef.current = true;
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!isCurrent()) return;
         setErr(err instanceof Error ? err.message : `Failed to load ${kind} file`);
       } finally {
-        if (mountedRef.current) setLoading(false);
+        if (isCurrent()) {
+          terminalInFlightRef.current[kind] = false;
+          setLoading(false);
+        }
       }
     },
     []
@@ -295,17 +364,24 @@ export const useJobDetail = (
     return () => clearInterval(handle);
   }, [enabled, visible, jobKey, jobIsTerminal, fetchJob]);
 
-  // Live log/listing polling while running. Drain incrementally each tick.
+  // Back on the tab: re-read the record at once rather than up to 5 s later.
+  // (The live drain below restarts with an immediate drain by itself, since
+  // it depends on `visible`.)
+  useOnBecameVisible(visible, () => {
+    if (enabled && jobKey && !jobIsTerminal) fetchJob(true);
+  });
+
+  // Live polling of the output on screen while running. Each kind keeps its
+  // own cursor, so switching tabs starts the newly shown one from where it
+  // left off (an immediate drain that catches up), and the hidden one costs
+  // no requests.
   useEffect(() => {
     if (!enabled || !visible || !jobKey || jobIsTerminal) return;
-    if (!sessionId || !computeJobId) return;
+    if (!sessionId || !computeJobId || !activeOutput) return;
     let cancelled = false;
-    const tick = async () => {
+    const tick = () => {
       if (cancelled) return;
-      await Promise.all([
-        drainLive(sessionId, computeJobId, 'log'),
-        drainLive(sessionId, computeJobId, 'listing'),
-      ]);
+      drainLive(sessionId, computeJobId, activeOutput);
     };
     tick();
     const handle = setInterval(tick, LOG_POLL_MS);
@@ -320,28 +396,55 @@ export const useJobDetail = (
     jobIsTerminal,
     sessionId,
     computeJobId,
+    activeOutput,
     refreshNonce,
     drainLive,
   ]);
 
   // Terminal-state files: fetch once per kind. The check on `*FetchedRef`
   // prevents re-fetching on every job-record refresh once we have the data.
+  // The log is always loaded (the detail header names the first error);
+  // the listing only once its tab is shown.
   useEffect(() => {
     if (!enabled || !job || !isTerminalState(job.state)) return;
     if (!terminalLogFetchedRef.current) fetchTerminalFile(job, 'log');
-    if (!terminalListingFetchedRef.current) fetchTerminalFile(job, 'listing');
-  }, [enabled, job, fetchTerminalFile]);
+    if (activeOutput === 'listing' && !terminalListingFetchedRef.current) {
+      fetchTerminalFile(job, 'listing');
+    }
+  }, [enabled, job, activeOutput, fetchTerminalFile]);
 
   const refresh = useCallback(() => {
     if (!jobId) return;
     setLogLines([]);
     setListingLines([]);
+    setLogLoading(false);
+    setListingLoading(false);
     resetDrainState();
     terminalLogFetchedRef.current = false;
     terminalListingFetchedRef.current = false;
     setRefreshNonce((n) => n + 1);
     fetchJob();
   }, [jobId, fetchJob, resetDrainState]);
+
+  const refreshOutput = useCallback(
+    (kind: JobOutputKind) => {
+      const current = jobRef.current;
+      if (!enabled || !current) return;
+      if (isTerminalState(current.state)) {
+        // A finished job's file is complete; reload just this one (also the
+        // Retry after a failed download). The old lines stay until it lands.
+        if (kind === 'log') terminalLogFetchedRef.current = false;
+        else terminalListingFetchedRef.current = false;
+        fetchTerminalFile(current, kind);
+        return;
+      }
+      // Running: pick up a state change, and fetch from the current cursor.
+      fetchJob(true);
+      const ids = getComputeLogIds(current);
+      if (ids) drainLive(ids.sessionId, ids.computeJobId, kind);
+    },
+    [enabled, fetchJob, drainLive, fetchTerminalFile]
+  );
 
   return {
     job,
@@ -354,5 +457,6 @@ export const useJobDetail = (
     listingLoading,
     listingError,
     refresh,
+    refreshOutput,
   };
 };
