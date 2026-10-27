@@ -205,6 +205,71 @@ export const notesFromReport = (report: ConversionReport): Record<string, Mappin
   return notes;
 };
 
+// --- Expected outputs (batch regression) ---
+
+/**
+ * Output name → the column that holds the value each row is expected to
+ * produce. Only outputs the user compares are present: nothing is compared
+ * unless it is mapped here.
+ */
+export type ExpectedSources = Record<string, string>;
+
+/**
+ * Suggest an expected-value column for each output, by name (ignoring case,
+ * '_', '-' and blanks): `expected_<output>` first (also the column the app's
+ * own results CSV writes), then `Output_<output>` (the actual values of an
+ * earlier results CSV), then a column named like the output itself, unless
+ * that column already feeds an input (an in/out variable's column holds its
+ * input value). Each column is suggested at most once.
+ */
+export const suggestExpectedColumns = (
+  columnNames: string[],
+  outputs: StepParameter[],
+  inputSources: InputSources
+): ExpectedSources => {
+  const normalized = columnNames.map(normalizeName);
+  const usedByInputs = new Set<string>();
+  for (const source of Object.values(inputSources)) {
+    if (source.kind === 'column') usedByInputs.add(source.column);
+  }
+  const taken = new Set<number>();
+  const pick = (wanted: string, allowInputColumns: boolean): number =>
+    normalized.findIndex((n, i) =>
+      n === wanted && !taken.has(i) && (allowInputColumns || !usedByInputs.has(columnNames[i]))
+    );
+
+  const suggestions: ExpectedSources = {};
+  for (const output of outputs) {
+    const name = normalizeName(output.name);
+    let index = pick(`expected${name}`, true);
+    if (index === -1) index = pick(`output${name}`, true);
+    if (index === -1) index = pick(name, false);
+    if (index !== -1) {
+      taken.add(index);
+      suggestions[output.name] = columnNames[index];
+    }
+  }
+  return suggestions;
+};
+
+/**
+ * The expected values of every row, keyed by output name, or null when no
+ * output is compared. `read` returns the cell of a column in a row.
+ */
+export const expectedRowsOf = <R>(
+  rows: R[],
+  expected: ExpectedSources,
+  read: (row: R, column: string) => unknown
+): Record<string, unknown>[] | null => {
+  const entries = Object.entries(expected);
+  if (entries.length === 0) return null;
+  return rows.map(row => {
+    const values: Record<string, unknown> = {};
+    for (const [output, column] of entries) values[output] = read(row, column);
+    return values;
+  });
+};
+
 /** Merge note maps (e.g. type conflicts and preview findings). */
 export const mergeNotes = (
   ...maps: Record<string, MappingNote[]>[]

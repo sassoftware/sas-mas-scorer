@@ -13,6 +13,12 @@ import { EmptyState } from '../common/EmptyState';
 import { getAllModules, getModule } from '../../api/modules';
 import { getAllSteps } from '../../api/steps';
 import { getScoreableStep } from '../../utils/moduleHelper';
+import { createFieldForParameter } from '../../utils/uiDefaults';
+
+/** Section choice for new parameters: an existing section id, or a new one. */
+const NEW_SECTION = '__new-section__';
+
+const newParamKey = (direction: 'input' | 'output', name: string) => `${direction}:${name}`;
 
 type ModuleTypeFilter = 'All' | 'Model' | 'Decision';
 
@@ -72,6 +78,12 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
   // just the empty option and its own value, so a module with hundreds of
   // parameters does not mount hundreds of copies of the list.
   const [activeSelect, setActiveSelect] = useState<number | null>(null);
+  // New-module parameters no field maps to: which to add as fields (keyed by
+  // newParamKey; absent means yes) and where to put them.
+  const [skipNew, setSkipNew] = useState<Set<string>>(new Set());
+  const [addToSection, setAddToSection] = useState<string>(
+    definition.layout.sections[0]?.id ?? NEW_SECTION
+  );
 
   // Load the complete module catalogue once per open; closing the dialog
   // discards whatever is still in flight.
@@ -116,7 +128,8 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
 
   // Build mappings when moving to the mapping step
   const handleProceedToMapping = () => {
-    if (!newStep || !currentStep) return;
+    if (!newStep) return;
+    setSkipNew(new Set());
 
     // Collect all parameter fields from the current definition
     const paramFields: UIField[] = [];
@@ -182,13 +195,32 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
         .filter((f): f is UIField => f !== null),
     }));
 
+    // Unmatched new parameters the user kept ticked become fields.
+    const additions = [
+      ...unmatchedInputs.map(p => ({ p, dir: 'input' as const })),
+      ...unmatchedOutputs.map(p => ({ p, dir: 'output' as const })),
+    ].filter(({ p, dir }) => !skipNew.has(newParamKey(dir, p.name)));
+
+    let sections = newSections;
+    if (additions.length > 0) {
+      let target = sections.find(s => s.id === addToSection);
+      if (!target) {
+        target = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: 'New Parameters', fields: [] };
+        sections = [...sections, target];
+      }
+      const targetId = target.id;
+      const start = target.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+      const newFields = additions.map(({ p, dir }, i) => createFieldForParameter(p, dir, start + i));
+      sections = sections.map(s => (s.id === targetId ? { ...s, fields: [...s.fields, ...newFields] } : s));
+    }
+
     const updatedDef: UIDefinition = {
       ...definition,
       moduleId: newModule.id,
       stepId: newStep.id,
       layout: {
         ...definition.layout,
-        sections: newSections,
+        sections,
       },
     };
 
@@ -203,13 +235,15 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
     return !oldParam || oldParam.type !== newParam.type;
   };
 
+  // The current module stays in the list (first): choosing it re-reads its
+  // signature, to re-map fields and add parameters published since.
   const filteredModules = modules.filter(m => {
-    if (m.id === definition.moduleId) return false; // Exclude current module
     if (typeFilter !== 'All' && getModuleType(m) !== typeFilter) return false;
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return m.name.toLowerCase().includes(term) || m.id.toLowerCase().includes(term);
-  });
+  }).sort((a, b) => Number(b.id === definition.moduleId) - Number(a.id === definition.moduleId));
+  const isResync = newModule?.id === definition.moduleId;
 
   // Look up the data type of an old parameter from the current step
   const getOldParamType = (parameterId: string, direction: 'input' | 'output'): string => {
@@ -234,6 +268,23 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
   const usedOutputs = new Set(
     outputMappings.map(x => x.mapping.newParameterId).filter(id => id !== '')
   );
+
+  // New-module parameters that no current field maps to.
+  const unmatchedInputs = (newStep?.inputs ?? []).filter(p => !usedInputs.has(p.name));
+  const unmatchedOutputs = (newStep?.outputs ?? []).filter(p => !usedOutputs.has(p.name));
+  const addCount = [
+    ...unmatchedInputs.map(p => newParamKey('input', p.name)),
+    ...unmatchedOutputs.map(p => newParamKey('output', p.name)),
+  ].filter(k => !skipNew.has(k)).length;
+
+  const toggleNew = (key: string, add: boolean) => {
+    setSkipNew(prev => {
+      const next = new Set(prev);
+      if (add) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const optionLabel = (p: StepParameter) => `${p.name} (${p.type}${p.size ? `, ${p.size}` : ''})`;
 
@@ -322,14 +373,16 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
     <>
       <Button variant="tertiary" onClick={() => setDialogStep('select-module')}>Back</Button>
       <Button variant="primary" onClick={handleApply}>
-        Apply ({mappedCount} of {mappings.length} mapped)
+        Apply ({mappedCount} of {mappings.length} mapped{addCount > 0 ? `, ${addCount} added` : ''})
       </Button>
     </>
   );
 
   return (
     <Modal
-      title={dialogStep === 'select-module' ? 'Replace Module' : 'Map Parameters'}
+      title={dialogStep === 'select-module'
+        ? 'Replace or Re-sync Module'
+        : isResync ? 'Re-sync Parameters' : 'Map Parameters'}
       onClose={onClose}
       size={dialogStep === 'map-parameters' ? 'large' : 'medium'}
       footer={footer}
@@ -356,8 +409,12 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
 
             <div className="replace-module__field">
               <label className="replace-module__label" htmlFor="replace-module-search">
-                Select New Module
+                Select Module
               </label>
+              <span className="replace-module__hint">
+                Choose another module to move the app to it, or the current module to
+                compare the app's fields with its current step signature again.
+              </span>
               <div className="replace-module__search-row">
                 <input
                   id="replace-module-search"
@@ -400,7 +457,12 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
                         onClick={() => handleModuleSelect(m.id)}
                       >
                         <div className="replace-module__item-left">
-                          <span className="replace-module__item-name">{m.name}</span>
+                          <span className="replace-module__item-name">
+                            {m.name}
+                            {m.id === definition.moduleId && (
+                              <span className="replace-module__item-current"> (current: re-sync)</span>
+                            )}
+                          </span>
                           <span className="replace-module__item-id">{m.id}</span>
                         </div>
                         <Badge variant={mType === 'Decision' ? 'warning' : mType === 'Model' ? 'info' : 'default'}>
@@ -434,8 +496,10 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
         {dialogStep === 'map-parameters' && newStep && (
           <>
             <p className="replace-module__mapping-info">
-              Map each field from the current UI to a parameter in the new module.
-              Unmapped fields will be removed.
+              {isResync
+                ? 'Each field is matched to a parameter of the module\'s current step signature by name. Re-map any that were renamed.'
+                : 'Map each field from the current UI to a parameter in the new module.'}
+              {' '}Unmapped fields will be removed.
             </p>
 
             {inputMappings.length > 0 &&
@@ -443,6 +507,58 @@ export const ReplaceModuleDialog: React.FC<Props> = ({
 
             {outputMappings.length > 0 &&
               renderMappingTable('Output Fields', outputMappings, 'output', newStep.outputs, usedOutputs)}
+
+            {unmatchedInputs.length + unmatchedOutputs.length > 0 && (
+              <fieldset className="replace-module__mapping-section replace-module__new-params">
+                <legend className="replace-module__mapping-title">
+                  Parameters with no field ({unmatchedInputs.length + unmatchedOutputs.length})
+                </legend>
+                <p className="replace-module__mapping-info">
+                  The step signature lists these, but no field maps to them. Ticked
+                  ones are added as fields; an input left out is sent as missing (null).
+                </p>
+                <ul className="replace-module__new-list">
+                  {[
+                    ...unmatchedInputs.map(p => ({ p, dir: 'input' as const })),
+                    ...unmatchedOutputs.map(p => ({ p, dir: 'output' as const })),
+                  ].map(({ p, dir }) => {
+                    const key = newParamKey(dir, p.name);
+                    return (
+                      <li key={key}>
+                        <label className="replace-module__new-item">
+                          <input
+                            type="checkbox"
+                            checked={!skipNew.has(key)}
+                            onChange={(e) => toggleNew(key, e.target.checked)}
+                          />
+                          <span className="replace-module__param-name">{p.name}</span>
+                          <span className="replace-module__param-type">
+                            {dir === 'input' ? 'Input' : 'Output'} · {p.type}{p.size ? `, ${p.size}` : ''}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="replace-module__field">
+                  <label className="replace-module__label" htmlFor="replace-module-add-section">
+                    Add to section
+                  </label>
+                  <select
+                    id="replace-module-add-section"
+                    className="sas-input"
+                    value={addToSection}
+                    onChange={(e) => setAddToSection(e.target.value)}
+                    disabled={addCount === 0}
+                  >
+                    {definition.layout.sections.map(s => (
+                      <option key={s.id} value={s.id}>{s.title || '(untitled)'}</option>
+                    ))}
+                    <option value={NEW_SECTION}>New section</option>
+                  </select>
+                </div>
+              </fieldset>
+            )}
 
             {!allMapped && (
               <Alert variant="warning">

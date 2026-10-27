@@ -2,10 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { paginateCollection } from './paginate';
-import { ContentItem, ContentType, CoverageByType, CoverageResult, CoverageStats, CollectionProgress, TestScenarioInfo } from '../types/coverage';
+import {
+  AssetTestHealth,
+  ContentItem,
+  ContentType,
+  CoverageByType,
+  CoverageResult,
+  CoverageStats,
+  CollectionProgress,
+  LastRunLookup,
+  TestChangeReason,
+  TestLastRun,
+  TestScenarioInfo,
+} from '../types/coverage';
 
-/** One walked collection: the content types plus the score definitions. */
-export type CoverageCollectionKey = ContentType | 'scoreDefinition';
+/** One walked collection: the content types, the score definitions and their executions. */
+export type CoverageCollectionKey = ContentType | 'scoreDefinition' | 'scoreExecution';
 
 /**
  * How one collection walk ended, so a gap is reported instead of showing up
@@ -26,6 +38,8 @@ export interface CoverageCollectionStatus {
   httpStatus?: number;
   /** Why a walk failed. */
   error?: string;
+  /** What the walk found, in words, when the counts alone do not say it. */
+  note?: string;
 }
 
 /** How the score definitions were sorted into coverage. */
@@ -42,9 +56,41 @@ export interface ScoreDefinitionBreakdown {
   trashed: number;
 }
 
+/**
+ * How the latest runs of the tests were read:
+ * - complete  every test's latest run was found, or the whole history was read
+ * - capped    the newest-first scan stopped at its cap with tests still unfound
+ * - failed    the execution history could not be read
+ * - none      there were no linked tests to look up
+ */
+export type RunScanStatus = 'complete' | 'capped' | 'failed' | 'none';
+
+/** Test health across the covered assets (counts of assets unless named otherwise). */
+export interface TestHealthSummary {
+  healthy: number;
+  failing: number;
+  noRun: number;
+  unknown: number;
+  /** Covered assets whose every test shows a change after it. */
+  changedSinceTests: number;
+  /** Covered assets that are failing or changed since their tests. */
+  atRisk: number;
+  /** Tests linked to an asset, and how many of them have a run found. */
+  tests: number;
+  testsWithRun: number;
+  /** Tests whose run lookup was cut off by the scan cap. */
+  testsNotInScan: number;
+  runScan: RunScanStatus;
+  /** Executions read during the scan. */
+  executionsRead: number;
+  /** The scan cap, in executions. */
+  executionCap: number;
+}
+
 export interface CoverageRunResult extends CoverageResult {
   collections: CoverageCollectionStatus[];
   scoreDefinitions: ScoreDefinitionBreakdown;
+  health: TestHealthSummary;
 }
 
 /** True when the tests themselves could not be read, so no asset's coverage is known. */
@@ -57,11 +103,17 @@ export function collectionGaps(result: CoverageRunResult): CoverageCollectionSta
   return result.collections.filter(c => c.status !== 'ok');
 }
 
+/** True when an asset counts as "covered, but failing or changed since its tests". */
+export function isAtRisk(item: ContentItem): boolean {
+  return item.hasTestScenario && (item.testHealth === 'failing' || item.changedSinceTests);
+}
+
 /** "330 of 330", "loaded 100 (no total reported)", "not collected (…)". */
 export function describeCollectionStatus(c: CoverageCollectionStatus): string {
   if (c.status === 'skipped') {
     return `not collected${c.error ? ` (${c.error})` : ''}`;
   }
+  if (c.note) return c.note;
   const counted = c.total !== null ? `${c.loaded} of ${c.total}` : `loaded ${c.loaded} (no total reported)`;
   return c.status === 'truncated' ? `${counted}, stopped at the page limit` : counted;
 }
@@ -72,6 +124,8 @@ export interface ScoreDefinition {
   name: string;
   description?: string;
   createdBy?: string;
+  creationTimeStamp?: string;
+  modifiedTimeStamp?: string;
   folderType?: string;
   objectDescriptor?: {
     uri?: string;
@@ -121,8 +175,19 @@ const CONTENT_ENDPOINTS: Record<ContentType, { path: string; accept: string; acc
 
 const COVERAGE_PAGE_SIZE = 100;
 
-/** Progress steps of one run: each content type, the score definitions, then the analysis. */
-export const COVERAGE_TOTAL_STEPS = Object.keys(CONTENT_ENDPOINTS).length + 2;
+/** Progress steps of one run: each content type, the score definitions, their latest runs, then the analysis. */
+export const COVERAGE_TOTAL_STEPS = Object.keys(CONTENT_ENDPOINTS).length + 3;
+
+/**
+ * The latest-run scan reads /scoreExecution/executions newest first (the
+ * service's own order; it sends no count) and stops once every linked test
+ * has its latest run, or at this many executions.
+ */
+const EXECUTION_PAGE_SIZE = 100;
+const EXECUTION_MAX_PAGES = 30;
+export const EXECUTION_SCAN_CAP = EXECUTION_PAGE_SIZE * EXECUTION_MAX_PAGES;
+/** The summary items carry no state or scoreDefinitionId; the full media type does. */
+const EXECUTION_ITEM_TYPE = 'application/vnd.sas.score.execution+json';
 
 /** Thrown by collectCoverage when its signal aborts the run. */
 export class CoverageRunCancelledError extends Error {
@@ -206,7 +271,28 @@ function mapToContentItem(raw: Record<string, unknown>, contentType: ContentType
     hasTestScenario: false,
     testScenarioCount: 0,
     testScenarios: [],
+    currentRevisionId: currentRevisionOf(raw),
+    testHealth: null,
+    changedSinceTests: false,
   };
+}
+
+/**
+ * The current revision id an asset's collection item names: a `revisionId`
+ * field, or a currentRevision link. Null when it names none (then only the
+ * modified-after-test rule applies).
+ */
+function currentRevisionOf(raw: Record<string, unknown>): string | null {
+  if (typeof raw.revisionId === 'string' && raw.revisionId) return raw.revisionId;
+  const links = Array.isArray(raw.links) ? (raw.links as Array<{ rel?: string; href?: string; uri?: string }>) : [];
+  const link = links.find(l => l?.rel === 'currentRevision');
+  return revisionIdOf(link?.uri ?? link?.href ?? '');
+}
+
+/** The {revisionId} of a …/revisions/{revisionId} URI; extractIdFromUri drops it. */
+export function revisionIdOf(uri: string | null | undefined): string | null {
+  const match = uri?.match(/\/revisions\/([^/?#]+)/);
+  return match ? match[1] : null;
 }
 
 /**
@@ -297,11 +383,182 @@ function linkTestScenarios(items: ContentItem[], scoreDefinitions: ScoreDefiniti
         description: scoreDef.description ?? null,
         createdBy: scoreDef.createdBy ?? '',
         inputDataType: scoreDef.inputData?.type ?? null,
+        creationTimestamp: scoreDef.creationTimeStamp ?? '',
+        targetUri: objectUri,
+        testedRevisionId: revisionIdOf(objectUri),
+        lastRunLookup: 'unread',
+        lastRun: null,
+        changes: [],
       } satisfies TestScenarioInfo);
     }
   }
 
   return breakdown;
+}
+
+/** The execution fields the latest-run scan reads (full media type). */
+interface ScoreExecutionItem {
+  id?: string;
+  state?: string;
+  creationTimeStamp?: string;
+  scoreExecutionRequest?: { scoreDefinitionId?: string };
+}
+
+interface LastRunScan {
+  runs: Map<string, TestLastRun>;
+  status: CoverageCollectionStatus;
+  runScan: RunScanStatus;
+  executionsRead: number;
+}
+
+/**
+ * Find the latest execution of each wanted score definition with one
+ * newest-first walk of /scoreExecution/executions, keeping the first
+ * execution seen per definition. The walk stops once every definition has
+ * one, or at EXECUTION_SCAN_CAP executions. (A server filter per definition
+ * would be one request per test: eq(scoreExecutionRequest.scoreDefinitionId,…)
+ * works, eq(scoreDefinitionId,…) is rejected with 400.)
+ */
+async function collectLastRuns(wanted: Set<string>, signal?: AbortSignal): Promise<LastRunScan> {
+  const label = 'Score Executions (latest test runs)';
+  const runs = new Map<string, TestLastRun>();
+  if (wanted.size === 0) {
+    return {
+      runs,
+      runScan: 'none',
+      executionsRead: 0,
+      status: { key: 'scoreExecution', label, status: 'ok', loaded: 0, total: null, note: 'no linked tests to look up' },
+    };
+  }
+  try {
+    const walk = await paginateCollection<ScoreExecutionItem>('/scoreExecution/executions', {
+      headers: {
+        Accept: 'application/vnd.sas.collection+json, application/json',
+        'Accept-Item': EXECUTION_ITEM_TYPE,
+      },
+      pageSize: EXECUTION_PAGE_SIZE,
+      maxPages: EXECUTION_MAX_PAGES,
+      // Only the executions on the page are needed, never the whole list.
+      accumulate: false,
+      onPage: (page) => {
+        for (const execution of page.items) {
+          const definitionId = execution.scoreExecutionRequest?.scoreDefinitionId;
+          if (!definitionId || !wanted.has(definitionId) || runs.has(definitionId)) continue;
+          runs.set(definitionId, {
+            state: String(execution.state ?? 'unknown'),
+            executionId: String(execution.id ?? ''),
+            timestamp: String(execution.creationTimeStamp ?? ''),
+          });
+        }
+        if (signal?.aborted) return false;
+        return runs.size < wanted.size;
+      },
+    });
+    const missing = wanted.size - runs.size;
+    const read = walk.loaded;
+    const capped = walk.truncated && missing > 0;
+    const testsLabel = (n: number) => `${n} test${n === 1 ? '' : 's'}`;
+    const note = capped
+      ? `read the ${read.toLocaleString()} newest runs (the scan limit); ${testsLabel(missing)} had no run among them`
+      : missing === 0
+        ? `latest run found for all ${testsLabel(wanted.size)} (read ${read.toLocaleString()} runs)`
+        : `read all ${read.toLocaleString()} recorded runs; ${testsLabel(missing)} had none`;
+    return {
+      runs,
+      runScan: capped ? 'capped' : 'complete',
+      executionsRead: read,
+      status: { key: 'scoreExecution', label, status: capped ? 'truncated' : 'ok', loaded: read, total: null, note },
+    };
+  } catch (err) {
+    console.warn('Failed to read score executions:', err);
+    return {
+      runs,
+      runScan: 'failed',
+      executionsRead: 0,
+      status: {
+        key: 'scoreExecution',
+        label,
+        status: 'skipped',
+        loaded: 0,
+        total: null,
+        httpStatus: httpStatusOf(err),
+        error: errorText(err),
+      },
+    };
+  }
+}
+
+/** True when `later` is a timestamp after `earlier` (both must parse). */
+function isAfter(later: string, earlier: string): boolean {
+  const a = Date.parse(later);
+  const b = Date.parse(earlier);
+  return Number.isFinite(a) && Number.isFinite(b) && a > b;
+}
+
+/**
+ * Give every linked test its latest run and the asset changes after it, and
+ * roll each covered asset up into a test health. Only what the metadata
+ * shows: a change after a test does not say the test would now fail.
+ */
+export function applyTestHealth(
+  items: ContentItem[],
+  runs: Map<string, TestLastRun>,
+  runScan: RunScanStatus,
+): Omit<TestHealthSummary, 'runScan' | 'executionsRead' | 'executionCap'> {
+  const summary = {
+    healthy: 0, failing: 0, noRun: 0, unknown: 0,
+    changedSinceTests: 0, atRisk: 0, tests: 0, testsWithRun: 0, testsNotInScan: 0,
+  };
+  const missingLookup: LastRunLookup =
+    runScan === 'capped' ? 'notInScan' : runScan === 'failed' ? 'unread' : 'none';
+
+  for (const item of items) {
+    if (item.testScenarios.length === 0) continue;
+    let failed = 0;
+    let completed = 0;
+    let unresolved = 0;
+    for (const test of item.testScenarios) {
+      summary.tests++;
+      const run = runs.get(test.scoreDefinitionId) ?? null;
+      test.lastRun = run;
+      test.lastRunLookup = run ? 'found' : missingLookup;
+      if (run) {
+        summary.testsWithRun++;
+        if (run.state === 'failed') failed++;
+        else if (run.state === 'completed') completed++;
+      } else if (missingLookup !== 'none') {
+        unresolved++;
+        if (missingLookup === 'notInScan') summary.testsNotInScan++;
+      }
+
+      const changes: TestChangeReason[] = [];
+      if (test.testedRevisionId && item.currentRevisionId && test.testedRevisionId !== item.currentRevisionId) {
+        changes.push({
+          kind: 'revision',
+          testedRevisionId: test.testedRevisionId,
+          currentRevisionId: item.currentRevisionId,
+        });
+      }
+      if (test.creationTimestamp && item.modifiedTimestamp && isAfter(item.modifiedTimestamp, test.creationTimestamp)) {
+        changes.push({ kind: 'modifiedAfter', assetModified: item.modifiedTimestamp, testCreated: test.creationTimestamp });
+      }
+      test.changes = changes;
+    }
+
+    let health: AssetTestHealth;
+    if (failed > 0) health = 'failing';
+    else if (completed > 0) health = 'healthy';
+    else if (unresolved > 0) health = 'unknown';
+    else health = 'noRun';
+    item.testHealth = health;
+    summary[health]++;
+
+    // Changed since its tests only when no test postdates the asset's state.
+    item.changedSinceTests = item.testScenarios.every(t => t.changes.length > 0);
+    if (item.changedSinceTests) summary.changedSinceTests++;
+    if (isAtRisk(item)) summary.atRisk++;
+  }
+  return summary;
 }
 
 function calculateStats(items: ContentItem[]): CoverageStats {
@@ -464,9 +721,18 @@ export async function collectCoverage(
   // A cancelled run's walks ended early and look complete; never report them.
   if (signal?.aborted) throw new CoverageRunCancelledError();
   const allItems: ContentItem[] = contentResults.flatMap(r => r.items);
-  const collections = [...contentResults.map(r => r.status), scoreDefResult.status];
 
-  // Analyze: link test scenarios to content items
+  // Link test scenarios to content items, then look up the latest run of
+  // every linked test (only those: an unlinked one would keep the
+  // newest-first scan going to its cap).
+  const breakdown = linkTestScenarios(allItems, scoreDefResult.definitions);
+  const wanted = new Set(allItems.flatMap(i => i.testScenarios.map(t => t.scoreDefinitionId)));
+  reportCollecting(`Reading the latest runs of ${wanted.size} tests...`);
+  const lastRuns = await collectLastRuns(wanted, signal);
+  if (signal?.aborted) throw new CoverageRunCancelledError();
+  completedSteps++;
+  const collections = [...contentResults.map(r => r.status), scoreDefResult.status, lastRuns.status];
+
   onProgress({
     phase: 'analyzing',
     currentStep: totalSteps,
@@ -475,7 +741,12 @@ export async function collectCoverage(
     itemsCollected,
   });
 
-  const breakdown = linkTestScenarios(allItems, scoreDefResult.definitions);
+  const health: TestHealthSummary = {
+    ...applyTestHealth(allItems, lastRuns.runs, lastRuns.runScan),
+    runScan: lastRuns.runScan,
+    executionsRead: lastRuns.executionsRead,
+    executionCap: EXECUTION_SCAN_CAP,
+  };
 
   const stats = calculateStats(allItems);
 
@@ -485,26 +756,88 @@ export async function collectCoverage(
     collectionDate: new Date().toISOString(),
     collections,
     scoreDefinitions: breakdown,
+    health,
   };
 }
 
 // Export helpers for generating downloadable files
 
-/** `testsKnown` false (the tests could not be read) writes "Unknown" instead of "No". */
-export function generateCoverageCSV(items: ContentItem[], testsKnown = true): string {
-  const headers = ['Name', 'Type', 'Has Test', 'Test Count', 'Created By', 'Created', 'Modified By', 'Modified', 'ID', 'URI'];
-  const rows = items.map(item => [
-    `"${(item.name ?? '').replace(/"/g, '""')}"`,
-    item.contentType,
-    !testsKnown ? 'Unknown' : item.hasTestScenario ? 'Yes' : 'No',
-    String(item.testScenarioCount),
-    item.createdBy,
-    item.creationTimestamp,
-    item.modifiedBy,
-    item.modifiedTimestamp,
-    item.id,
-    item.uri,
-  ].join(','));
+/** The words for an asset's test health; the UI, the CSV and the Markdown all use them. */
+export function testHealthLabel(health: AssetTestHealth | null, runScan?: RunScanStatus): string {
+  switch (health) {
+    case 'healthy': return 'Healthy';
+    case 'failing': return 'Failing';
+    case 'noRun': return 'No finished run';
+    case 'unknown': return runScan === 'failed' ? 'Runs not read' : 'No run in scan';
+    default: return '';
+  }
+}
+
+/** What a test's latest-run lookup found, in words: "completed 2026-10-20 14:03" or why there is none. */
+export function describeLastRun(test: TestScenarioInfo, executionCap = EXECUTION_SCAN_CAP): string {
+  if (test.lastRun) {
+    const when = test.lastRun.timestamp ? new Date(test.lastRun.timestamp).toLocaleString() : 'date not recorded';
+    return `${test.lastRun.state} (${when})`;
+  }
+  switch (test.lastRunLookup) {
+    case 'none': return 'no run recorded';
+    case 'notInScan': return `no run in the ${executionCap.toLocaleString()} newest runs`;
+    default: return 'runs not read';
+  }
+}
+
+/** A test's changes after it, in words, or '' when the metadata shows none. */
+export function describeTestChanges(test: TestScenarioInfo): string {
+  return test.changes.map(change => change.kind === 'revision'
+    ? `targets revision ${shortId(change.testedRevisionId)}; the asset is now at revision ${shortId(change.currentRevisionId)}`
+    : `asset modified ${new Date(change.assetModified).toLocaleString()}, after the test was created ${new Date(change.testCreated).toLocaleString()}`,
+  ).join('; ');
+}
+
+/** The first block of a revision UUID, enough to tell two apart. */
+export function shortId(id: string): string {
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
+
+/** The newest latest-run of an asset's tests, or null. */
+export function newestRun(item: ContentItem): TestLastRun | null {
+  let newest: TestLastRun | null = null;
+  for (const test of item.testScenarios) {
+    if (test.lastRun && (!newest || (Date.parse(test.lastRun.timestamp) || 0) > (Date.parse(newest.timestamp) || 0))) {
+      newest = test.lastRun;
+    }
+  }
+  return newest;
+}
+
+/**
+ * `testsKnown` false (the tests could not be read) writes "Unknown" instead of "No".
+ * `runScan` names how the latest runs were read, for the health column's words.
+ */
+export function generateCoverageCSV(items: ContentItem[], testsKnown = true, runScan?: RunScanStatus): string {
+  const headers = [
+    'Name', 'Type', 'Has Test', 'Test Count', 'Test Health', 'Changed Since Tests', 'Latest Run State', 'Latest Run',
+    'Created By', 'Created', 'Modified By', 'Modified', 'ID', 'URI',
+  ];
+  const rows = items.map(item => {
+    const run = newestRun(item);
+    return [
+      `"${(item.name ?? '').replace(/"/g, '""')}"`,
+      item.contentType,
+      !testsKnown ? 'Unknown' : item.hasTestScenario ? 'Yes' : 'No',
+      String(item.testScenarioCount),
+      testHealthLabel(item.testHealth, runScan),
+      item.hasTestScenario ? (item.changedSinceTests ? 'Yes' : 'No') : '',
+      run?.state ?? '',
+      run?.timestamp ?? '',
+      item.createdBy,
+      item.creationTimestamp,
+      item.modifiedBy,
+      item.modifiedTimestamp,
+      item.id,
+      item.uri,
+    ].join(',');
+  });
 
   return [headers.join(','), ...rows].join('\n');
 }
@@ -522,10 +855,19 @@ export function generateCoverageMarkdown(result: CoverageRunResult): string {
   lines.push(`**Generated:** ${new Date(result.collectionDate).toLocaleString()}`);
   lines.push('');
 
-  if (gaps.length > 0) {
+  const assetGaps = gaps.filter(g => g.key !== 'scoreExecution');
+  if (assetGaps.length > 0) {
     lines.push(noTests
       ? '> **Warning:** the score definitions (tests) could not be read, so no coverage figure is reported. See Data Collection.'
       : '> **Warning:** some collections were not read completely; the figures below cover only what was collected. See Data Collection.');
+    lines.push('');
+  }
+  const health = result.health;
+  if (!noTests && (health.runScan === 'capped' || health.runScan === 'failed')) {
+    lines.push(health.runScan === 'capped'
+      ? `> **Note:** the latest-run scan read the ${health.executionsRead.toLocaleString()} newest score executions (its limit); ` +
+        `${health.testsNotInScan} test${health.testsNotInScan === 1 ? ' has' : 's have'} no run among them, so their last run is not known.`
+      : '> **Note:** the score executions could not be read, so no test has a known last run. See Data Collection.');
     lines.push('');
   }
 
@@ -539,6 +881,24 @@ export function generateCoverageMarkdown(result: CoverageRunResult): string {
   lines.push(`| Without Tests | ${noTests ? 'n/a' : stats.overall.itemsWithoutTests} |`);
   lines.push(`| **Coverage** | **${noTests ? 'n/a' : `${stats.overall.coveragePercentage}%`}** |`);
   lines.push('');
+
+  // Test health of the covered assets
+  if (!noTests && stats.overall.itemsWithTests > 0) {
+    lines.push('## Test Health');
+    lines.push('');
+    lines.push('Last run = the state SAS recorded for the newest score execution of each test ("completed" means the run finished, not that expected values matched). ' +
+      '"Changed since tests" = for every test of the asset, the test targets another revision than the current one, or the asset was modified after the test was created.');
+    lines.push('');
+    lines.push('| Covered assets | Count |');
+    lines.push('| --- | ---: |');
+    lines.push(`| Healthy (no latest run failed, at least one completed) | ${health.healthy} |`);
+    lines.push(`| Failing (a test's latest run failed) | ${health.failing} |`);
+    lines.push(`| No finished run | ${health.noRun} |`);
+    if (health.unknown > 0) lines.push(`| ${testHealthLabel('unknown', health.runScan)} | ${health.unknown} |`);
+    lines.push(`| Changed since tests | ${health.changedSinceTests} |`);
+    lines.push(`| **Covered, but failing or changed since tests** | **${health.atRisk}** |`);
+    lines.push('');
+  }
 
   // What was read, and what counted as a test
   lines.push('## Data Collection');
@@ -588,6 +948,20 @@ export function generateCoverageMarkdown(result: CoverageRunResult): string {
   }
   lines.push('');
 
+  // The release risk: covered, but failing or changed since the tests
+  const atRisk = items.filter(isAtRisk);
+  if (atRisk.length > 0) {
+    lines.push('## Covered, But Failing or Changed Since Tests');
+    lines.push('');
+    lines.push('| Name | Type | Test Health | Changed Since Tests |');
+    lines.push('| --- | --- | --- | --- |');
+    for (const item of atRisk) {
+      lines.push(`| ${cell(item.name)} | ${typeLabels[item.contentType] ?? item.contentType} | ` +
+        `${testHealthLabel(item.testHealth, health.runScan)} | ${item.changedSinceTests ? 'Yes' : 'No'} |`);
+    }
+    lines.push('');
+  }
+
   // Assets with tests — show linked test details
   const tested = items.filter(i => i.hasTestScenario);
   if (tested.length > 0) {
@@ -596,13 +970,15 @@ export function generateCoverageMarkdown(result: CoverageRunResult): string {
     for (const item of tested) {
       lines.push(`### ${item.name}`);
       lines.push('');
-      lines.push(`**Type:** ${typeLabels[item.contentType] ?? item.contentType} | **Tests:** ${item.testScenarioCount} | **Created By:** ${item.createdBy}`);
+      lines.push(`**Type:** ${typeLabels[item.contentType] ?? item.contentType} | **Tests:** ${item.testScenarioCount} | ` +
+        `**Test Health:** ${testHealthLabel(item.testHealth, health.runScan) || 'n/a'} | **Created By:** ${item.createdBy}`);
       lines.push('');
-      lines.push('| Test Name | Scenario Type | Description |');
-      lines.push('| --- | --- | --- |');
+      lines.push('| Test Name | Scenario Type | Last Run | Changed Since Test | Description |');
+      lines.push('| --- | --- | --- | --- | --- |');
       for (const ts of item.testScenarios) {
         const desc = ts.description ? ts.description.replace(/\|/g, '\\|') : '-';
-        lines.push(`| ${ts.name} | ${ts.scenarioType} | ${desc} |`);
+        const changes = describeTestChanges(ts) || 'no change shown';
+        lines.push(`| ${ts.name} | ${ts.scenarioType} | ${cell(describeLastRun(ts, health.executionCap))} | ${cell(changes)} | ${desc} |`);
       }
       lines.push('');
     }

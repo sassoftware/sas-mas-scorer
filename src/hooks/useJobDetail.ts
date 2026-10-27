@@ -178,6 +178,12 @@ export const useJobDetail = (
   const jobRef = useRef<ExecutionJob | null>(job);
   jobRef.current = job;
 
+  // The job this hook shows now. The page stays mounted when it moves to
+  // another job (a rerun opens the new one, Back returns), so a request for
+  // the previous job that answers late must not put that job back.
+  const jobIdRef = useRef(jobId);
+  jobIdRef.current = jobId;
+
   const resetDrainState = useCallback((): void => {
     nextLogStartRef.current = 0;
     nextListingStartRef.current = 0;
@@ -214,17 +220,18 @@ export const useJobDetail = (
       if (!enabled || !jobId) return null;
       if (!silent) setJobLoading(true);
       setJobError(null);
+      const isCurrent = (): boolean => mountedRef.current && jobIdRef.current === jobId;
       try {
         const next = await getJob(jobId);
-        if (!mountedRef.current) return null;
+        if (!isCurrent()) return null;
         setJob(next);
         return next;
       } catch (err) {
-        if (!mountedRef.current) return null;
+        if (!isCurrent()) return null;
         setJobError(err instanceof Error ? err.message : 'Failed to load job');
         return null;
       } finally {
-        if (mountedRef.current && !silent) setJobLoading(false);
+        if (isCurrent() && !silent) setJobLoading(false);
       }
     },
     [enabled, jobId]

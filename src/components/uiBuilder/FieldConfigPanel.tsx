@@ -1,10 +1,16 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useId } from 'react';
 import { UIField, UISection, WidgetType, FieldOption, ValueMapping, GaugeColorStop } from '../../types/uiBuilder';
 import { StepParameter } from '../../types';
-import { getCompatibleWidgets, getDefaultWidget } from '../../utils/uiDefaults';
+import {
+  coerceConfigValue,
+  getCompatibleWidgets,
+  getDefaultToggleValues,
+  getDefaultWidget,
+  isNumericType,
+} from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
@@ -45,11 +51,17 @@ export const FieldConfigPanel: React.FC<Props> = ({
   onMoveToSection,
   onClose,
 }) => {
+  const uid = useId();
+  const fid = (name: string) => `${uid}-${name}`;
+
   const compatibleWidgets = field.direction === 'static'
     ? ['markdown' as WidgetType]
     : parameter
       ? getCompatibleWidgets(parameter.type, field.direction)
       : Object.keys(widgetLabels) as WidgetType[];
+  // A saved app may use a widget the type no longer offers; keep it listed
+  // so the select shows the truth rather than silently a different widget.
+  if (!compatibleWidgets.includes(field.widget)) compatibleWidgets.push(field.widget);
 
   const handleChange = <K extends keyof UIField>(key: K, value: UIField[K]) => {
     onChange({ ...field, [key]: value });
@@ -59,7 +71,8 @@ export const FieldConfigPanel: React.FC<Props> = ({
     const newParam = allParameters.find(p => p.name === newParameterId);
     if (!newParam || field.direction === 'static') return;
 
-    // Update the field: change parameterId, reset widget to default for the new type
+    // Update the field: change parameterId; keep the widget only when the new
+    // parameter's type supports it, else use that type's default.
     const newDirection = field.direction;
     const newWidget = getDefaultWidget(newParam.type, newDirection);
 
@@ -67,7 +80,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
       ...field,
       parameterId: newParameterId,
       label: newParameterId, // default label to parameter name
-      widget: compatibleWidgets.includes(field.widget) ? field.widget : newWidget,
+      widget: getCompatibleWidgets(newParam.type, newDirection).includes(field.widget) ? field.widget : newWidget,
     });
   };
 
@@ -101,8 +114,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
 
   const handleOptionChange = (index: number, key: keyof FieldOption, val: string) => {
     const options = [...(field.validation?.options ?? [])];
-    // Auto-coerce value to number if it looks numeric (for numeric parameter types)
-    const coerced = key === 'value' && val !== '' && !isNaN(Number(val)) ? Number(val) : val;
+    // Stored by the parameter's type: a number for a numeric parameter, the
+    // text as typed for a string ("007" stays "007").
+    const coerced = key === 'value' && val !== '' ? coerceConfigValue(val, parameter?.type) : val;
     options[index] = { ...options[index], [key]: coerced };
     handleChange('validation', { ...field.validation, options });
   };
@@ -161,9 +175,21 @@ export const FieldConfigPanel: React.FC<Props> = ({
     });
   };
 
+  const isInput = field.direction === 'input';
   const showOptions = field.widget === 'dropdown' || field.widget === 'radio';
   const showMinMax = field.widget === 'slider' || field.widget === 'number';
-  const showStep = field.widget === 'slider';
+  const showStep = field.widget === 'slider' || field.widget === 'number';
+  const showRequired = isInput && field.widget !== 'hidden' && field.widget !== 'readonly';
+  // Text limits apply to string parameters (or a field whose parameter is gone).
+  const showMaxLength = isInput
+    && (field.widget === 'text' || field.widget === 'textarea')
+    && (!parameter || parameter.type === 'string');
+  const showToggleValues = isInput && field.widget === 'toggle';
+  const toggleDefaults = getDefaultToggleValues(parameter?.type);
+
+  const setValidation = (patch: Partial<NonNullable<UIField['validation']>>) => {
+    handleChange('validation', { ...field.validation, ...patch });
+  };
   const showGaugeConfig = field.widget === 'gauge';
   const showOutputFormat = field.direction === 'output' && field.widget !== 'hidden';
   const showValueMappings = field.direction === 'output' && (field.widget === 'badge' || field.widget === 'readonly');
@@ -184,8 +210,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
             <div className="ui-builder__config-section-title">Markdown Content</div>
 
             <div className="ui-builder__config-field">
-              <label>Content</label>
+              <label htmlFor={fid('content')}>Content</label>
               <textarea
+                id={fid('content')}
                 className="sas-input ui-builder__markdown-editor"
                 rows={8}
                 value={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
@@ -203,8 +230,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
             <div className="ui-builder__config-section-title">Parameter Mapping</div>
 
             <div className="ui-builder__config-field">
-              <label>Direction</label>
+              <label htmlFor={fid('direction')}>Direction</label>
               <select
+                id={fid('direction')}
                 className="sas-input"
                 value={field.direction}
                 onChange={(e) => handleDirectionChange(e.target.value as 'input' | 'output')}
@@ -215,12 +243,18 @@ export const FieldConfigPanel: React.FC<Props> = ({
             </div>
 
             <div className="ui-builder__config-field">
-              <label>Mapped Parameter</label>
+              <label htmlFor={fid('param')}>Mapped Parameter</label>
               <select
+                id={fid('param')}
                 className="sas-input"
                 value={field.parameterId}
                 onChange={(e) => handleParameterMapping(e.target.value)}
               >
+                {!parameter && (
+                  // The stored parameter is not in the step signature (or the
+                  // step has not loaded): show it rather than a wrong name.
+                  <option value={field.parameterId}>{field.parameterId} (not in the step signature)</option>
+                )}
                 {allParameters.map(p => {
                   const isUsed = usedParameterIds.has(p.name) && p.name !== field.parameterId;
                   return (
@@ -245,8 +279,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
             <div className="ui-builder__config-section-title">Placement</div>
 
             <div className="ui-builder__config-field">
-              <label>Section</label>
+              <label htmlFor={fid('section')}>Section</label>
               <select
+                id={fid('section')}
                 className="sas-input"
                 value={currentSectionId}
                 onChange={(e) => onMoveToSection(e.target.value)}
@@ -265,8 +300,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
         <div className="ui-builder__config-section-title">Appearance</div>
 
         <div className="ui-builder__config-field">
-          <label>Label</label>
+          <label htmlFor={fid('label')}>Label</label>
           <input
+            id={fid('label')}
             type="text"
             className="sas-input"
             value={field.label}
@@ -275,8 +311,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
         </div>
 
         <div className="ui-builder__config-field">
-          <label>Description / Help Text</label>
+          <label htmlFor={fid('description')}>Description / Help Text</label>
           <input
+            id={fid('description')}
             type="text"
             className="sas-input"
             value={field.description ?? ''}
@@ -286,8 +323,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
 
         {field.direction !== 'static' && (
           <div className="ui-builder__config-field">
-            <label>Widget Type</label>
+            <label htmlFor={fid('widget')}>Widget Type</label>
             <select
+              id={fid('widget')}
               className="sas-input"
               value={field.widget}
               onChange={(e) => handleChange('widget', e.target.value as WidgetType)}
@@ -300,8 +338,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
         )}
 
         <div className="ui-builder__config-field">
-          <label>Width</label>
+          <label htmlFor={fid('width')}>Width</label>
           <select
+            id={fid('width')}
             className="sas-input"
             value={field.width}
             onChange={(e) => handleChange('width', e.target.value as UIField['width'])}
@@ -339,8 +378,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
             <div className="ui-builder__config-section-title">Input Settings</div>
 
             <div className="ui-builder__config-field">
-              <label>Placeholder</label>
+              <label htmlFor={fid('placeholder')}>Placeholder</label>
               <input
+                id={fid('placeholder')}
                 type="text"
                 className="sas-input"
                 value={field.placeholder ?? ''}
@@ -349,70 +389,159 @@ export const FieldConfigPanel: React.FC<Props> = ({
             </div>
 
             <div className="ui-builder__config-field">
-              <label>Default Value</label>
+              <label htmlFor={fid('default')}>Default Value</label>
               <input
+                id={fid('default')}
                 type="text"
                 className="sas-input"
-                value={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
+                aria-describedby={fid('default-hint')}
+                value={field.defaultValue !== undefined
+                  ? Array.isArray(field.defaultValue) ? field.defaultValue.join(', ') : String(field.defaultValue)
+                  : ''}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === '') handleChange('defaultValue', undefined);
-                  else if (!isNaN(Number(val))) handleChange('defaultValue', Number(val));
-                  else handleChange('defaultValue', val);
+                  handleChange('defaultValue', val === '' ? undefined : coerceConfigValue(val, parameter?.type));
                 }}
               />
+              <span className="ui-builder__config-type-hint" id={fid('default-hint')}>
+                {parameter
+                  ? isNumericType(parameter.type)
+                    ? 'Stored as a number.'
+                    : parameter.type.endsWith('Array')
+                      ? 'Comma-separated; sent as an array.'
+                      : 'Stored as text, exactly as typed.'
+                  : 'Converted by the parameter type when the app runs.'}
+              </span>
             </div>
+
+            {showRequired && (
+              <div className="ui-builder__config-field">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!!field.validation?.required}
+                    onChange={(e) => setValidation({ required: e.target.checked || undefined })}
+                    aria-describedby={fid('required-hint')}
+                  />
+                  {' '}Required
+                </label>
+                <span className="ui-builder__config-type-hint" id={fid('required-hint')}>
+                  The app will not run until this field has a value.
+                </span>
+              </div>
+            )}
+
+            {showToggleValues && (
+              <div className="ui-builder__config-row">
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('on')}>Value when on</label>
+                  <input
+                    id={fid('on')}
+                    type="text"
+                    className="sas-input"
+                    value={field.validation?.onValue ?? ''}
+                    placeholder={toggleDefaults.on}
+                    onChange={(e) => setValidation({ onValue: e.target.value || undefined })}
+                  />
+                </div>
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('off')}>Value when off</label>
+                  <input
+                    id={fid('off')}
+                    type="text"
+                    className="sas-input"
+                    value={field.validation?.offValue ?? ''}
+                    placeholder={toggleDefaults.off}
+                    onChange={(e) => setValidation({ offValue: e.target.value || undefined })}
+                  />
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {/* === Validation === */}
-        {(showMinMax || showOptions) && (
+        {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {showMaxLength && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('maxlength')}>Max length</label>
+            <input
+              id={fid('maxlength')}
+              type="number"
+              className="sas-input"
+              min="1"
+              aria-describedby={fid('maxlength-hint')}
+              value={field.validation?.maxLength ?? ''}
+              placeholder={parameter?.size ? String(parameter.size) : 'No limit'}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setValidation({ maxLength: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) });
+              }}
+            />
+            <span className="ui-builder__config-type-hint" id={fid('maxlength-hint')}>
+              {parameter?.size
+                ? `Empty uses the size the step signature declares (${parameter.size}).`
+                : 'Checked before the app runs.'}
+            </span>
+          </div>
         )}
 
         {showMinMax && (
           <>
             <div className="ui-builder__config-row">
               <div className="ui-builder__config-field">
-                <label>Min</label>
+                <label htmlFor={fid('min')}>Min</label>
                 <input
+                  id={fid('min')}
                   type="number"
                   className="sas-input"
                   value={field.validation?.min ?? ''}
-                  onChange={(e) => handleChange('validation', {
-                    ...field.validation,
+                  onChange={(e) => setValidation({
                     min: e.target.value === '' ? undefined : Number(e.target.value),
                   })}
                 />
               </div>
               <div className="ui-builder__config-field">
-                <label>Max</label>
+                <label htmlFor={fid('max')}>Max</label>
                 <input
+                  id={fid('max')}
                   type="number"
                   className="sas-input"
                   value={field.validation?.max ?? ''}
-                  onChange={(e) => handleChange('validation', {
-                    ...field.validation,
+                  onChange={(e) => setValidation({
                     max: e.target.value === '' ? undefined : Number(e.target.value),
                   })}
                 />
               </div>
             </div>
+            {field.validation?.min !== undefined && field.validation?.max !== undefined
+              && field.validation.min > field.validation.max && (
+              <span className="ui-builder__config-warning" role="status">
+                Min is greater than Max, so no value can pass.
+              </span>
+            )}
             {showStep && (
               <div className="ui-builder__config-field">
-                <label>Step Size</label>
+                <label htmlFor={fid('step')}>Step Size</label>
                 <input
+                  id={fid('step')}
                   type="number"
                   className="sas-input"
+                  min="0"
+                  aria-describedby={fid('step-hint')}
                   value={field.validation?.step ?? ''}
                   placeholder="1"
-                  onChange={(e) => handleChange('validation', {
-                    ...field.validation,
+                  onChange={(e) => setValidation({
                     step: e.target.value === '' ? undefined : Number(e.target.value),
                   })}
                 />
-                <span className="ui-builder__config-type-hint">
-                  Increment between values (e.g. 0.1, 1, 5)
+                <span className="ui-builder__config-type-hint" id={fid('step-hint')}>
+                  {field.widget === 'number'
+                    ? 'Arrow Up / Down change the value by this much (e.g. 0.1, 1, 5)'
+                    : 'Increment between values (e.g. 0.1, 1, 5)'}
                 </span>
               </div>
             )}
@@ -428,6 +557,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   type="text"
                   className="sas-input"
                   placeholder="Label"
+                  aria-label={`Option ${i + 1} label`}
                   value={opt.label}
                   onChange={(e) => handleOptionChange(i, 'label', e.target.value)}
                 />
@@ -435,6 +565,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   type="text"
                   className="sas-input"
                   placeholder="Value"
+                  aria-label={`Option ${i + 1} value`}
                   value={String(opt.value)}
                   onChange={(e) => handleOptionChange(i, 'value', e.target.value)}
                 />
@@ -461,8 +592,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
             <div className="ui-builder__config-section-title">Output Formatting</div>
 
             <div className="ui-builder__config-field">
-              <label>Decimal Places</label>
+              <label htmlFor={fid('decimals')}>Decimal Places</label>
               <input
+                id={fid('decimals')}
                 type="number"
                 className="sas-input"
                 min="0"

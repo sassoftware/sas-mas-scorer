@@ -49,10 +49,12 @@ export function useSessionExpiryPrompt(options: SessionExpiryPromptOptions): Rea
 
   useEffect(
     () =>
-      setSessionExpiredHandler(async () => {
+      setSessionExpiredHandler(async ({ force }) => {
         const current = optionsRef.current;
         if (!current.canPrompt()) return 'unavailable';
-        if (await current.confirmSession().catch(() => false)) return 'renewed';
+        // force: the session already looked fine once and the retry was still
+        // turned away, so only a real sign-in can help
+        if (!force && (await current.confirmSession().catch(() => false))) return 'renewed';
         return new Promise<SessionRenewal>((resolve) => {
           resolveRef.current = resolve;
           setError(null);

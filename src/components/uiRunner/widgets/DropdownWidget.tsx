@@ -2,21 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { UIField } from '../../../types/uiBuilder';
+import { InputWidgetProps, controlAria } from './types';
 
-interface Props {
-  field: UIField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  disabled?: boolean;
-}
-
-export const DropdownWidget: React.FC<Props> = ({ field, value, onChange, disabled }) => {
+export const DropdownWidget: React.FC<InputWidgetProps> = (props) => {
+  const { field, value, onChange, disabled } = props;
   const options = field.validation?.options ?? [];
 
   return (
     <select
       className="sas-input"
+      {...controlAria(props)}
       value={value !== null && value !== undefined ? String(value) : ''}
       onChange={(e) => {
         const selected = options.find(o => String(o.value) === e.target.value);

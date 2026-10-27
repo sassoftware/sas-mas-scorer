@@ -33,12 +33,16 @@ import { CasUploadDialog } from './CasUploadDialog';
 import { SaveScenarioDialog } from './SaveScenarioDialog';
 import { SaveBatchScenariosDialog } from './SaveBatchScenariosDialog';
 import { SaveTestDialog } from './SaveTestDialog';
-import { LoadScenarioDialog } from './LoadScenarioDialog';
+import { LoadScenarioDialog, ScenarioSelection } from './LoadScenarioDialog';
+import { scenarioMismatch } from './scenarioMapping';
+import { RunHistory } from './RunHistory';
+import { RunRecord, scoringSessionKey, useDraftInputs, useRunHistory } from './scoringSession';
 import { useStepExecution } from '../../hooks';
 import { getModuleSource, executeStep, buildStepInput, getSasViyaUrl, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo, getDecisionSignature, DecisionSignatureVariable } from '../../api';
 import { DataGridParamInfo } from './DataGridInputModal';
 import { coerceDatagridValue } from '../../utils/datagrid';
 import { saveTextFile } from '../../utils/download';
+import { checkRow, formatCheckValue, hasExpectation } from '../../utils/expectedValues';
 
 interface ScorePanelProps {
   module: Module;
@@ -66,6 +70,15 @@ const EMPTY_DATAGRID_PARAMS: Record<string, DataGridParamInfo> = {};
 const EMPTY_BATCH_RUN: BatchRun = { results: [], stats: null };
 const EMPTY_BATCH_RESULTS: BatchResult[] = [];
 
+/** A scenario loaded into the form, kept to show its expected values after the run. */
+interface LoadedScenarioState {
+  id: string;
+  name: string;
+  expected: Record<string, unknown>;
+  /** The scenario's inputs as they would be sent; its expectations apply to a run of exactly these */
+  inputsKey: string;
+}
+
 // Progress is published at most this often during a batch, so a very large
 // run does not re-render the panel once per scored row.
 const PROGRESS_INTERVAL_MS = 100;
@@ -82,7 +95,20 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   onBack,
   onSelectAnotherStep,
 }) => {
-  const [inputValues, setInputValues] = useState<Record<string, unknown>>({});
+  // The form, kept as a session draft per server + module + step, and the
+  // step's run history (both in this browser tab only; see scoringSession.ts)
+  const sessionKey = useMemo(() => scoringSessionKey(module.id, step.id), [module.id, step.id]);
+  const inputNames = useMemo(() => (step.inputs ?? []).map(p => p.name), [step.inputs]);
+  const {
+    values: inputValues,
+    setValues: setInputValues,
+    restored: draftRestored,
+    dismissRestored: dismissDraftRestored,
+  } = useDraftInputs(sessionKey, inputNames);
+  const { runs: runHistory, record: recordRun, clear: clearRunHistory } = useRunHistory(sessionKey);
+  // A short note about what just filled the form (draft, scenario, history)
+  const [inputNotice, setInputNotice] = useState<string | null>(null);
+  const [loadedScenario, setLoadedScenario] = useState<LoadedScenarioState | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [sourceData, setSourceData] = useState<ModuleSource | null>(null);
   const [loadingSource, setLoadingSource] = useState(false);
@@ -279,18 +305,94 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const lastRunFailed = !!output && !!error;
   const outputStale = inputsChangedSinceRun || lastRunFailed;
 
-  const handleExecute = useCallback(async () => {
+  // Every Single Execution run goes through here and is added to the run
+  // history (under the step it ran on, even if the user has moved on)
+  const runValues = useCallback(async (values: Record<string, unknown>) => {
+    const runKey = sessionKey;
+    const sent = { ...values };
+    const at = Date.now();
+    const start = performance.now();
     try {
-      await executeWithValues(step, inputValues);
+      const result = await executeWithValues(step, sent);
+      recordRun({
+        at,
+        inputs: sent,
+        outputs: (result.outputs ?? []).map(o => ({ name: o.name, value: o.value })),
+        executionState: result.executionState,
+        latencyMs: performance.now() - start,
+      }, runKey);
     } catch (err) {
-      // Error is handled by the hook
+      // The error itself is shown by the hook
+      if (axios.isCancel(err)) return;
+      recordRun({
+        at,
+        inputs: sent,
+        outputs: null,
+        latencyMs: performance.now() - start,
+        error: err instanceof Error ? err.message : 'Execution failed',
+      }, runKey);
     }
-  }, [step, inputValues, executeWithValues]);
+  }, [sessionKey, step, executeWithValues, recordRun]);
+
+  const handleExecute = useCallback(() => runValues(inputValues), [runValues, inputValues]);
 
   const handleReset = useCallback(() => {
     setInputValues({});
+    setLoadedScenario(null);
+    setInputNotice(null);
+    dismissDraftRestored();
     reset();
-  }, [reset]);
+  }, [reset, setInputValues, dismissDraftRestored]);
+
+  // Another step (the panel is not remounted for it) starts without the
+  // previous step's scenario or notes
+  useEffect(() => {
+    setLoadedScenario(null);
+    setInputNotice(null);
+  }, [sessionKey]);
+
+  // Loading a scenario replaces the form; its expected values are shown with
+  // the result of a run of exactly its inputs
+  const handleLoadScenario = useCallback((scenario: ScenarioSelection, options?: { run?: boolean }) => {
+    setInputValues(scenario.values);
+    dismissDraftRestored();
+    const mismatch = scenarioMismatch(scenario, step.id);
+    if (mismatch) {
+      // Its expected values describe a run with inputs this step cannot take
+      setLoadedScenario(null);
+      setInputNotice(
+        `Loaded scenario “${scenario.name}” only partly: ${mismatch} ` +
+        'Those inputs were left out, so its expected values are not shown.'
+      );
+      return;
+    }
+    const checked = Object.values(scenario.expected).filter(hasExpectation).length;
+    setLoadedScenario({
+      id: scenario.id,
+      name: scenario.name,
+      expected: scenario.expected,
+      inputsKey: sentInputsKey(scenario.values),
+    });
+    setInputNotice(
+      `Loaded scenario “${scenario.name}”: every input was replaced. ` +
+      (checked > 0
+        ? `After the run, its ${checked} expected output value${checked === 1 ? '' : 's'} are shown next to the results.`
+        : 'It has no expected output values to check.')
+    );
+    if (options?.run) runValues(scenario.values);
+  }, [setInputValues, dismissDraftRestored, sentInputsKey, runValues, step.id]);
+
+  const handleRestoreRun = useCallback((run: RunRecord) => {
+    const values: Record<string, unknown> = {};
+    for (const name of inputNames) values[name] = run.inputs[name] ?? null;
+    setInputValues(values);
+    dismissDraftRestored();
+    setInputNotice(`Restored the inputs of the run at ${new Date(run.at).toLocaleTimeString()}.`);
+  }, [inputNames, setInputValues, dismissDraftRestored]);
+
+  // The loaded scenario's expectations, when the result on screen is a run of its inputs
+  const scenarioMatchesOutput = !!loadedScenario && !!output && !!outputInputValues &&
+    sentInputsKey(outputInputValues) === loadedScenario.inputsKey;
 
   const handleClearOutputs = useCallback(() => {
     reset();
@@ -351,7 +453,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     });
 
     setInputValues(sampleValues);
-  }, [step.inputs]);
+  }, [step.inputs, setInputValues]);
 
   // Batch rows carry datagrid cells as JSON strings (CSV/CAS columns are flat);
   // MAS rejects the string form, so parse them into the native array first
@@ -375,7 +477,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     rowIndex: number,
     rawInput: Record<string, unknown>,
     signal?: AbortSignal,
-    onRetry?: () => void
+    onRetry?: () => void,
+    expected?: Record<string, unknown>
   ): Promise<BatchResult | undefined> => {
     const input = normalizeDatagridInputs(rawInput);
     let retries = 0;
@@ -393,6 +496,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
           error: null,
           executionTime: requestEndTime - requestStartTime,
           ...(retries > 0 ? { retries } : {}),
+          // Checked once, here, against what MAS returned for this row
+          ...(expected ? { expected, check: checkRow(output.outputs, expected) } : {}),
         };
       } catch (err) {
         // An aborted request is the panel unmounting mid-batch, not a scoring
@@ -415,6 +520,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
           error: err instanceof Error ? err.message : 'Unknown error',
           executionTime: requestEndTime - requestStartTime,
           ...(retries > 0 ? { retries } : {}),
+          ...(expected ? { expected } : {}),
         };
       }
     }
@@ -430,7 +536,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const runBatch = useCallback(async (
     inputs: Record<string, unknown>[],
     rowIndexOf: (slot: number) => number,
-    concurrency: number
+    concurrency: number,
+    expectedOf?: (slot: number) => Record<string, unknown> | undefined
   ): Promise<{ results: (BatchResult | undefined)[]; runtime: number }> => {
     batchAbortRef.current = false;
     // One controller per batch. Stop does NOT abort it (in-flight rows are
@@ -495,7 +602,7 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
         const slot = next++;
         const result = await executeRow(rowIndexOf(slot), inputs[slot], controller.signal, () => {
           retries++;
-        });
+        }, expectedOf?.(slot));
         // Cancelled: the panel is unmounting, so this worker stops rather
         // than recording a row nobody will see.
         if (!result) return;
@@ -531,7 +638,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   const handleBatchExecute = useCallback(async (
     mode: BatchMode,
     rows: Record<string, unknown>[],
-    concurrency: number
+    concurrency: number,
+    expected?: Record<string, unknown>[] | null
   ) => {
     lastConcurrencyRef.current[mode] = concurrency;
     setRunningBatchMode(mode);
@@ -542,7 +650,12 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
 
     // Whatever happens below, the progress card must not outlive the run
     try {
-      const { results, runtime } = await runBatch(rows, slot => slot, concurrency);
+      const { results, runtime } = await runBatch(
+        rows,
+        slot => slot,
+        concurrency,
+        expected ? slot => expected[slot] : undefined
+      );
       // Each result sits at its own row index, so the filtered array is already
       // in rowIndex order (it may be partial if stopped early).
       const finished = results.filter((r): r is BatchResult => r !== undefined);
@@ -554,11 +667,13 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
   }, [runBatch]);
 
   const handleBatchExecuteFile = useCallback(
-    (rows: Record<string, unknown>[], concurrency: number) => handleBatchExecute('batch', rows, concurrency),
+    (rows: Record<string, unknown>[], concurrency: number, expected?: Record<string, unknown>[] | null) =>
+      handleBatchExecute('batch', rows, concurrency, expected),
     [handleBatchExecute]
   );
   const handleBatchExecuteCas = useCallback(
-    (rows: Record<string, unknown>[], concurrency: number) => handleBatchExecute('casTable', rows, concurrency),
+    (rows: Record<string, unknown>[], concurrency: number, expected?: Record<string, unknown>[] | null) =>
+      handleBatchExecute('casTable', rows, concurrency, expected),
     [handleBatchExecute]
   );
 
@@ -582,7 +697,8 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
       const { results, runtime } = await runBatch(
         slots.map(i => run.results[i].input),
         k => run.results[slots[k]].rowIndex,
-        lastConcurrencyRef.current[mode]
+        lastConcurrencyRef.current[mode],
+        k => run.results[slots[k]].expected
       );
       setBatchRuns(prev => {
         // Cleared or replaced meanwhile: there is nothing to merge into
@@ -663,6 +779,14 @@ export const ScorePanel: React.FC<ScorePanelProps> = ({
     setSelectedBatchIndices(selectedIndices);
     setShowBatchScenarios(true);
   }, [retryDecisionSignature]);
+
+  // Load Test in the CAS tab: a decision's saved CAS-table tests
+  const casTestSource = useMemo(
+    () => (moduleType === 'Decision' && sourceURI
+      ? { sourceURI, signature: decisionSignature, onOpen: retryDecisionSignature }
+      : undefined),
+    [moduleType, sourceURI, decisionSignature, retryDecisionSignature]
+  );
 
   // Save CAS table setup as a test
   const handleSaveAsTest = useCallback((info: CasTableTestInfo) => {
@@ -1236,8 +1360,33 @@ title;`;
 
     const outputParams = batchResults.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [];
     const inputParams = Object.keys(batchResults[0]?.input ?? {});
+    // Outputs compared with an expected column: Expected_<o> and Match_<o>
+    // follow the outputs, so a downloaded file can be uploaded again as a
+    // regression suite (Expected_ columns are suggested as expectations).
+    const expectedParams: string[] = [];
+    {
+      const seen = new Set<string>();
+      for (const r of batchResults) {
+        if (!r.expected) continue;
+        for (const name of Object.keys(r.expected)) {
+          if (!seen.has(name)) {
+            seen.add(name);
+            expectedParams.push(name);
+          }
+        }
+      }
+    }
+    const hasExpected = expectedParams.length > 0;
 
-    const headers = ['Row', 'Status', ...inputParams.map(p => `Input_${p}`), ...outputParams.map(p => `Output_${p}`), 'Runtime_ms', 'Error', 'Source_Link', 'Version'];
+    const headers = [
+      'Row', 'Status',
+      ...inputParams.map(p => `Input_${p}`),
+      ...outputParams.map(p => `Output_${p}`),
+      ...expectedParams.map(p => `Expected_${p}`),
+      ...expectedParams.map(p => `Match_${p}`),
+      ...(hasExpected ? ['Check'] : []),
+      'Runtime_ms', 'Error', 'Source_Link', 'Version',
+    ];
 
     // Serialize datagrids and other structured values as JSON, not "[object Object]"
     const toCsvValue = (value: unknown): string => {
@@ -1260,6 +1409,19 @@ title;`;
       outputParams.forEach(param => {
         row.push(toCsvValue(outputByName.get(param)));
       });
+
+      if (hasExpected) {
+        expectedParams.forEach(param => {
+          row.push(formatCheckValue(result.expected?.[param]));
+        });
+        // match / differs; blank when the cell was blank or the row failed
+        expectedParams.forEach(param => {
+          const check = result.check;
+          if (!check || !check.checked.includes(param)) row.push('');
+          else row.push(check.failed.includes(param) ? 'differs' : 'match');
+        });
+        row.push(!result.check ? '' : result.check.status === 'fail' ? 'differs' : result.check.status === 'pass' ? 'match' : 'not checked');
+      }
 
       row.push(String(result.executionTime));
       row.push(result.error ?? '');
@@ -1465,6 +1627,24 @@ title;`;
               <h3>Input Parameters ({step.inputs?.length ?? 0})</h3>
             </CardHeader>
             <CardBody>
+              {(draftRestored || inputNotice) && (
+                <div className="score-panel__input-notice" role="status" aria-live="polite">
+                  <span>
+                    {inputNotice ?? 'Restored the inputs you entered for this step earlier in this browser tab.'}
+                  </span>
+                  <Button
+                    variant="tertiary"
+                    size="small"
+                    onClick={() => {
+                      setInputNotice(null);
+                      dismissDraftRestored();
+                    }}
+                    aria-label="Dismiss this note"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              )}
               <InputForm
                 parameters={step.inputs ?? []}
                 values={inputValues}
@@ -1546,10 +1726,27 @@ title;`;
                   output={output}
                   parameters={step.outputs ?? []}
                   executionTime={executionTime}
+                  expected={scenarioMatchesOutput ? loadedScenario?.expected : null}
+                  expectedSource={loadedScenario?.name}
                 />
               </div>
+              {loadedScenario && !scenarioMatchesOutput && (
+                <p className="score-panel__stale-note">
+                  The expected values of scenario &ldquo;{loadedScenario.name}&rdquo; apply to its own
+                  inputs, so they are not shown for this run. Load the scenario again to check it.
+                </p>
+              )}
             </div>
           )}
+
+          <RunHistory
+            runs={runHistory}
+            inputParameters={step.inputs ?? []}
+            outputParameters={step.outputs ?? []}
+            onRestore={handleRestoreRun}
+            onClear={clearRunHistory}
+            disabled={executing}
+          />
         </div>
 
         {/* Batch Execution Mode */}
@@ -1557,6 +1754,7 @@ title;`;
           <div className="score-panel__mode-body" hidden={executionMode !== 'batch'}>
             <FileUpload
               parameters={step.inputs ?? []}
+              outputParameters={step.outputs ?? []}
               onExecuteBatch={handleBatchExecuteFile}
               executing={batchExecuting}
             />
@@ -1595,9 +1793,11 @@ title;`;
           <div className="score-panel__mode-body" hidden={executionMode !== 'casTable'}>
             <CasTableScore
               parameters={step.inputs ?? []}
+              outputParameters={step.outputs ?? []}
               onExecuteBatch={handleBatchExecuteCas}
               executing={batchExecuting}
               onSaveAsTest={moduleType === 'Decision' && sourceURI ? handleSaveAsTest : undefined}
+              testSource={casTestSource}
             />
 
             {/* Batch Progress */}
@@ -1643,9 +1843,10 @@ title;`;
       {showLoadScenario && sourceURI && (
         <LoadScenarioDialog
           sourceURI={sourceURI}
-          inputParameters={step.inputs ?? []}
+          moduleId={module.id}
+          step={step}
           signature={decisionSignature}
-          onLoad={(values) => setInputValues(prev => ({ ...prev, ...values }))}
+          onLoad={handleLoadScenario}
           onClose={() => setShowLoadScenario(false)}
         />
       )}

@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   getSegmentationTreeById,
@@ -11,7 +11,9 @@ import {
 } from '../../api/segmentationTrees';
 import { subscribeRequestCache } from '../../api/requestCache';
 import { buildTreeIndex } from '../../utils/segTree/treeIndex';
-import { leafPrefix, nextLeaf } from '../../utils/segTree/leafCounts';
+import { leafPrefix, nextLeaf, stepOrigin, type StepDirection } from '../../utils/segTree/leafCounts';
+import { findInTree } from '../../utils/segTree/findInTree';
+import { stalePathIds } from '../../utils/segTree/testRows';
 import { autoExpand, expandAll, expandOneLevel, visibleRows, withPathOpen } from '../../utils/segTree/treeView';
 import { allPathsCsv, type PathView } from '../../utils/segTree/formats';
 import { loadTestRun, saveTestRun, treeRevisionKey } from '../../utils/segTree/testRunStore';
@@ -27,6 +29,9 @@ import SegTreeOutcomeIndex from './SegTreeOutcomeIndex';
 import SegTreeTestDialog, { type TestRunSummary } from './SegTreeTestDialog';
 import SegTreeOutline from './SegTreeOutline';
 import { UnreachableBanner } from './SegTreeUnreachable';
+import SegTreeFindBar, { type StepMode } from './SegTreeFindBar';
+import SegTreeTraceDialog from './SegTreeTraceDialog';
+import SegTreeTestsDialog from './SegTreeTestsDialog';
 
 // The diagram brings in the canvas library; load it only when its tab is opened.
 const SegTreeDiagram = lazy(() => import('./SegTreeDiagram'));
@@ -94,6 +99,18 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
   // Open branches per tree view. The diagram defaults to far fewer nodes than
   // the outline: a drawn tree gets hard to read much sooner than a list.
   const [expandedBy, setExpandedBy] = useState<Record<TreeTab, Set<string>>>({ outline: new Set(), diagram: new Set() });
+  const [findQuery, setFindQuery] = useState('');
+  const [stepMode, setStepMode] = useState<StepMode>('matches');
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [testsOpen, setTestsOpen] = useState(false);
+  // Typing stays responsive on a tree of thousands of branches; matching follows.
+  const deferredQuery = useDeferredValue(findQuery);
+
+  // Another tree starts with an empty find.
+  useEffect(() => {
+    setFindQuery('');
+    setStepMode('matches');
+  }, [treeId]);
 
   useEffect(() => {
     let active = true;
@@ -188,6 +205,15 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
 
   const shownRun = runHidden ? null : run;
 
+  const find = useMemo(() => findInTree(index, deferredQuery), [index, deferredQuery]);
+  const findMarks = find.matches.length > 0 ? find : null;
+
+  // Result rows whose path is not in this revision (removed, or split further since the test was made).
+  const staleCount = useMemo(
+    () => (index && shownRun ? stalePathIds(index, shownRun.results).length : 0),
+    [index, shownRun]
+  );
+
   const resultPrefixes = useMemo<ResultPrefixes | null>(() => {
     if (!index || !shownRun) return null;
     const byPath = shownRun.results.byPath;
@@ -223,10 +249,19 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
   const activeBranchId = focus && !focus.childSplitId ? focus.id : null;
   const deepLink = buildDeepLink('segmentationTree', tree.id);
   const failedTotal = shownRun?.results.failed ?? 0;
-  const focusOrdinal = focus ? (focus.childSplitId ? focus.leafStart - 1 : index.leafOrdinal.get(focus.id)!) : -1;
+  // A list that is no longer on offer (no test results, no dead ends) falls back to the find matches.
+  const effectiveMode: StepMode =
+    (stepMode === 'failed' && !resultPrefixes) || (stepMode === 'deadEnds' && index.shadowedCount === 0) ? 'matches' : stepMode;
 
-  const jumpToNext = (test: (id: string) => boolean) => {
-    const id = nextLeaf(index, focusOrdinal, test);
+  const isFailed = (id: string) => shownRun?.results.byPath.get(id)?.status === 'fail';
+  const jumpTo = (test: (id: string) => boolean, direction: StepDirection) => {
+    const id = nextLeaf(index, stepOrigin(index, focusId, direction), test, direction);
+    if (id) goTo(id);
+  };
+
+  // Start from the top of the tree so the first failed path is selected.
+  const showFirstFailure = () => {
+    const id = nextLeaf(index, -1, (leaf) => run?.results.byPath.get(leaf)?.status === 'fail');
     if (id) goTo(id);
   };
 
@@ -252,6 +287,12 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
         <div className="segtree__actions">
           <Button variant="secondary" size="small" disabled={index.leafIds.length === 0} onClick={() => setTestScope({ title: 'Whole tree', leafIds: index.leafIds })}>
             Test whole tree…
+          </Button>
+          <Button variant="secondary" size="small" onClick={() => setTestsOpen(true)}>
+            Tests on this tree…
+          </Button>
+          <Button variant="secondary" size="small" disabled={!index.rootSplitId} onClick={() => setTraceOpen(true)}>
+            Find path for a record…
           </Button>
           <Button
             variant="secondary"
@@ -281,14 +322,23 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
             onClose={() => setRunHidden(true)}
             dismissible
             actions={failedTotal > 0 ? (
-              <Button variant="secondary" size="small" onClick={() => jumpToNext((id) => shownRun.results.byPath.get(id)?.status === 'fail')}>
-                Next failed path
-              </Button>
+              <>
+                <Button variant="secondary" size="small" onClick={() => jumpTo(isFailed, -1)}>
+                  Previous failed path
+                </Button>
+                <Button variant="secondary" size="small" onClick={() => jumpTo(isFailed, 1)}>
+                  Next failed path
+                </Button>
+              </>
             ) : undefined}
           >
             {shownRun.results.passed.toLocaleString()} passed · {failedTotal.toLocaleString()} failed
             {shownRun.results.unchecked > 0 ? ` · ${shownRun.results.unchecked.toLocaleString()} without expected values` : ''}.
-            Output table <code>{shownRun.outputTable}</code>.
+            {shownRun.revisionNote ? ` ${shownRun.revisionNote}.` : ''}
+            {staleCount > 0
+              ? ` ${staleCount.toLocaleString()} result row${staleCount !== 1 ? 's refer' : ' refers'} to paths that are not in this revision of the tree (removed, or split further), so ${staleCount !== 1 ? 'they are' : 'it is'} not shown on it.`
+              : ''}
+            {' '}Output table <code>{shownRun.outputTable}</code>.
             {runStored
               ? ' Kept for this browser session; hiding it keeps it available.'
               : ' Too large to keep after a reload; it stays until you leave this tree.'}
@@ -307,6 +357,19 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           onTest={(title, leafIds) => setTestScope({ title, leafIds })}
         />
         <div className="segtree__centre">
+          <SegTreeFindBar
+            index={index}
+            focusId={focusId}
+            query={findQuery}
+            onQueryChange={setFindQuery}
+            find={find}
+            mode={effectiveMode}
+            onModeChange={setStepMode}
+            shadowedPrefix={shadowedPrefix}
+            failPrefix={resultPrefixes?.fail ?? null}
+            results={shownRun?.results.byPath ?? null}
+            onNavigate={goTo}
+          />
           <div className="segtree-tabs" role="tablist" aria-label="Tree view">
             {CENTRE_VIEWS.map((v) => (
               <button
@@ -369,6 +432,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
                 shadowedPrefix={shadowedPrefix}
                 results={resultPrefixes}
                 onNavigate={goTo}
+                find={findMarks}
               />
             )}
 
@@ -383,6 +447,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
                   shadowedPrefix={shadowedPrefix}
                   results={resultPrefixes}
                   onNavigate={goTo}
+                  find={findMarks}
                 />
               </Suspense>
             )}
@@ -423,11 +488,20 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           leafIds={testScope.leafIds}
           onClose={() => setTestScope(null)}
           onResults={applyRun}
-          onShowFailure={() => {
-            // Start from the top of the tree so the first failed path is selected.
-            const id = nextLeaf(index, -1, (leaf) => run?.results.byPath.get(leaf)?.status === 'fail');
-            if (id) goTo(id);
-          }}
+          onShowFailure={showFirstFailure}
+        />
+      )}
+
+      {traceOpen && (
+        <SegTreeTraceDialog index={index} focusId={focusId} onClose={() => setTraceOpen(false)} onShow={goTo} />
+      )}
+
+      {testsOpen && (
+        <SegTreeTestsDialog
+          index={index}
+          onClose={() => setTestsOpen(false)}
+          onResults={applyRun}
+          onShowFailure={showFirstFailure}
         />
       )}
     </div>

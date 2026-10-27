@@ -24,6 +24,7 @@ import {
 import { Alert, Button, Loading, isAnyModalOpen } from '../common';
 import FlowDeepLink from './FlowDeepLink';
 import CollapsibleSection from './CollapsibleSection';
+import { TraceVariableButton, VariableTraceSection, type TraceInfo } from './VariableTrace';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -190,8 +191,33 @@ function RuleElement({ element, lead }: { element: RuleElementView; lead: string
  * A rule set is an ordered if / else if / else chain. Rules arrive in execution
  * order and conditions within a rule are ANDed.
  */
-function RuleChain({ bundle }: { bundle: RuleSetBundle }) {
+function RuleChain({ bundle, mappings, tracedVariable, onTraceVariable }: {
+  bundle: RuleSetBundle;
+  /** The step's mappings: rule set terms are traced as the decision variables they map to. */
+  mappings?: StepMapping[];
+  tracedVariable?: string | null;
+  onTraceVariable?: (name: string) => void;
+}) {
   const view = ruleSetViewOf(bundle);
+  const terms = (names: string[]) => {
+    if (!onTraceVariable) return names.join(', ');
+    return (
+      <span className="flow-trace-var-list">
+        {names.map((term) => {
+          const key = term.toLowerCase();
+          const target = mappings?.find((m) => (m.stepTermName ?? '').toLowerCase() === key)?.targetDecisionTermName ?? term;
+          return (
+            <TraceVariableButton
+              key={term}
+              name={target}
+              traced={tracedVariable}
+              onTrace={onTraceVariable}
+            />
+          );
+        })}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -219,13 +245,13 @@ function RuleChain({ bundle }: { bundle: RuleSetBundle }) {
           {view.reads.length > 0 && (
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Reads:</span>
-              <span className="flow-sp-detail__value">{view.reads.join(', ')}</span>
+              <span className="flow-sp-detail__value">{terms(view.reads)}</span>
             </div>
           )}
           {view.writes.length > 0 && (
             <div className="flow-sp-detail">
               <span className="flow-sp-detail__label">Writes:</span>
-              <span className="flow-sp-detail__value">{view.writes.join(', ')}</span>
+              <span className="flow-sp-detail__value">{terms(view.writes)}</span>
             </div>
           )}
         </>
@@ -301,16 +327,40 @@ function countTree(node: SegTreeNode | undefined): { splits: number; leaves: num
 /* ------------------------------------------------------------------ */
 
 interface FlowSidePanelProps {
-  nodeData: SidNodeData;
+  /** The node whose details are shown; null shows only the variable trace. */
+  nodeData: SidNodeData | null;
+  /** Its id in the diagram, so the trace's jump list can mark it. */
+  nodeId?: string | null;
   /** Definitions already fetched by the page, keyed by step revision URI. */
   restApiCache?: Map<string, RestApiDefinitionDetail>;
   /** Rule sets already fetched by the page, keyed by rule set id. */
   ruleSetCache?: Map<string, RuleSetBundle>;
+  /** The Close button. */
   onClose: () => void;
+  /** Escape; defaults to onClose. The page clears a trace first. */
+  onEscape?: () => void;
   onViewCode?: (href: string, language: string) => void;
+  /** The variable traced now, with its jump lists. */
+  trace?: TraceInfo | null;
+  /** Start or stop tracing a variable (the panel's variable names are toggles). */
+  onTraceVariable?: (name: string) => void;
+  onClearTrace?: () => void;
+  onJumpToNode?: (id: string) => void;
 }
 
-export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, onClose, onViewCode }: FlowSidePanelProps) {
+/** Stands in for the node while only the trace is shown: every node section renders nothing. */
+const NO_NODE: SidNodeData = { label: '', nodeType: 'unknown' };
+
+export default function FlowSidePanel({
+  nodeData: selectedNode, nodeId, restApiCache, ruleSetCache, onClose, onEscape, onViewCode,
+  trace, onTraceVariable, onClearTrace, onJumpToNode,
+}: FlowSidePanelProps) {
+  const nodeData = selectedNode ?? NO_NODE;
+  const tracedVariable = trace?.variable ?? null;
+  /** A variable name: a trace toggle when the page traces, plain text otherwise. */
+  const varName = (name: string) => (onTraceVariable
+    ? <TraceVariableButton name={name} traced={tracedVariable} onTrace={onTraceVariable} />
+    : name);
   const [ruleSetBundle, setRuleSetBundle] = useState<RuleSetBundle | null>(null);
   const [modelDetail, setModelDetail] = useState<SidModelDetail | null>(null);
   const [codeFileDetail, setCodeFileDetail] = useState<CodeFileDetail | null>(null);
@@ -327,21 +377,36 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
   // Escape closes the panel — unless a modal (code viewer) is open above it,
   // in which case the modal owns the key and the panel must stay put.
   useEffect(() => {
+    const handleEscape = onEscape ?? onClose;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (isAnyModalOpen()) return;
-      onClose();
+      handleEscape();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, onEscape]);
 
   const step = nodeData.step;
   const colors = NODE_COLORS[nodeData.nodeType] ?? NODE_COLORS.unknown;
 
   /* ---- useEffect 1: Fetch details based on step type ---- */
   useEffect(() => {
-    if (!step) return;
+    if (!step) {
+      // Only the trace is shown now: drop the last node's details.
+      setRuleSetBundle(null);
+      setModelDetail(null);
+      setCodeFileDetail(null);
+      setCodeFileHref('');
+      setTreatmentDefs([]);
+      setTreatmentGroup(null);
+      setNodeTypeDetail(null);
+      setSegTreeDetail(null);
+      setRestApiDetail(null);
+      setErrors([]);
+      setLoading(false);
+      return;
+    }
 
     const currentStep = step;
     const errs: string[] = [];
@@ -521,28 +586,44 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
   /* ---- JSX ---- */
   return (
     <div className="flow-side-panel">
-      <button type="button" className="flow-side-panel__close" onClick={onClose} title="Close panel">
+      <button
+        type="button"
+        className="flow-side-panel__close"
+        onClick={onClose}
+        title={selectedNode ? 'Close node details' : 'Close and clear the trace'}
+      >
         <span aria-hidden="true">&#x2715;</span> Close
       </button>
       {/* Header */}
-      <div
-        className="flow-side-panel__header"
-        style={{ backgroundColor: colors.bg, borderBottomColor: colors.border }}
-      >
-        <span
-          className="flow-side-panel__type-badge"
-          style={{ backgroundColor: colors.badge, color: 'var(--sas-white)' }}
+      {selectedNode ? (
+        <div
+          className="flow-side-panel__header"
+          style={{ backgroundColor: colors.bg, borderBottomColor: colors.border }}
         >
-          {NODE_TYPE_LABELS[nodeData.nodeType] ?? nodeData.nodeType}
-        </span>
-        <div className="flow-side-panel__title">{nodeData.label}</div>
-        {step?.customObject?.name && step.customObject.name !== nodeData.label && (
-          <div className="flow-side-panel__subtitle">{step.customObject.name}</div>
-        )}
-      </div>
+          <span
+            className="flow-side-panel__type-badge"
+            style={{ backgroundColor: colors.badge, color: 'var(--sas-white)' }}
+          >
+            {NODE_TYPE_LABELS[nodeData.nodeType] ?? nodeData.nodeType}
+          </span>
+          <div className="flow-side-panel__title">{nodeData.label}</div>
+          {step?.customObject?.name && step.customObject.name !== nodeData.label && (
+            <div className="flow-side-panel__subtitle">{step.customObject.name}</div>
+          )}
+        </div>
+      ) : (
+        <div className="flow-side-panel__header flow-side-panel__header--trace">
+          <div className="flow-side-panel__title">Variable trace</div>
+          <div className="flow-side-panel__subtitle">Select a node below or in the diagram for its details.</div>
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flow-side-panel__content">
+        {trace && onClearTrace && onJumpToNode && (
+          <VariableTraceSection trace={trace} selectedId={nodeId} onJump={onJumpToNode} onClear={onClearTrace} />
+        )}
+
         {loading && <Loading size="small" message="Loading details..." />}
 
         {errors.length > 0 && (
@@ -907,7 +988,14 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
                 <VariableTable variables={ruleSetDetail.signature} />
               </>
             )}
-            {ruleSetBundle && ruleSetBundle.rules.length > 0 && <RuleChain bundle={ruleSetBundle} />}
+            {ruleSetBundle && ruleSetBundle.rules.length > 0 && (
+              <RuleChain
+                bundle={ruleSetBundle}
+                mappings={step?.mappings}
+                tracedVariable={tracedVariable}
+                onTraceVariable={onTraceVariable}
+              />
+            )}
           </CollapsibleSection>
         )}
 
@@ -1232,7 +1320,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
               <tbody>
                 {step.mappings.map((m: StepMapping, i: number) => (
                   <tr className="sas-table__row" key={m.id ?? i}>
-                    <td className="sas-table__td">{m.targetDecisionTermName}</td>
+                    <td className="sas-table__td">{varName(m.targetDecisionTermName)}</td>
                     <td className="sas-table__td">
                       <span className={directionBadgeClass(m.direction)}>
                         {directionLabel(m.direction)}
@@ -1260,7 +1348,7 @@ export default function FlowSidePanel({ nodeData, restApiCache, ruleSetCache, on
               <tbody>
                 {step.assignments.map((a: VariableAssignment) => (
                   <tr className="sas-table__row" key={a.id}>
-                    <td className="sas-table__td">{a.variableName}</td>
+                    <td className="sas-table__td">{varName(a.variableName)}</td>
                     <td className="sas-table__td flow-sp-code">{a.value ?? ''}</td>
                     <td className="sas-table__td">{a.dataType ?? ''}</td>
                   </tr>

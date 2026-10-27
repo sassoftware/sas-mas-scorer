@@ -2,26 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { UIField } from '../../../types/uiBuilder';
+import { InputWidgetProps } from './types';
 
-interface Props {
-  field: UIField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  disabled?: boolean;
-}
-
-export const RadioWidget: React.FC<Props> = ({ field, value, onChange, disabled }) => {
+export const RadioWidget: React.FC<InputWidgetProps> = ({
+  field, value, onChange, disabled, id, labelId, describedBy, invalid,
+}) => {
   const options = field.validation?.options ?? [];
+  const groupName = `radio-${id ?? field.parameterId}`;
 
   return (
-    <div className="ui-runner__radio-group">
+    <div
+      className="ui-runner__radio-group"
+      role="radiogroup"
+      id={id}
+      aria-labelledby={labelId}
+      aria-describedby={describedBy || undefined}
+      aria-invalid={invalid ? true : undefined}
+      aria-required={field.validation?.required ? true : undefined}
+    >
       {options.map((opt, i) => (
         <label key={i} className="ui-runner__radio-label">
           <input
             type="radio"
-            name={`radio-${field.parameterId}`}
-            checked={String(value) === String(opt.value)}
+            name={groupName}
+            checked={value !== null && value !== undefined && String(value) === String(opt.value)}
             onChange={() => onChange(opt.value)}
             disabled={disabled}
           />

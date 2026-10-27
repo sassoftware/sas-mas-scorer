@@ -3,11 +3,12 @@
 
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { SidNodeData } from '../../../types/sid';
+import NodeFrame, { isUnavailable } from './NodeFrame';
 import { NODE_COLORS } from '../../../flow/constants';
 
 type StartEndNodeType = Node<SidNodeData, 'start' | 'end'>;
 
-export default function StartEndNode({ data }: NodeProps<StartEndNodeType>) {
+export default function StartEndNode({ id, data, selected }: NodeProps<StartEndNodeType>) {
   const isStart = data.nodeType === 'start';
   // Sub-decision/parallel connector nodes have step data attached
   // and need both handles since they're intermediate nodes
@@ -22,23 +23,25 @@ export default function StartEndNode({ data }: NodeProps<StartEndNodeType>) {
   return (
     <>
       {(!isGlobalStart) && <Handle type="target" position={Position.Top} />}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '8px 24px',
-          borderRadius: '9999px',
-          border: `2px solid ${colors.border}`,
-          fontSize: '14px',
-          fontWeight: 500,
-          backgroundColor: colors.bg,
-          color: colors.text,
-          minWidth: 80,
-        }}
-      >
-        {data.label}
-      </div>
+      <NodeFrame id={id} selected={selected} unavailable={isUnavailable(data)}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px 24px',
+            borderRadius: '9999px',
+            border: `2px solid ${colors.border}`,
+            fontSize: '14px',
+            fontWeight: 500,
+            backgroundColor: colors.bg,
+            color: colors.text,
+            minWidth: 80,
+          }}
+        >
+          {data.label}
+        </div>
+      </NodeFrame>
       {(!isGlobalEnd) && <Handle type="source" position={Position.Bottom} />}
     </>
   );

@@ -1992,3 +1992,482 @@
   font-size: var(--font-size-sm);
   color: var(--sas-gray-700);
 }
+
+/* --- Expected versus actual (scenarios, batch regression) --- */
+
+/* State is in the icon shape and the text; the colour only repeats it */
+.check-badge {
+  gap: var(--space-1);
+}
+
+.check-badge__icon {
+  width: 0.9em;
+  height: 0.9em;
+  flex-shrink: 0;
+}
+
+.comparison-rule {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.comparison-rule__summary {
+  cursor: pointer;
+  color: var(--sas-blue-dark);
+  width: fit-content;
+}
+
+.comparison-rule__summary:focus-visible {
+  outline: 2px solid var(--sas-blue-primary);
+  outline-offset: 2px;
+}
+
+.comparison-rule__list {
+  margin: var(--space-2) 0 0 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.output-display__check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+.output-display__check-summary .comparison-rule {
+  flex-basis: 100%;
+}
+
+/* A differing row also carries the "Differs" badge; the bar only repeats it */
+.output-display__row--fail td:first-child {
+  box-shadow: inset 3px 0 0 var(--sas-error-dark);
+}
+
+.score-panel__input-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--sas-blue-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+}
+
+/* --- Load Scenario: search and Run all --- */
+
+.load-scenario__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.load-scenario__search {
+  flex: 1 1 240px;
+}
+
+.load-scenario__count {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.load-scenario__run {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.load-scenario__run .sas-progress {
+  align-self: stretch;
+}
+
+.load-scenario__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.load-scenario__results-title {
+  margin: 0;
+}
+
+.load-scenario__results-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.load-scenario__results-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.load-scenario__run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.load-scenario__run-item {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  background: var(--sas-white);
+}
+
+.load-scenario__run-item--fail,
+.load-scenario__run-item--error {
+  border-left: 3px solid var(--sas-error-dark);
+}
+
+.load-scenario__run-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.load-scenario__run-name {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.load-scenario__run-counts {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+}
+
+.load-scenario__run-actions {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.load-scenario__run-details {
+  margin-top: var(--space-2);
+}
+
+.load-scenario__run-error {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--sas-error-dark);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.load-scenario__value {
+  overflow-wrap: anywhere;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* --- Expected outputs mapping (batch) --- */
+
+.expected-mapping {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--sas-gray-200);
+}
+
+.expected-mapping__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.expected-mapping__title {
+  margin: 0;
+}
+
+.expected-mapping__toggle,
+.run-history__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  cursor: pointer;
+}
+
+.expected-mapping__toggle:focus-visible,
+.run-history__toggle:focus-visible {
+  outline: 2px solid var(--sas-blue-primary);
+  outline-offset: 2px;
+}
+
+.expected-mapping__chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform var(--transition-fast);
+}
+
+.expected-mapping__chevron--open {
+  transform: rotate(90deg);
+}
+
+.expected-mapping__body {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.expected-mapping__body[hidden] {
+  display: none;
+}
+
+.expected-mapping__intro {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.expected-mapping__suggested {
+  font-size: var(--font-size-xs);
+  color: var(--sas-gray-600);
+  font-style: italic;
+}
+
+/* --- Batch results: expected values --- */
+
+.batch-results__expected-note {
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.batch-results__expected-note p {
+  margin: 0 0 var(--space-1) 0;
+}
+
+/* The differing cell says "expected …" in text; the bar only repeats it */
+.batch-results__value--differs {
+  box-shadow: inset 3px 0 0 var(--sas-error-dark);
+}
+
+.batch-results__expected-value {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--sas-error-dark);
+}
+
+.batch-results__check-table {
+  margin-top: var(--space-3);
+}
+
+.batch-results__check-caption {
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  padding-bottom: var(--space-1);
+}
+
+/* --- Save as Test: Run now --- */
+
+.save-test__run-now {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.save-test__run {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.save-test__run-title {
+  margin: 0;
+}
+
+.save-test__run-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.save-test__run-progress .sas-progress {
+  align-self: stretch;
+}
+
+.save-test__run-note {
+  margin: var(--space-2) 0 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.save-test__log {
+  margin: var(--space-2) 0 0 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+  background: var(--sas-gray-50);
+  color: var(--sas-gray-800);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  white-space: pre;
+}
+
+/* --- Single run: history and diff --- */
+
+.run-history {
+  margin-top: var(--space-4);
+}
+
+.run-history__title {
+  margin: 0;
+}
+
+.run-history__intro,
+.run-history__empty,
+.run-history__hint {
+  margin: 0 0 var(--space-3) 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.run-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.run-history__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.run-history__item--picked {
+  border-color: var(--sas-blue-primary);
+  background-color: var(--sas-blue-light);
+}
+
+.run-history__item-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.run-history__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.run-history__summary {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-history__diff {
+  margin-top: var(--space-4);
+}
+
+.run-history__diff-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.run-history__diff-header h4 {
+  margin: 0;
+}
+
+.run-history__changed-only {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.run-history__diff-summary {
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.run-history__diff-section th {
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  background-color: var(--sas-gray-50);
+}
+
+.run-history__diff-name {
+  text-align: left;
+  font-weight: var(--font-weight-medium);
+}
+
+.run-history__diff-value {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* The row also says "Changed" in text; the bar only repeats it */
+.run-history__diff-row--changed th {
+  box-shadow: inset 3px 0 0 var(--sas-warning-dark);
+}
+
+.run-history__changed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-warning-dark);
+}
+
+.run-history__changed svg {
+  width: 14px;
+  height: 14px;
+}
+
+.run-history__same {
+  color: var(--sas-gray-600);
+}

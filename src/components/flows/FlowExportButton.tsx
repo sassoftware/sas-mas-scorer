@@ -6,7 +6,7 @@ import type { DecisionFlow } from '../../types/sid';
 import type { RestApiDefinitionDetail } from '../../api/restApiDefinitions';
 import type { RuleSetBundle } from '../../api/rulesets';
 import { generateMarkdownExport, type ExportProgress } from '../../flow/mermaidExport';
-import { Button } from '../common';
+import { Alert, Button } from '../common';
 import { saveTextFile } from '../../utils/download';
 
 interface FlowExportButtonProps {
@@ -26,15 +26,25 @@ const EXPORT_ICON = (
 export default function FlowExportButton({ flow, subDecisionCache, restApiCache, ruleSetCache }: FlowExportButtonProps) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
+  const [error, setError] = useState('');
+  // Parts of the last export that could not be loaded (they are listed in the file).
+  const [incomplete, setIncomplete] = useState(0);
 
   async function handleExport() {
     setExporting(true);
     setProgress(null);
+    setError('');
+    setIncomplete(0);
     try {
-      const md = await generateMarkdownExport(flow, setProgress, subDecisionCache, restApiCache, ruleSetCache);
+      let missing = 0;
+      const md = await generateMarkdownExport(
+        flow, setProgress, subDecisionCache, restApiCache, ruleSetCache, (count) => { missing = count; },
+      );
       saveTextFile(md, `${flow.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`, 'text/markdown');
+      setIncomplete(missing);
     } catch (e) {
       console.error('Export failed:', e);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setExporting(false);
       setProgress(null);
@@ -46,8 +56,22 @@ export default function FlowExportButton({ flow, subDecisionCache, restApiCache,
     : 'Export Markdown';
 
   return (
-    <Button variant="secondary" size="small" icon={EXPORT_ICON} loading={exporting} onClick={handleExport}>
-      {label}
-    </Button>
+    <div className="flow-export">
+      <Button variant="secondary" size="small" icon={EXPORT_ICON} loading={exporting} onClick={handleExport}>
+        {label}
+      </Button>
+      {error && (
+        <div className="flow-export__message">
+          <Alert variant="error" title="The Markdown export failed" dismissible onClose={() => setError('')}>
+            {error}
+          </Alert>
+        </div>
+      )}
+      <p className="flow-export__status" role="status">
+        {incomplete > 0
+          ? `Exported with ${incomplete} missing detail${incomplete === 1 ? '' : 's'}; see "Incomplete Sections" at the top of the file.`
+          : ''}
+      </p>
+    </div>
   );
 }

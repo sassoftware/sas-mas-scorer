@@ -32,6 +32,20 @@ interface ConversionState {
   depth: number;
   groups: NodeGroup[];
   activeGroupStack: NodeGroup[];
+  /** Sub-decision URIs, rule set ids and REST definition URIs that failed to load. */
+  unavailableRefs: ReadonlySet<string>;
+}
+
+/**
+ * The object this step references, when it is one the page loads (a
+ * sub-decision, rule set or REST API definition) and its load failed.
+ */
+function unavailableData(state: ConversionState, ref: string | undefined): Partial<SidNodeData> | undefined {
+  return ref && state.unavailableRefs.has(ref) ? { unavailable: true } : undefined;
+}
+
+function stepRef(step: Step | undefined): string | undefined {
+  return step?.ruleset?.id ?? step?.customObject?.uri;
 }
 
 /** Method and host badges for a REST API node, once its definition is cached. */
@@ -98,7 +112,7 @@ function addNode(
     id,
     type: nodeType === 'condition' || nodeType === 'cond_expr' ? 'condition' : nodeType,
     position: { x: 0, y: 0 },
-    data: { label, nodeType, step, ...extra },
+    data: { label, nodeType, step, ...unavailableData(state, stepRef(step)), ...extra },
   });
   for (const group of state.activeGroupStack) {
     group.nodeIds.push(id);
@@ -205,7 +219,7 @@ function processSteps(
 
           if (subSteps.length > 0) {
             const entryNid = nextId(state);
-            addNode(state, entryNid, 'decision', pn.name, step);
+            addNode(state, entryNid, 'decision', pn.name, step, { subDecisionExpanded: true });
             addEdge(state, forkNid, entryNid, '');
 
             state.depth++;
@@ -224,7 +238,7 @@ function processSteps(
           }
         } else {
           const pnNid = nextId(state);
-          addNode(state, pnNid, 'decision', pn.name, step);
+          addNode(state, pnNid, 'decision', pn.name, step, unavailableData(state, pn.uri));
           addEdge(state, forkNid, pnNid, '');
           branchTerminals.push({ nodeId: pnNid, edgeLabel: '' });
         }
@@ -342,7 +356,7 @@ function processSteps(
         beginGroup(state, step.customObject.name, 'sub-decision');
 
         const entryNid = nextId(state);
-        addNode(state, entryNid, 'decision', step.customObject.name, step);
+        addNode(state, entryNid, 'decision', step.customObject.name, step, { subDecisionExpanded: true });
         connectPending(state, pending, entryNid);
         if (!firstId) firstId = entryNid;
 
@@ -384,6 +398,7 @@ export function convertFlowToGraph(
   subDecisionCache: Map<string, DecisionFlow> = new Map(),
   restApiCache: Map<string, RestApiDefinitionDetail> = new Map(),
   ruleSetCache: Map<string, RuleSetBundle> = new Map(),
+  unavailableRefs: ReadonlySet<string> = new Set(),
 ): { nodes: Node<SidNodeData>[]; edges: Edge[]; groups: NodeGroup[] } {
   const steps = flow.flow?.steps ?? [];
 
@@ -399,6 +414,7 @@ export function convertFlowToGraph(
     depth: 0,
     groups: [],
     activeGroupStack: [],
+    unavailableRefs,
   };
 
   const startId = nextId(state);

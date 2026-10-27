@@ -8,7 +8,9 @@ import type { DecisionFlow } from '../../types/sid';
 import { formatTimestamp, truncate } from '../../utils/formatters';
 import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import { registerViewCache } from '../../utils/viewCaches';
-import { Alert, Button, Loading, Pagination, SearchInput } from '../common';
+import { Alert, Badge, Button, Loading, Pagination, SearchInput } from '../common';
+import { masModuleRoute, type DecisionMasModules } from '../../api/modelPublish';
+import { useDecisionMasIndex } from '../coverage/DecisionScoreAction';
 
 const PAGE_SIZE = 20;
 
@@ -93,6 +95,10 @@ export default function FlowListPage() {
     return sorted.slice(start, start + PAGE_SIZE);
   }, [sorted, page, totalPages]);
 
+  // Published / Not published, from one modelPublish query for every flow
+  // (cached; it takes a few seconds, so the list never waits for it).
+  const mas = useDecisionMasIndex(allDecisions.length > 0);
+
   const toggleSort = () => {
     updateParams({ sort: sortDir === 'asc' ? 'desc' : 'asc', page: '1' });
   };
@@ -150,19 +156,20 @@ export default function FlowListPage() {
               <th className="sas-table__th">Description</th>
               <th className="sas-table__th flow-list__col--modified">Modified</th>
               <th className="sas-table__th flow-list__col--modified-by">Modified by</th>
+              <th className="sas-table__th decision-mas__col">MAS module</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr className="sas-table__row">
-                <td colSpan={4} className="sas-table__td flow-list__empty">
+                <td colSpan={5} className="sas-table__td flow-list__empty">
                   <Loading size="small" message="Loading decisions..." />
                 </td>
               </tr>
             )}
             {!loading && displayDecisions.length === 0 && (
               <tr className="sas-table__row">
-                <td colSpan={4} className="sas-table__td flow-list__empty">
+                <td colSpan={5} className="sas-table__td flow-list__empty">
                   {search ? 'No decisions match your search' : 'No decisions found'}
                 </td>
               </tr>
@@ -183,6 +190,9 @@ export default function FlowListPage() {
                 <td className="sas-table__td flow-list__col--desc">{truncate(d.description ?? '', 60)}</td>
                 <td className="sas-table__td flow-list__col--modified">{formatTimestamp(d.modifiedTimeStamp)}</td>
                 <td className="sas-table__td flow-list__col--modified-by">{d.modifiedBy}</td>
+                <td className="sas-table__td decision-mas__col">
+                  <MasStatus flowName={d.name} modules={mas.index?.[d.id]} loading={mas.loading} failed={!!mas.error} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -200,5 +210,65 @@ export default function FlowListPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The flow's MAS module, from its completed publish records checked against
+ * the MAS module list: Published (the module name links to the scorer), Not
+ * published, or Module removed. The state is in the text, never the colour
+ * alone.
+ */
+function MasStatus({
+  flowName,
+  modules,
+  loading,
+  failed,
+}: {
+  flowName: string;
+  modules: DecisionMasModules | undefined;
+  loading: boolean;
+  failed: boolean;
+}) {
+  if (loading) return <span className="decision-mas__pending">Checking…</span>;
+  if (failed) {
+    return <span className="decision-mas__pending" title="The publish history could not be read">Unknown</span>;
+  }
+  if (!modules) {
+    return <Badge variant="default" size="small">Not published</Badge>;
+  }
+  const { latest, others, removed, verified } = modules;
+  if (!latest) {
+    // Every module the publish records name is gone from MAS.
+    const removedNames = removed.map((r) => r.publishName).join(', ');
+    return (
+      <span className="decision-mas__cell" title={`Published as ${removedNames}; MAS no longer has the module`}>
+        <Badge variant="warning" size="small">Module removed</Badge>
+        <span className="sr-only">: published as {removedNames}, which MAS no longer has</span>
+      </span>
+    );
+  }
+  const otherNames = others.map((o) => o.publishName).join(', ');
+  return (
+    <span className="decision-mas__cell">
+      <Badge variant="success" size="small">Published</Badge>
+      <Link
+        to={masModuleRoute(latest.publishName)}
+        className="decision-mas__cell-link"
+        aria-label={`Score ${flowName} in MAS module ${latest.publishName}${verified ? '' : ' (not checked in MAS)'}`}
+        title={verified
+          ? `Score in MAS module ${latest.publishName}`
+          : `Score in MAS module ${latest.publishName} (from the publish history; MAS could not be checked)`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {latest.publishName}
+      </Link>
+      {others.length > 0 && (
+        <span className="decision-mas__cell-more" title={`Also published as ${otherNames}`}>
+          <span aria-hidden="true">+{others.length}</span>
+          <span className="sr-only">, also published as {otherNames}</span>
+        </span>
+      )}
+    </span>
   );
 }

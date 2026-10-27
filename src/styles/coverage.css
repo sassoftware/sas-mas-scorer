@@ -433,3 +433,201 @@
   color: var(--sas-text-muted);
   font-style: italic;
 }
+
+/* ─── Test Health (covpub-4) ─── */
+
+/* Every state carries its word and an icon; colour only reinforces it. */
+.coverage-health__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.coverage-health__count {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-left: 4px solid var(--sas-gray-400);
+  border-radius: var(--radius-md);
+  color: var(--sas-gray-700);
+}
+
+.coverage-health__count--healthy { border-left-color: var(--sas-success); color: var(--sas-success-dark); }
+.coverage-health__count--failing { border-left-color: var(--sas-error); color: var(--sas-error-dark); }
+.coverage-health__count--changed { border-left-color: var(--sas-warning); color: var(--sas-warning-dark); }
+
+.coverage-health__count > .coverage-health__icon {
+  width: 18px;
+  height: 18px;
+}
+
+.coverage-health__value {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+}
+
+.coverage-health__label {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+}
+
+.coverage-health__hint {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+}
+
+.coverage-health__note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  line-height: var(--line-height-normal);
+}
+
+.coverage-health__cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.coverage-health__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.coverage-health__icon {
+  flex-shrink: 0;
+}
+
+.coverage-run {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.coverage-run__date {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.coverage-scenarios__changes {
+  max-width: 320px;
+}
+
+.coverage-changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.coverage-changes__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--sas-warning-dark);
+}
+
+.coverage-changes__item > .coverage-health__icon {
+  margin-top: 3px;
+}
+
+/* ─── Score this decision (journey-3) ───
+   Shared by the flow header, the flow list and the coverage rows
+   (components/coverage/DecisionScoreAction.tsx); index.css loads this file
+   for every view. */
+
+.decision-mas__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.decision-mas {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  max-width: 420px;
+}
+
+.decision-mas--none {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.decision-mas__score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+}
+
+.decision-mas__name {
+  font-family: var(--font-family-mono);
+}
+
+.decision-mas__note,
+.decision-mas__others {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+  text-align: right;
+}
+
+.decision-mas__note {
+  color: var(--sas-warning-dark);
+}
+
+.decision-mas__note > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.decision-mas__col {
+  width: 220px;
+}
+
+.decision-mas__cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.decision-mas__cell-link {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
+
+.decision-mas__cell-more,
+.decision-mas__pending {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}

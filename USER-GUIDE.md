@@ -37,7 +37,8 @@ The SAS MAS Scorer gives you a visual interface to:
 
 - Browse all published modules and inspect their inputs, outputs, and source code.
 - Score individual rows by filling in a form, or score thousands of rows in parallel from an uploaded file (CSV, TSV, JSON/JSONL, Excel, or Parquet) or a CAS table.
-- Save scoring setups back to SAS Intelligent Decisioning as **Scenarios** (static input/expected output pairs) or **Tests** (CAS table-backed batch tests).
+- Save scoring setups back to SAS Intelligent Decisioning as **Scenarios** (static input/expected output pairs) or **Tests** (CAS table-backed batch tests), and load, run and check them again from the app.
+- Compare results with expected values: a loaded scenario, a batch file's or CAS table's expected-output columns, or two runs from the run history.
 - Build lightweight custom UIs on top of any module so that business users can score without seeing the underlying technical details.
 - Visualize SAS Intelligent Decisioning flows as interactive diagrams.
 - Analyze test coverage across all your Decisioning and Model Manager assets.
@@ -113,11 +114,11 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 | **All Modules** | Browse, search, and filter all published modules |
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
-| **Segmentation Trees** | Navigate large segmentation trees path by path, copy any path, and turn paths into SID scenarios or tests |
-| **Test Coverage** | Analyze test scenario coverage across all assets |
+| **Segmentation Trees** | Navigate and search large segmentation trees path by path, copy any path, predict a record's path, and turn paths into SID scenarios or tests |
+| **Test Coverage** | Analyze test scenario coverage and test health across all assets |
 | **Publishing Overview** | See every publishing destination and everything deployed to it |
 | **Rules Import** | Validate and import SAS Intelligent Decisioning rule sets from CSV files |
-| **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code |
+| **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code, and rerun finished jobs |
 | **Schema → Code** | Generate a Python `execute()` function from a JSON/XML sample and save it to SAS Intelligent Decisioning |
 
 ### Current Module Section
@@ -145,7 +146,7 @@ The sidebar starts as a narrow rail of icons, giving the page the extra width; h
 
 ### Narrow Windows and Embeds
 
-Below 768 pixels — a SAS Visual Analytics object, a Job Execution embed, or a small browser window — the sidebar becomes a drawer: the menu button at the left of the header opens it over the page, and **Escape**, a click outside it, or choosing a page closes it. Tables scroll inside their cards rather than pushing the page sideways, and toolbars wrap. The desktop app never goes narrower than 800 pixels, so it always shows the full sidebar (collapsible as above).
+Below 768 pixels — a SAS Visual Analytics object, a Job Execution embed, or a small browser window — the sidebar becomes a drawer: the menu button at the left of the header opens it over the page, and **Escape**, a click outside it, or choosing a page closes it. Toolbars wrap. At any window width, a table wider than the window (Test Coverage's asset table, for example) scrolls inside its card instead of giving the whole page a horizontal scroll bar. The desktop app never goes narrower than 800 pixels, so it always shows the full sidebar (collapsible as above).
 
 ---
 
@@ -237,6 +238,8 @@ Two cards at the top show:
 
 The input form shows one field for each input parameter. Each field is labelled with the parameter name and displays a type badge (e.g. `decimal`, `string`, `integer`).
 
+**The form is kept for the browser tab.** What you enter is kept for each step (per connection, module and step) while the browser tab is open, so leaving the score page and coming back, or reloading, no longer clears it. A note above the form says *Restored the inputs you entered for this step earlier in this browser tab*; **Dismiss** hides it. The values stay in this browser tab only, are never sent anywhere, and are cleared when you log out, switch connection or close the tab.
+
 ### DataGrid Inputs (Decision Modules)
 
 If a decision input is a **datagrid** (a table-valued variable), the app detects this from the decision's signature and replaces the raw text field with a grid editor. The field shows a `dataGrid` type badge, a summary of the current grid (e.g. "2 rows × 2 columns"), and a **Create grid…** / **Edit grid…** button that opens the editor:
@@ -252,7 +255,7 @@ The grid is sent to MAS in its native JSON structure — you never have to hand-
 
 | Button | What It Does |
 |--------|--------------|
-| **Load Scenario** | Load saved input values from a previously saved scenario in SAS Intelligent Decisioning (Decision modules only) |
+| **Load Scenario** | Replace every input with the values of a scenario saved in SAS Intelligent Decisioning, keeping its expected outputs to check after the run, or score all of the decision's scenarios at once (Decision modules only; see [Scenarios and Tests](#9-scenarios-and-tests)) |
 | **Auto-fill Defaults** | Populate all fields with zero-values (0 for numbers, empty string for text, empty arrays for array types) |
 | **Clear All** | Reset all input fields to empty |
 
@@ -275,6 +278,30 @@ After a successful execution, a results section appears below the input form sho
 - **Clear Results** — Dismiss the results section.
 
 **When the inputs change after a run:** the results stay on screen, dimmed, under **Results (previous run)**, with an **Inputs changed since this run** banner and a **Run again** button. **Save as Scenario** is disabled until you run again, so a scenario never pairs inputs with outputs they did not produce. If a re-run fails, the error is shown and the previous successful result stays below it, dimmed and labelled the same way.
+
+**Checking a loaded scenario:** after you load a scenario (see [Scenarios and Tests](#9-scenarios-and-tests)) and click **Execute Score**, the output table gains an **Expected** column and a **Check** column. Each output shows **Matches**, **Differs** or **Not checked** (the scenario has no expected value for it), and a line above the table sums it up — *Scenario Approve_1: 4 match, 1 differ, 2 not checked (no expected value)* — with a **Matches expected**, **Differs from expected** or **Nothing to check** badge. An output the scenario expects but the run did not return is listed as *not returned* and counts as differing. The expected values belong to the scenario's own inputs: if you change an input and run again, they are not shown for that run, and a note says to load the scenario again to check it. **How values are compared** below the summary opens the comparison rule (see the next section).
+
+### How Values Are Compared
+
+Every expected-versus-actual check in the app — a loaded scenario, **Run all scenarios**, the expected-output columns of a batch run — uses the same rule, and each of those places has a **How values are compared** link that opens it:
+
+- **Actual values** are what the published MAS module returned for that run; nothing is calculated in the browser.
+- **Numbers** — also numbers written as text, such as `"12.50"` — match when they differ by at most 1 × 10⁻⁹ times the expected value (or by at most 1 × 10⁻⁹ when the expected value is between −1 and 1). No rounding or format is applied.
+- **Text** matches exactly after leading and trailing blanks are removed; upper and lower case count. A date-time written with "T" or a blank, or with a zero fraction, is the same value.
+- **Missing values** match each other: null, an empty value and the SAS missing values `.`, `.A`–`.Z` and `._`.
+- **A blank expected value is not checked** (null or blank shows "Not checked"). To require a missing result, expect `.`.
+- **DataGrids and lists** match when every cell matches by the same rules.
+- **"Differs"** only says that the values are not the same; it does not say why.
+
+### Run History
+
+Below the results, **Run history (N)** keeps the last 20 runs of the step (each **Execute Score** adds one): the time, the state, the latency and the first outputs, or the error of a failed run. Click the heading to open it.
+
+- **Restore inputs** puts that run's inputs back in the form (*Restored the inputs of the run at 14:05:12*).
+- **Pick two runs** with their checkboxes to compare them: a table lists every input and output of both runs, marks each one **Changed** or **Same**, and says how many changed (*2 inputs and 1 output changed*). **Only changed values** hides the rest. A third pick replaces the oldest one. Values are compared by the rule above.
+- **Clear history** empties the list.
+
+The history stays in this browser tab only: it is never sent anywhere, and it is cleared when you log out, switch connection or close the tab.
 
 ---
 
@@ -324,6 +351,14 @@ The file therefore does not need a column for every input. A badge summarizes th
 
 **Datagrid inputs:** a flat file cannot nest a table inside a cell, so a column mapped to a datagrid parameter should contain the serialized datagrid JSON (e.g. `[{"metadata":[{"col":"string"}]},{"data":[["a"]]}]`) in each cell. The app parses it into the native structure MAS expects before scoring — this applies to CAS table batches as well.
 
+### Expected Outputs (Regression Checks)
+
+Below the input mapping, the optional **Expected outputs (optional)** section turns a batch run into a regression check. For each output, choose the column that holds the value each row should produce; outputs left on **Not compared** are not checked. A badge says how many outputs are compared (*3 of 5 outputs compared*, or *Nothing compared*), and **Compare nothing** clears every choice.
+
+Columns named `expected_<output>`, `Output_<output>` or like the output itself are suggested when the file is loaded (a column already used for an input is not suggested by the output's own name). Suggestions are marked **Suggested by name**; **Remove** next to any choice stops comparing that output.
+
+Each scored row is then marked **Matches**, **Differs** or **Not checked**: a row differs when at least one compared output is not the same as its expected value, and is not checked when all its expected cells are blank (a blank cell is never checked). Failed rows are not compared. The values are compared by the rule in [How Values Are Compared](#how-values-are-compared): blanks trimmed from text, numbers within 1 × 10⁻⁹ relative tolerance, every kind of missing value alike, a blank expected value not checked.
+
 ### Data Preview
 
 A preview table shows the first few rows of your data so you can verify it looks correct.
@@ -355,13 +390,15 @@ After the run completes (or is stopped), the results are displayed in a detailed
 | Median Response | The middle response time |
 | Total Requests | How many rows were processed |
 | Succeeded / Failed | Count of successes and errors |
+| Mismatches / Match Expected / Not Checked | With expected-output columns mapped: rows that differ from, match, or had nothing to compare with their expected values (**Not Checked** only when there are such rows) |
 
 **Results table:**
 
-Each row shows the row number, status badge, output values, and runtime. Click **Show** on any row to expand it and see the full input and output JSON.
+Each row shows the row number, status badge, output values, and runtime. Click **Show** on any row to expand it and see the full input and output JSON; with expected outputs mapped, the expanded row also lists each compared output with its expected value, actual value and check.
 
-- **Status filter** — the chips **All**, **Succeeded** and **Failed** (each with its count) above the table narrow it to those rows; the line next to them says what is shown (e.g. *Showing 12 failed of 5,000 rows*), and **Show all rows** clears the filter.
-- **Sorting** — click the **Row**, **Status**, any output or the **Runtime** header to sort; click again to reverse. Missing values always sort last.
+- **Expected values** — with expected-output columns mapped, the card header shows *N differ from expected*, the table gains an **Expected** column (**Matches**, **Differs (N)** or **Not checked**), each differing value is highlighted with *expected …* written under it, and a note above the table explains the check, with **How values are compared**.
+- **Status filter** — the chips **All**, **Succeeded** and **Failed** (each with its count), and **Mismatched** when expected outputs are mapped, narrow the table to those rows; the line next to them says what is shown (e.g. *Showing 12 failed of 5,000 rows*), and **Show all rows** clears the filter.
+- **Sorting** — click the **Row**, **Status**, **Expected**, any output or the **Runtime** header to sort; click again to reverse (on **Expected**, differing rows come first). Missing values always sort last.
 - **Paging** — 100 rows per page by default (switch to 500 or 1,000 with **Rows per page**); **Showing 1-100 of N** and the **Previous** / **Next** controls sit below the table.
 
 Sorting, filtering and selection apply to the whole result set, not just the visible page. **Download CSV** and **Upload to CAS** always include every row, whatever the filter.
@@ -379,7 +416,7 @@ If an output value is a datagrid, the cell shows a **DataGrid(rows × columns)**
 | **Retry failed rows (N)** | Score only the failed rows again (shown when rows failed) |
 | **Save as Scenarios** | Save selected rows as test scenarios (select rows using checkboxes first) |
 | **Upload to CAS** | Upload the results as a new CAS table |
-| **Download CSV** | Export results as a CSV file including inputs, outputs, runtime, status, and errors |
+| **Download CSV** | Export results as a CSV file including inputs, outputs, runtime, status, and errors. With expected outputs mapped, it adds an `Expected_<output>` and a `Match_<output>` column per compared output and a `Check` column (`match`, `differs` or `not checked`), so the file can be uploaded again as a regression suite — its `Expected_` columns are suggested as expected outputs |
 | **Clear Results** | Remove the results from the screen |
 
 ### Selecting Rows
@@ -398,6 +435,12 @@ Switch to the **Parallel (CAS Table)** tab to score rows directly from a CAS tab
 2. **Caslib** — Select the caslib (library) that contains your table (e.g. `Public`).
 3. **Table** — The app lists all tables in the selected caslib that have at least one row. Use the filter box to narrow the list. Click a table to select it.
 
+### Load Test
+
+For Decision modules, **Load Test…** in the card header lists the decision's CAS-table tests saved in SAS Intelligent Decisioning (tests created with **Save as Test** here or on the decision's Tests tab). Each entry shows the input table, how many columns it maps, and — for the first 25 tests — when it last ran (*Last run started …* or *No run found*). Search by name, table or author.
+
+Choosing a test selects its CAS server, caslib and table and replaces the column mapping with the test's: *Loaded test "Regression_Q3": 12 inputs mapped to columns, 2 sent as missing (the test does not map them).* A note lists mapped columns the table no longer has (those inputs need a source) and mapped variables that are not inputs of this step (skipped). If the test's server, caslib or table is not available to you (or the table has no rows, so it is not listed), the selection stops there and a note says what is missing — load the table into CAS, then load the test again.
+
 ### Column Mapping
 
 Once you select a table, the app loads its column metadata and shows the mapping interface — the same as the file upload mode: each input takes a column (listed with its CAS type), **Send as missing (null)** or a **constant**, the badge summarizes the choices, **Send N unset inputs as missing** fills the rest, and **Run All** waits until every input has a source. Columns are auto-matched by name.
@@ -409,6 +452,8 @@ The notes under each input are based on the table's metadata and the preview row
 - Values in the preview rows that cannot be read are listed, prefixed *Preview rows:*.
 
 CAS returns every missing numeric as `.`; these, and the special missing values `.A`–`.Z` and `._`, are sent as missing (null), not 0.
+
+The optional **Expected outputs** section works as in the file upload mode (see [Expected Outputs (Regression Checks)](#expected-outputs-regression-checks)): map a column per output and every scored row is checked against it.
 
 **Before scoring:** the full table is only read when you click **Run All**, and the same check then runs on every fetched row. If any values cannot be read, nothing is scored yet: a warning lists, per input, how many values are affected, with examples and the first row, and offers **Score N rows anyway** (those values are sent as missing) or **Cancel**.
 
@@ -427,11 +472,11 @@ Switching table or caslib while data is still loading discards the earlier load 
 
 ### Save as Test
 
-For Decision modules, a **Save as Test** button appears next to **Run All**. This lets you save the CAS table and column mapping configuration as a Test (score definition) back to SAS Intelligent Decisioning — without needing to run the batch first. Inputs set to **Send as missing** are saved without a mapping, which is how a test leaves them missing. A setup with a **constant** cannot be saved as a test (SAS Intelligent Decisioning has no constant mapping for table tests): the button stays disabled and a note explains why — constants apply to runs in this app only. See [Scenarios and Tests](#9-scenarios-and-tests) for details.
+For Decision modules, a **Save as Test** button appears next to **Run All**. This lets you save the CAS table and column mapping configuration as a Test (score definition) back to SAS Intelligent Decisioning — without needing to run the batch first. Inputs set to **Send as missing** are saved without a mapping, which is how a test leaves them missing. A setup with a **constant** cannot be saved as a test (SAS Intelligent Decisioning has no constant mapping for table tests): the button stays disabled and a note explains why — constants apply to runs in this app only. The dialog can also run the test straight away. See [Scenarios and Tests](#9-scenarios-and-tests) for details.
 
 ### Running and Results
 
-Click **Run All** to start the batch. Once the rows are fetched, the run and its results work exactly as in the file upload mode: the same progress card, automatic retries and pause after repeated failures, and the same statistics, status filter, **Errors by message**, **Retry failed rows**, selection, and export capabilities.
+Click **Run All** to start the batch. Once the rows are fetched, the run and its results work exactly as in the file upload mode: the same progress card, automatic retries and pause after repeated failures, and the same statistics, status filter, expected-value checks, **Errors by message**, **Retry failed rows**, selection, and export capabilities.
 
 ---
 
@@ -465,8 +510,25 @@ A **Scenario** captures a single row of static input values and expected output 
 **Loading a scenario (in Single Execution):**
 
 1. Click **Load Scenario** in the input card header.
-2. A dialog lists all saved scenarios for the current decision.
-3. Click a scenario to load its input values into the form.
+2. A dialog lists all saved scenarios for the current decision. Search by name, description or author.
+3. Click a scenario. Loading a scenario **replaces every input in the form** and keeps the scenario's expected outputs. A note says so — *Loaded scenario "Approve_1": every input was replaced. After the run, its 3 expected output values are shown next to the results.*
+4. Click **Execute Score**. Each output shows its expected value and **Matches**, **Differs** or **Not checked** (see [Viewing Results](#viewing-results) and [How Values Are Compared](#how-values-are-compared)).
+
+If some of the scenario's inputs are not inputs of this step (it may belong to another step, or the decision has changed since it was saved), the form is filled without them and its expected values are not shown, and the note names those inputs.
+
+**Running all scenarios:**
+
+**Run all scenarios (N)** in the Load Scenario dialog scores every scenario of the decision against the published module you are on — or, with a search entered, **Run N shown** scores only the scenarios the search shows. Each scenario's inputs are scored by the module and its outputs compared with the saved expected values, three scenarios at a time; **Stop** ends the run early.
+
+The results list each scenario as **Matches**, **Differs**, **Not checked** (no expected values) or **Could not run**, with a summary such as *24 scenarios run: 21 match the expected values, 2 differ, 1 could not run*, and **How values are compared**.
+
+- The chips **All**, **Differs**, **Could not run**, **Matches** and **Not checked** filter the list.
+- **Go to first difference** shows the first scenario that differs (or could not run) with its details open.
+- **Details** lists each differing output with its expected and actual value (*not returned* when the run did not return it), or the reason a scenario could not run.
+- **Load and run** loads that scenario into the form and runs it, so you see the full result with its checks.
+- **Back to the list** returns to the scenario list.
+
+A scenario with inputs the step does not have is reported as **Could not run**, naming those inputs, instead of being scored without them.
 
 ### Tests
 
@@ -483,9 +545,14 @@ A **Test** captures a CAS table reference and column-to-variable mappings. Inste
    - **SAS Content Folder** — Browse and select a folder (click "Select current folder" to confirm).
    - **CAS Output Library** — Choose where the output table will be written.
    - **Column Mappings** — A read-only summary showing each variable mapped to its CAS column, or *(missing)* for inputs sent as missing.
-4. Click **Save Test**.
+   - **Run the test now and show its output table and row count** — ticked by default: the test runs as soon as it is saved.
+4. Click **Save and Run** (or **Save Test** when the box is cleared).
 
-Both Scenarios and Tests appear in SAS Intelligent Decisioning under the decision's test section, where they can be executed and validated.
+**Running the test:** with the box ticked — or with **Run test now** after saving — the dialog runs the test in SAS Viya (this can take a few minutes; **Stop waiting** stops waiting while the run continues in SAS Viya). It then shows the run's **State**, its **Output Table** and the **Output Size** in rows and columns; **Run again** runs it once more. The app reports the output table and its size only; it does not read or compare the scored rows, so review them in SAS Intelligent Decisioning or in the CAS table. If the run fails, SAS Intelligent Decisioning records no message of its own, so the dialog shows the **ERROR** lines of the run's SAS log instead (or, when there are none, its warnings or last lines).
+
+**Loading a test:** **Load Test…** on the CAS Table tab lists the decision's CAS-table tests, with when each last ran, and selects the test's table and column mapping (see [Load Test](#load-test)).
+
+Both Scenarios and Tests appear in SAS Intelligent Decisioning under the decision's test section, where they can also be executed and validated.
 
 ---
 
@@ -533,28 +600,36 @@ Both take you to the UI Builder.
 
 ### The UI Builder
 
-The builder has three main areas:
+The builder page is headed **Create UI App** (or **Edit: <app name>**) with the module's name below it. The breadcrumb **UI Apps** above the heading returns to the UI Apps list. The builder has three main areas.
 
 **Toolbar (top):**
 
-| Button | Description |
-|--------|-------------|
-| **Back** | Return to the UI Apps list |
-| **Layout columns** (1 / 2 / 3) | Set the number of form columns |
+| Control | Description |
+|---------|-------------|
+| **Name** / **Description** | The app's name and an optional description |
+| **Columns:** 1 / 2 / 3 | Set the number of form columns |
+| **Output:** | Where outputs are shown: **Below** (in a separate section), **Side by Side** (inputs on the left, outputs on the right) or **Inline** (outputs among the inputs) |
+| **Button:** | The text on the run button (default `Execute`) |
+| Save status | **Unsaved changes**, **All changes saved**, or **Not saved yet** for a new app |
+| **Undo** | Undo the last edit (**Ctrl+Z**); hover it to see which edit (e.g. *Undo: Remove field Age*) |
 | **Share** | Open the Share dialog to copy a self-contained link or portable code for this UI (see [Sharing & Standalone Mode](#sharing--standalone-mode)) |
-| **Replace Module** | Swap the underlying module while preserving as much of the field configuration as possible (available when editing an existing app) |
-| **Preview / Edit** | Toggle between editing and previewing the live form |
-| **Save** | Save the current configuration |
-| **Delete** | Delete this UI App |
+| **Replace / Re-sync Module** | Swap the underlying module, or re-read the current one, while preserving as much of the field configuration as possible (available when editing an existing app; see [Replace / Re-sync Module](#replace--re-sync-module)) |
+| **Preview & Test Run** / **Back to Editing** | Switch between editing and a live run of the form |
+| **Save & Run** | Save the app and open it in the runner |
+| **Save** | Save the app and keep editing |
+
+A UI App is deleted from the **UI Apps** list (see [Managing UI Apps](#managing-ui-apps)), not from the builder.
 
 **Canvas (center):**
 
-The canvas shows your form layout organized into **sections**. Each section has a title, can be collapsed, and contains one or more fields.
+The canvas shows your form layout organized into **sections**. Each section has a title and contains one or more fields.
 
-- Click **Add Section** to create a new section.
-- Click **Add Text Block** to insert a static markdown text block (supports inline images).
-- Use the **up/down arrows** on a section to reorder it.
-- Click the **X** on a section to remove it.
+- Click **Add Section** (below the sections) to create a new section.
+- **+ Add field** at the foot of a section lists the step's parameters that have no field yet and adds the one you pick. It is disabled when every parameter in the step signature already has a field.
+- **+ Text Block** at the foot of a section inserts a static markdown text block (supports inline images).
+- Use the **up/down arrows** on a section or a field to reorder it.
+- Click the **X** on a section or a field to remove it; **Undo** restores it.
+- A field is labelled **(required)** when it is marked Required, **Hidden** when it is not visible, and **Not in signature** when its parameter is no longer in the module's step signature.
 
 **Field Configuration:**
 
@@ -562,26 +637,32 @@ Click any field to configure it. Each field has these properties:
 
 | Property | Description |
 |----------|-------------|
+| **Direction** | Input (the user provides the value) or Output (shows results). Text blocks are static content |
+| **Mapped Parameter** | The step parameter the field is bound to; its type and declared size are shown below it |
+| **Section** | Move the field to another section |
 | **Label** | Display name shown to the user |
-| **Description** | Help text shown below the field |
-| **Widget** | The type of UI control (see below) |
-| **Width** | Full, Half, or Third of the section width |
-| **Direction** | Input (user provides value), Output (shows results), or Static (always visible) |
-| **Default Value** | Pre-populated value |
-| **Visible** | Whether the field is shown in the form |
+| **Description / Help Text** | Help text shown below the field |
+| **Widget Type** | The type of UI control (see below) |
+| **Width** | 1/3, 1/2 or Full of the section width |
+| **Visible** | Whether the field is shown in the form. A hidden input with a default value is sent on every execution |
 | **Placeholder** | Hint text shown when the field is empty |
+| **Default Value** | Pre-populated value, stored by the parameter's type: a number for a numeric parameter, comma-separated values sent as an array for an array parameter, and text exactly as typed for a string parameter |
+| **Required** | The app will not run until this field has a value |
+| **Value when on** / **Value when off** | For a Toggle: what it sends (default `1` / `0` for an integer input, `Y` / `N` for a string input) |
+| **Max length** | For Text Input and Text Area on a string input. Empty uses the size the step signature declares |
+| **Min** / **Max** / **Step Size** | For Number Input and Slider. Min and Max are checked before the app runs; Step Size is how much the arrow keys (or the slider) change the value |
 
 ### Widget Types
 
 | Widget | Use For | Configuration |
 |--------|---------|---------------|
-| **Text Input** | Free-text string inputs | Max length |
-| **Number Input** | Numeric inputs | Min, Max, Step, Decimal places |
-| **Slider** | Numeric inputs with a visual range | Min, Max, Step |
+| **Text Input** | Free-text string inputs | Max length (default: the size in the step signature) |
+| **Number Input** | Numeric inputs | Min, Max, Step Size |
+| **Slider** | Numeric inputs with a visual range | Min, Max, Step Size |
 | **Dropdown** | Picking from a fixed list | Options (label/value pairs) |
 | **Radio Buttons** | Picking from a small set of options | Options (label/value pairs) |
-| **Toggle Switch** | Boolean (yes/no) inputs | — |
-| **Text Area** | Multi-line text inputs | Max length |
+| **Toggle Switch** | On/off flags on integer or string inputs | Value when on / off (default `1` / `0`, or `Y` / `N` for a string) |
+| **Text Area** | Multi-line text inputs | Max length (default: the size in the step signature) |
 | **Read Only** | Displaying a value the user cannot change | — |
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
@@ -596,26 +677,37 @@ Output fields have additional options:
 - **Value mappings** — Translate raw output values to user-friendly labels (e.g. map `1` to "Approved" and `0` to "Denied").
 - **Gauge color stops** — Define ranges with colors (e.g. 0-30 green, 30-70 orange, 70-100 red).
 
-### UI Settings
+### Saving and Leaving the Builder
 
-Open the settings panel to configure app-wide options:
+- **Save** saves the app and keeps you in the builder (*Saved. You can keep editing.*); **Save & Run** saves it and opens it in the runner. The status next to the buttons reads **Unsaved changes** whenever the app differs from what was last saved.
+- **Undo** (or **Ctrl+Z**, **⌘Z** on a Mac) reverses edits one at a time, newest first — adding, removing, moving and remapping fields and sections among them. While you type in a field, Ctrl+Z undoes the typing in that field instead.
+- **Preview & Test Run** shows the form as it is now, unsaved changes included, and runs the **published module** in MAS when you execute it. A **Preview run** note says so; running a preview does not save the app. **Back to Editing** returns to the canvas.
+- **Leaving with unsaved changes** — the breadcrumb, the sidebar (pages and recent items) and the browser's **Back** / **Forward** buttons ask **Leave without saving?** first: **Stay**, **Discard Changes**, or **Save and Leave**. In the browser and Job Execution versions, reloading or closing the tab shows the browser's own leave prompt. **The desktop app does not prompt when its window is closed**: unsaved changes are then lost, so save before closing it.
 
-| Setting | Options |
-|---------|---------|
-| **Title** | The heading shown at the top of the app |
-| **Submit Button Label** | Text on the execute button (e.g. "Score", "Calculate", "Submit") |
-| **Show Execution Time** | Display how long the scoring request took |
-| **Theme** | Default, Compact, or Card |
-| **Output Layout** | Inline (outputs mixed with inputs), Below (outputs in a separate section), or Side-by-side (inputs on the left, outputs on the right) |
+### When the Module Changes
+
+The builder compares the app's fields with the module's current step signature. When they differ, a banner above the toolbar lists:
+
+- **New inputs with no field** — sent as missing (null) until you add them.
+- **New outputs with no field.**
+- **Fields for parameters the signature no longer lists** — these are not sent.
+
+**Add to section…** adds a field for every new parameter to the section you pick (or a **New section**), and **Remove orphaned fields** removes the fields whose parameters are gone; **Undo** reverses either. The banner can be dismissed. To re-read the module (for example after it was republished), use **Replace / Re-sync Module** and pick the current module again.
 
 ### Running a UI App
 
 From the **UI Apps** list, click **Run** on any app. The runner displays the form as configured in the builder.
 
 1. Fill in the input fields.
-2. Click the submit button (label configured in settings).
+2. Click the run button (its text is set with **Button:** in the builder; default `Execute`).
 3. Output fields update with the results.
-4. Click **Reset** to clear the form and start over.
+4. Click **Clear All** to reset the form and start over.
+
+**Checks before running:** the runner checks every visible, editable input before anything is sent to MAS. It checks the type and size the step signature declares (a number for a numeric input, a whole number for an integer input, numbers in a numeric array, a string no longer than its declared size) and the field settings from the builder (**Required**, **Min**, **Max**, **Max length**). Each problem is shown under its field — e.g. *Enter a whole number. The step signature declares this input as integer.* or *Use at most 8 characters (now 11).* — and a **Not run: check the highlighted fields** message counts them. These checks cover only the step signature's types and sizes and the app's field settings: they do not know the module's own rules, which run in MAS, so a value that passes them can still be rejected or produce an unexpected result.
+
+**How values are sent:** each value is sent as its parameter's type. Text stays text (`"007"` stays `"007"`), numbers are sent as numbers and array inputs as arrays. A slider you have not touched sends the value it shows.
+
+**When the module has changed:** if the app's fields differ from the module's current step signature, the runner says so in a banner (the app still runs): inputs in the signature with no field in the app are sent as missing (null), fields for parameters the signature no longer lists are not sent (inputs) or stay empty (outputs), and outputs the app does not show are named. Edit the app to add or remove those fields.
 
 **Header actions in the runner:**
 
@@ -659,17 +751,18 @@ The **UI Apps** list page shows all your apps as cards.
 | **Import** | Upload a previously exported JSON file to create a new app |
 | **Delete** | Remove the app (requires confirmation) |
 
-### Replace Module
+### Replace / Re-sync Module
 
-When editing an existing UI App, you can swap the underlying module without starting from scratch:
+When editing an existing UI App, you can swap the underlying module without starting from scratch, or re-read the current module after it has changed:
 
-1. Click **Replace Module** in the builder toolbar.
-2. Browse and search modules. Use the type filter to narrow results.
-3. Select the new module and its step.
-4. A parameter mapping screen appears showing the old and new parameters side by side. The app auto-matches parameters by name. You can manually remap or remove any field.
-5. Click **Replace** to apply the changes.
+1. Click **Replace / Re-sync Module** in the builder toolbar.
+2. Browse and search modules. Use the type filter to narrow results. The app's own module is marked **(current: re-sync)** — pick it to re-read its current step signature.
+3. Select the module and its step, then click **Next: Map Parameters**.
+4. A parameter mapping screen (**Map Parameters**, or **Re-sync Parameters** for the current module) shows each current field next to a parameter of the module's step. The app auto-matches parameters by name. You can manually remap any field, or choose **(unmapped — will be removed)**.
+5. **Parameters with no field** lists the step's parameters that no field maps to. Ticked ones are added as fields, in the section you pick under **Add to section** (or a **New section**); an input left out is sent as missing (null).
+6. Click **Apply** to apply the changes (the button counts the mapped and added fields).
 
-Fields that map successfully keep their widget configuration, labels, and settings. Unmapped fields are removed.
+Fields that map successfully keep their widget configuration, labels, and settings. Unmapped fields are removed. **Undo** in the builder reverses the whole replacement or re-sync.
 
 ---
 
@@ -680,6 +773,22 @@ The **View Flows** page lets you explore SAS Intelligent Decisioning decision fl
 ### Flow List
 
 The list page shows all decision flows in your environment. Use the search box to filter by name or description. Click a decision to open its flow diagram.
+
+The **MAS module** column says whether each decision is published to MAS, from the decisions' completed publish records checked against the modules MAS has (one lookup for the whole list, so the column may show **Checking…** for a few seconds):
+
+- **Published** with the module name — click the name to open the module in this app and score it. A **+N** marks other modules the decision was also published as. When MAS could not be asked, the link's tooltip says the module comes from the publish history and was not checked.
+- **Not published** — no completed publish to MAS.
+- **Module removed** — the decision was published, but MAS no longer has the module.
+- **Unknown** — the publish history could not be read.
+
+### Scoring a Published Decision
+
+A decision's flow page shows, under its name, **Published to MAS as <module> — Score** when it has been published to MAS and MAS has the module. Click it to open that module in this app (its Module Details page), where **Execute** on a step opens the scoring panel. The button says more when it needs to:
+
+- *Published …; the flow has been modified since, so the module runs the revision published then* — the flow was changed after it was published.
+- *From the publish history; MAS could not be asked whether the module still exists.*
+- **Also published as** lists other modules, and *Earlier modules no longer in MAS* names removed ones.
+- **Not published to MAS**, or **Published to MAS as <module>, but MAS no longer has that module**, when there is nothing to score.
 
 ### Flow Diagram
 
@@ -708,6 +817,27 @@ The diagram renders the full decision flow with all node types:
 - **Fit View** — Click the fit-to-screen button to zoom the entire flow into view.
 - **Mini Map** — A small overview in the bottom-right corner for navigation.
 - **Legend** — Toggle the legend to see what each node color and shape represents.
+- **Keyboard** — Tab to a node and press **Enter** or **Space** to open its details, as a click does. The selected node has a clear ring, and it is centred when its details open.
+
+### Find Node
+
+The **Find node** box above the diagram (*Name, type or expression*) filters the nodes by name, node type, expression, or the sub-decision they sit in, and lists the matches (*12 matching nodes*; the first 50 are listed, so type more to narrow a long list). Pick one with the mouse, or with **↑** / **↓** and **Enter**: the diagram zooms to that node and opens its details. **Escape** closes the list.
+
+### Where Is This Variable Used
+
+Select a variable name to see which nodes use it. Variable names are selectable in the decision header's **Variables (N)** section, in a rule set's reads and writes in the side panel, and in a node's mappings and an assignment in the side panel. The diagram then:
+
+- marks the nodes whose own rules or terms **write** it (solid outline), **read** it (dashed outline) or both (double outline), and the nodes it is only **mapped into or out of** (dotted outline), each with a tag (**Reads**, **Writes**, **Reads + writes**, **Mapped in**, **Mapped out**, **Mapped in + out**), and dims the rest;
+- shows a summary bar above the canvas (*Where `Score` is used: 2 writes · 3 reads · 1 mapped · 4 not checked*) with **Clear trace**;
+- lists the nodes in the side panel under **Where `Score` is used** — **Read or written by its rules or terms**, **Mapped into or out of**, and **Not checked** — and each entry takes you to its node.
+
+Select the same name again, click **Clear trace**, or press **Escape** to stop.
+
+**What the trace knows — and what it does not.** This is lineage from the decision's metadata, not an execution trace. Rule sets, branch conditions, assignments and record contact are read from the terms SAS Intelligent Decisioning records for them. Code files, models, REST calls, treatments, segmentation trees and sub-decisions are shown by their input and output mappings only: they may use a variable internally in ways the app cannot see. Nodes of those kinds with no mappings at all are listed as **Not checked**, because the app cannot tell whether they use the variable. Free-text expressions are not read. The trace does not show which rule fires or what value results, and a write inside a rule happens only when that rule's conditions are met.
+
+### When Referenced Objects Cannot Be Loaded
+
+If a sub-decision, rule set or REST API definition the flow refers to cannot be loaded, the page says so — *2 referenced objects could not be loaded* — and lists each one with the reason. Their nodes are marked **Unavailable**: a sub-decision is not expanded, and a rule set or REST API node has no badges, so the diagram may be missing parts of the decision. **Retry** loads them again; **Copy details** copies the error for a support ticket.
 
 ### Node Details Side Panel
 
@@ -732,7 +862,11 @@ If the decision has an associated workflow, the flow header shows the current wo
 
 ### Export
 
-Click **Export** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details. Rule set sections show the same execution-order chain as the side panel, with the reads/writes lists and any validation messages. Two inventory tables precede the diagram: **Rule Sets** (every rule set the decision executes, with rule count, type, version and validation status) and **Lookup Tables & Lists** (every lookup table and advanced list those rule sets read, and which rules use them). If the decision calls any REST API definitions, the document also contains an **External Endpoints** table listing every outbound call — the node, HTTP method, endpoint, authorization type and definition version. Together these three tables are the decision's external dependencies, which is useful for review and governance. The export reuses everything the page has already loaded, so it does not re-request rule sets or REST definitions.
+Click **Export Markdown** to generate a Markdown document with a Mermaid diagram of the flow and enriched node details. Rule set sections show the same execution-order chain as the side panel, with the reads/writes lists and any validation messages. Two inventory tables precede the diagram: **Rule Sets** (every rule set the decision executes, with rule count, type, version and validation status) and **Lookup Tables & Lists** (every lookup table and advanced list those rule sets read, and which rules use them). If the decision calls any REST API definitions, the document also contains an **External Endpoints** table listing every outbound call — the node, HTTP method, endpoint, authorization type and definition version. Together these three tables are the decision's external dependencies, which is useful for review and governance. The export reuses everything the page has already loaded, so it does not re-request rule sets or REST definitions.
+
+A **Variable Usage** table lists every variable with its direction and the nodes that write it, read it, or have it mapped in or out, followed by the nodes that are **Not checked** (no mappings declared, so they may use any variable). It is the same lineage as [Where Is This Variable Used](#where-is-this-variable-used), with the same caveat at its top: it comes from the decision's metadata, not from an execution; it does not show which rule fires or what value results; and code files, models, sub-decisions, REST calls and other mapped nodes are shown by their mappings only.
+
+**When details are missing:** if parts of the flow could not be loaded from SAS Viya, the file opens with an **Incomplete Sections** list naming each affected section and why, and each of those sections starts with an *Incomplete section* note; the page says *Exported with N missing details; see "Incomplete Sections" at the top of the file.* Export again to retry. If the export fails altogether, **The Markdown export failed** shows the error instead of nothing happening.
 
 ---
 
@@ -746,7 +880,8 @@ Lists every segmentation tree in the environment; search by name or description 
 
 ### Reading the Page
 
-- **Header** — name, description, version and counts (splits, paths, outcomes), a link that opens the tree in SAS Intelligent Decisioning, **Test whole tree…** and **Export paths (CSV)**.
+- **Header** — name, description, version and counts (splits, paths, outcomes), a link that opens the tree in SAS Intelligent Decisioning, **Test whole tree…**, **Tests on this tree…**, **Find path for a record…** and **Export paths (CSV)**.
+- **Find bar** — above the centre view: find in the tree and step through matches, paths, dead ends or failed paths, with the **Variables** summary below it (see [Find in Tree](#find-in-tree)).
 - **Breadcrumb** — the path from the top of the tree to where you are. Click any step to jump back to that level. The **▾** beside a step lists the other branches at that level (with how many paths sit below each, or the outcome it assigns) and switches to one of them, so you can move sideways without climbing back up.
 - **Centre: Split, Outline, Diagram or Icicle** — four ways to look at the tree (see below). All three follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
 - **Left: Outcomes** — every outcome with its output values and how many paths reach it. Search by name or value, group by an output variable (e.g. `ScenarioGroup`), or filter to outcomes with failed or unreachable paths. Clicking an outcome reached by one path jumps straight to it; an outcome reached by several paths expands to list them, showing the conditions **every** path shares once and only what differs under each path.
@@ -766,6 +901,21 @@ The page address carries your position (`?at=…`), so the browser's Back button
   - **Dead ends** (and **test results** after a test run) — the dead-end or failed paths in a strong colour, the blocks leading to them in a light tint.
 
 Large trees are not opened all at once. On load the Outline opens the top levels until about 150 branches are showing and the Diagram until about 40; everything deeper stays collapsed until you open it. Selecting a node anywhere opens the tree up to it. **Open one more level**, **Collapse all** and **Reset** (back to the starting view) apply to the tab you are on, the Outline also has **Expand all**, and while either tab is open the outcome list moves below the tree to give it the width.
+
+### Find in Tree
+
+The find box above the tree (*Find variable, condition or outcome...*) searches split variables, branch conditions and outcomes. Matches are marked in the Outline and the Icicle, and the selected match is shown in every view.
+
+**Previous** / **Next** step through a list, chosen with **Step through**:
+
+- **Find matches** — the find results (*Match 3 of 12*).
+- **All paths (N)** — every path in the tree's order.
+- **Dead ends (N)** — the unreachable paths, when the tree has any.
+- **Failed paths (N)** — after a test run whose results are on show.
+
+Stepping works in both directions. In the find box, **Enter** / **Shift+Enter** go to the next / previous match; anywhere on the page, **Alt+↓** / **Alt+↑** go to the next / previous item in the chosen list. **Shortcuts** next to the buttons lists these keys.
+
+**Variables (N)** below the find bar opens a summary of every variable the tree splits on: its type, how many splits test it, at which levels, and its cut points or values (branches whose condition could not be read are counted as *not read*). **Find** on a row searches the tree for that variable.
 
 ### Merged and Raw Conditions
 
@@ -797,6 +947,23 @@ The page finds them when the tree loads. A banner says how many there are, with 
 
 **Export paths (CSV)** writes one row per path: its number, one column per variable with the merged condition, the outcome, its output values and whether the path is reachable — effectively the strategy table rebuilt from the tree, which makes it easy to compare against the spreadsheet a tree was built from.
 
+### Find Path for a Record
+
+**Find path for a record…** predicts which path a record takes. Enter the record as **JSON** — paste it in the format **Copy → Sample input (JSON)** produces (numbers as JSON numbers, text in quotes, `null` for missing) — or as a **Form** with one field per variable the tree tests (blank is missing). **Start from Path N's sample input** fills it from the selected path. Tick **Take variables that are not in the record as missing** to carry on where the record has no value; otherwise the prediction stops there. Click **Predict path**.
+
+The result is labelled **Predicted path — from the tree's conditions, not executed by SAS**. It names the path and its outcome with the values it assigns, and lists each step: the variable, its value, and every branch tried in order — *does not match*, or *matched, taken* (the first branch that holds wins, and **Other** takes whatever reaches it). **Show the predicted path on the tree** selects the path.
+
+**This is a prediction, not a SAS run.** The page reads the tree's branch conditions; it does not run or imitate the code SAS Intelligent Decisioning generates. Wherever it cannot be sure, it stops — **Stopped at step N: cannot decide** — marks that step **Not decided**, and says why. It stops at:
+
+- an expression, or a branch condition it could not fully read;
+- a variable that is not an input in the tree's signature (a function or a derived value), or that the record does not carry;
+- a type mismatch — text for a number, a number for text, a decimal for an integer; nothing is converted;
+- a SAS special missing value given as text (`.`, `.A`–`.Z`, `._`) — give `null` for missing;
+- a number within rounding distance of a cut point, but not equal to it;
+- text that differs from a branch value only in upper or lower case or in leading or trailing blanks, a value with leading or trailing blanks, and a branch value that is blank or looks like a list or an expression.
+
+If no branch matches and the split has no Other branch, it says the record leaves the tree there without an outcome. **Show where it stopped** selects that point on the tree. The prediction cannot prove which path SAS takes; a real run — a test (see [Testing Paths](#testing-paths)) or a scored record — only shows the outcome SAS produces.
+
 ### Testing Paths
 
 **Test this path…** (path panel), **Test N paths…** (any point in the tree), **Test all N paths…** (an outcome) and **Test whole tree…** (header) open the same dialog for that set of paths.
@@ -815,6 +982,19 @@ The folder and caslib you pick are remembered for next time.
 The last test results are kept for the browser session for that revision of the tree, so they are still there after you leave the page and come back; a new revision of the tree starts without them. Dismissing the results banner hides them, and **Show last test results** in the header brings them back.
 
 **When a run fails.** SAS Intelligent Decisioning records no error message for these runs, so the dialog reads the run's SAS log and shows its **ERROR** lines (or, when there are none, its warnings or last lines). Below them are the **Full log**, **Download the log**, **Open the log in SAS Viya** and a link that opens the tree's tests in SAS Intelligent Decisioning.
+
+### Tests on This Tree
+
+**Tests on this tree…** lists the tests and scenarios saved on the tree in SAS Intelligent Decisioning. Each one shows the tree revision it is pinned to — **Revision 2.0 (current)**, or **Older revision 1.0** in a warning colour — because a test scores the revision its definition names, not necessarily the one on screen.
+
+For each **table test**:
+
+- **Show last results** reads the output table of the test's last completed run and shows the results on the tree. If none of the recent runs completed, or the output table is gone (for example when its CAS session ended), it says so and suggests running the test again.
+- **Run again** runs the test and shows the new results on the tree. For a test pinned to an older revision, **Run on the current revision…** offers **Move and run** (changes the saved test in SAS Intelligent Decisioning so it tests the current revision, then runs it; its rows and expected values stay as saved) or **Run on its own revision**.
+
+Result rows are matched to paths by their `_pathId`. Rows whose path is not in this revision of the tree (removed, or split further) are counted and flagged, not shown on it. Closing the dialog during a run stops waiting; the run continues in SAS Viya.
+
+**Scenarios** are listed with their revision, but keep their expected values in the scenario rather than in an output table, so they are run and checked on the tree's **Scenarios** tab in SAS Intelligent Decisioning.
 
 ---
 
@@ -849,30 +1029,51 @@ The **Test Coverage** page helps you understand which of your SAS Intelligent De
 
 - **Coverage Gauge** — A circular gauge showing overall coverage percentage.
 - **Stat Cards** — Total assets, assets with tests, and assets without tests.
+- **Test Health** — How the covered assets' tests stand (see below).
 - **Coverage by Asset Type** — A bar chart showing coverage percentage for each asset type (Decisions, Business Rules, Code Files, etc.), color-coded by coverage level.
+
+**Test Health:**
+
+For each test, the analysis looks up its **last run** — the state SAS recorded for the newest score execution of that test, with its date — and whether the asset **changed since the test**. Covered assets then roll up as:
+
+| Health | Meaning |
+|--------|---------|
+| **Healthy** | No test's latest run failed, and at least one completed |
+| **Failing** | A test's latest run failed |
+| **No finished run** | No completed or failed run recorded |
+| **No run in scan** | No run was found within the scan limit; a run may exist further back (**Runs not read** when the executions could not be read) |
+| **Changed since tests** | Every test of the asset predates its current state |
+
+Read these words exactly as meant:
+
+- **"Completed" means the run finished, not that its expected values matched.** The app reads the state SAS recorded; it does not compare the run's output with expected values, so a Healthy asset can still have tests whose results differ.
+- **"Changed since test"** means the test targets another revision than the asset's current one, or the asset was modified after the test was created. It does not mean the test would now fail.
+- **The scan of runs has a limit.** Runs are read newest first, up to the 3,000 newest score executions. When the limit is reached, the card says so (*Latest runs found for 40 of 52 tests, from the 3,000 newest score executions (the scan limit).*), and a warning above the results explains that tests showing **No run in scan** may have a run further back. If the score executions could not be read, a warning says so; coverage itself is not affected.
+
+**Show the N covered but failing or changed** in the card (or the **Coverage** filter below) narrows the table to the assets at risk; **Show all assets** goes back.
 
 **Detail Table:**
 
-The table lists every asset with columns for Name, Type, Coverage status, number of Tests, Created By, and Modified date.
+The table lists every asset with columns for Name, Type, Coverage status, number of Tests, Test health (with a **Changed since tests** marker), Created By, Modified date, and links.
 
 - **Search** — Filter by name or author; the table updates shortly after you stop typing.
 - **Type filter** — Show only a specific asset type.
-- **Coverage filter** — Show All, Covered only, or Uncovered only.
+- **Coverage filter** — Show All, Covered only, Uncovered only, or **Covered, but failing or changed since tests**.
 - Click a column header (or Tab to it and press **Enter**) to sort.
 - The table is paginated; expanded rows stay expanded when you page away and back, and **Export CSV** always includes every filtered row.
 
 **Expanding a Row:**
 
-Click the chevron on any covered asset to expand it and see its individual test scenarios — including the scenario name, type, and description.
+Click the chevron on any covered asset to expand it and see its individual test scenarios — the name, type, **Last run** (the recorded state, such as *Completed* or *Failed*, with its date, or *No run recorded* / *No run in the 3,000 newest runs*), **Changed since test** (e.g. *Targets revision 1a2b3c4d; the asset is now at 5e6f7a8b*, or *Asset modified …, after this test was created …*; *None shown in the metadata* otherwise), and description.
 
 **Deep Links:**
 
-Each asset row has a link icon that opens the asset in SAS Intelligent Decisioning. Decision assets also have a flow icon that opens the in-app flow viewer.
+Each asset row has a link icon that opens the asset in SAS Intelligent Decisioning. Decision assets also have a flow icon that opens the in-app flow viewer, and — when the decision is published to a module MAS has — a **Score** icon that opens that module in this app (see [Scoring a Published Decision](#scoring-a-published-decision)). Segmentation trees have an icon that opens them in the [Segmentation Tree Explorer](#14-segmentation-tree-explorer).
 
 ### Exporting
 
-- **Export CSV** — Downloads a `test-coverage.csv` file with all assets and their coverage status.
-- **Export Markdown** — Downloads a formatted `test-coverage-report.md` with the full analysis, including a **Data Collection** section (what was read and what was counted as a test) and a warning at the top when the collection was incomplete.
+- **Export CSV** — Downloads a `test-coverage.csv` file with all assets and their coverage status, including **Test Health**, **Changed Since Tests**, **Latest Run State** and **Latest Run** columns.
+- **Export Markdown** — Downloads a formatted `test-coverage-report.md` with the full analysis, including a **Test Health** section (with the same notes on what "completed" and "changed since tests" mean), a **Data Collection** section (what was read and what was counted as a test) and a warning at the top when the collection was incomplete.
 
 ---
 
@@ -958,6 +1159,7 @@ Selecting a job opens its detail page at `/jobs/<id>`. The header shows:
 - A **← Back to Job Monitoring** link.
 - A **Refresh** button that re-fetches the job record and log/listing for this one job.
 - A red **Cancel Job** or **Delete Job** button (see *Cancelling or Deleting a Job* below).
+- For a finished job, **Rerun** and **Rerun with changes…** (see *Rerunning a Job* below), and the **Application** that submitted it.
 
 The open tab is part of the link (`?tab=code`, for example), so a reload, **Back** or a shared link shows the same tab.
 
@@ -983,6 +1185,17 @@ The detail page exposes a single destructive action whose label depends on the j
 5. On success the app navigates you back to the Job Monitoring overview. The deleted job is also dropped from the in-memory cache so the KPI counts reflect the change immediately, without forcing a full re-walk of the job list.
 
 Both dialogs are dismiss-blocking while the underlying request is in flight — you can't accidentally close them mid-request — and surface a red error banner if SAS Viya returns a failure.
+
+#### Rerunning a Job
+
+A finished job (`completed`, `failed`, `canceled`, `timedOut`) submitted from SAS Job Execution or SAS Studio — or whose request does not name the submitting application, which the dialog then notes — can be submitted again from its detail page:
+
+- **Rerun** — a confirmation (*Rerun this job?*) says what will happen: the job is submitted again as a new job, under your user, with the same arguments as the original run; this job stays as it is. Click **Rerun job**.
+- **Rerun with changes…** — the same, but first lists the original arguments (and the parameters the job definition declares) as fields you can edit. Changed fields are tagged **changed**, a parameter that was not passed originally shows its default, and the dialog counts the changed values. Click **Rerun with these values**.
+
+When the original request named a job definition by URI, the rerun uses that definition as it is now, which may differ from the version the job ran — the dialog says so; otherwise it runs the same code the job ran. The new job opens at once with its live log.
+
+Jobs submitted by other services — score executions and SAS Intelligent Decisioning tests, publishing validations, Model Studio pipelines and the like — are not offered a rerun: those services keep their own record of each run, so the page says *Rerun is not offered: it was submitted by …* and asks you to run it again from that application. A job whose stored request has neither a job definition URI nor the definition code cannot be rerun either, and the page says why.
 
 The page has four tabs:
 
@@ -1181,7 +1394,10 @@ The application meets **WCAG 2.1 AA**: every control can be reached and operated
 - **Tab** / **Shift+Tab** move between controls everywhere — including table rows that open something (the row's name is the button), sort headers, file drop zones, the sidebar and the icon buttons. The focused control shows a blue ring.
 - **Enter** or **Space** activates the focused control; **Space** toggles a row checkbox.
 - In any dialog, **Escape** closes it, **Tab** stays inside it, and focus returns to the control that opened it when it closes. A click on the dark area outside the dialog also closes it.
-- **Escape** also closes the node details panel in View Flows and the navigation drawer on narrow layouts.
+- **Escape** also closes the navigation drawer on narrow layouts. In View Flows it first clears a variable trace, then closes the node details panel.
+- In View Flows, **Enter** or **Space** on a focused node opens its details, as a click does; in **Find node**, **↑**/**↓** and **Enter** pick a match.
+- In the Segmentation Tree Explorer, **Enter** / **Shift+Enter** in the find box go to the next / previous match, and **Alt+↓** / **Alt+↑** anywhere on the page step through the chosen list (matches, paths, dead ends or failed paths).
+- In the UI Builder, **Ctrl+Z** (**⌘Z** on a Mac) undoes the last edit when you are not typing in a field.
 - Menus (**Copy ▾**, the breadcrumb's **▾** branch lists) open with **Enter**, **Space** or **↓**; **↑**/**↓**, **Home** and **End** move between items, **Enter** picks one and **Escape** closes the menu.
 - Severity and status are never conveyed by colour alone — error rows carry a **×** marker and a red bar, badges carry text, and log lines carry a glyph.
 - With the operating system's **reduce motion** setting on, nothing in the app animates or spins.

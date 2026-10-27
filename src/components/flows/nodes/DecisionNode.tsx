@@ -3,11 +3,12 @@
 
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { SidNodeData } from '../../../types/sid';
+import NodeFrame, { isUnavailable } from './NodeFrame';
 import { NODE_COLORS, CODE_TYPE_LABELS, NODE_TYPE_LABELS } from '../../../flow/constants';
 
 type DecisionNodeType = Node<SidNodeData, 'decision'>;
 
-export default function DecisionNode({ data }: NodeProps<DecisionNodeType>) {
+export default function DecisionNode({ id, data, selected }: NodeProps<DecisionNodeType>) {
   const colors = NODE_COLORS[data.nodeType];
   const codeType = data.step?.customObject?.type;
   let badge: string;
@@ -27,35 +28,37 @@ export default function DecisionNode({ data }: NodeProps<DecisionNodeType>) {
   return (
     <>
       <Handle type="target" position={Position.Top} />
-      <div
-        style={{
-          borderRadius: '8px',
-          border: `2px solid ${colors.border}`,
-          padding: '8px 16px',
-          minWidth: '160px',
-          textAlign: 'center',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-          backgroundColor: colors.bg,
-        }}
-      >
-        <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '2px 8px',
-              borderRadius: '9999px',
-              color: 'var(--sas-white)',
-              fontSize: '10px',
-              backgroundColor: colors.badge,
-            }}
-          >
-            {badge}
-          </span>
+      <NodeFrame id={id} selected={selected} unavailable={isUnavailable(data)}>
+        <div
+          style={{
+            borderRadius: '8px',
+            border: `2px solid ${colors.border}`,
+            padding: '8px 16px',
+            minWidth: '160px',
+            textAlign: 'center',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            backgroundColor: colors.bg,
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                color: 'var(--sas-white)',
+                fontSize: '10px',
+                backgroundColor: colors.badge,
+              }}
+            >
+              {badge}
+            </span>
+          </div>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
+            {data.label}
+          </div>
         </div>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
-          {data.label}
-        </div>
-      </div>
+      </NodeFrame>
       <Handle type="source" position={Position.Bottom} />
     </>
   );

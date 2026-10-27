@@ -20,7 +20,13 @@
  */
 export type SessionRenewal = 'renewed' | 'dismissed' | 'unavailable';
 
-type SessionExpiredHandler = () => Promise<SessionRenewal>;
+/**
+ * `force`: skip the quiet check that the session is still valid and ask the
+ * user to sign in. Used when a request was turned away again right after that
+ * check said the session was fine (for example, the tokens are unexpired but
+ * SAS Logon no longer accepts them for every service).
+ */
+type SessionExpiredHandler = (options: { force: boolean }) => Promise<SessionRenewal>;
 
 let handler: SessionExpiredHandler | null = null;
 let pending: Promise<SessionRenewal> | null = null;
@@ -41,11 +47,11 @@ export function setSessionExpiredHandler(next: SessionExpiredHandler): () => voi
 }
 
 /** Called by the API client on a response that shows the session has ended. */
-export function requestSessionRenewal(): Promise<SessionRenewal> {
+export function requestSessionRenewal(options: { force?: boolean } = {}): Promise<SessionRenewal> {
   if (pending) return pending;
   if (dismissed) return Promise.resolve('dismissed');
   if (!handler) return Promise.resolve('unavailable');
-  const current = handler()
+  const current = handler({ force: options.force ?? false })
     .catch((): SessionRenewal => 'dismissed')
     .then((result) => {
       if (result === 'dismissed') dismissed = true;

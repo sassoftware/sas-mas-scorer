@@ -14,6 +14,8 @@ export interface StoredTestRun {
   ranAt: string;
   outputTable: string;
   results: TestRunResults;
+  /** Which tree revision the run scored, as shown to the user. */
+  revisionNote?: string;
 }
 
 interface StoredShape {

@@ -440,6 +440,47 @@
   font-size: 0.85em;
 }
 
+/* Required marker; the control itself carries aria-required */
+.ui-runner__field-required {
+  color: var(--sas-error-dark);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The author's limits (Min / Max / length), stated under the control */
+.ui-runner__field-constraint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+/* Pre-run check: a red border plus the message text, not colour alone */
+.ui-runner__field-error {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  /* -dark: the base error red is under 4.5:1 for small text */
+  color: var(--sas-error-dark);
+}
+
+.ui-runner__field--invalid .sas-input,
+.ui-runner__field--invalid .sas-textarea {
+  border-color: var(--sas-error-dark);
+}
+
+.ui-runner__field--invalid .ui-runner__radio-group,
+.ui-runner__field--invalid .ui-runner__toggle {
+  outline: 1px solid var(--sas-error-dark);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Signature notice: which parameters, one line each */
+.ui-runner__drift-list {
+  margin: 0 0 var(--space-1);
+  padding-left: var(--space-4);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .ui-runner__fields--cols-2,

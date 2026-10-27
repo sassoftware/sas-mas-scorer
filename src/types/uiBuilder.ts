@@ -65,6 +65,11 @@ export type WidgetType =
   | 'hidden'
   | 'markdown';
 
+/**
+ * Per-field settings. Every member is optional: definitions saved by older
+ * versions (in localStorage, exported JSON and share links) carry only some of
+ * them, and a missing member always means the pre-2.12 behaviour.
+ */
 export interface FieldValidation {
   min?: number;
   max?: number;
@@ -73,7 +78,18 @@ export interface FieldValidation {
   options?: FieldOption[];
   valueMappings?: ValueMapping[];
   gaugeConfig?: GaugeConfig;
+  /** Input must have a value before the app runs (default false). */
+  required?: boolean;
+  /** Longest accepted text; unset falls back to the parameter's MAS size. */
+  maxLength?: number;
+  /** Value a Toggle sends when on (default 1, or "Y" for a string parameter). */
+  onValue?: string;
+  /** Value a Toggle sends when off (default 0, or "N" for a string parameter). */
+  offValue?: string;
 }
+
+/** A field's runtime problem, shown inline under the control. */
+export type FieldErrors = Record<string, string>;
 
 export interface FieldOption {
   label: string;

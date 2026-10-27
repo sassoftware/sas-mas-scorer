@@ -10,7 +10,9 @@ import { buildDecisionDeepLink } from '../../utils/deepLinks';
 import { Button } from '../common';
 import FlowDeepLink from './FlowDeepLink';
 import FlowExportButton from './FlowExportButton';
+import { FlowScoreAction } from '../coverage/DecisionScoreAction';
 import CollapsibleSection from './CollapsibleSection';
+import { TraceVariableButton } from './VariableTrace';
 
 interface FlowHeaderProps {
   flow: DecisionFlow;
@@ -18,6 +20,10 @@ interface FlowHeaderProps {
   restApiCache?: Map<string, RestApiDefinitionDetail>;
   ruleSetCache?: Map<string, RuleSetBundle>;
   onShowWorkflowHistory?: () => void;
+  /** The variable traced in the diagram, if any. */
+  tracedVariable?: string | null;
+  /** Start or stop tracing a variable; makes the variable names toggle buttons. */
+  onTraceVariable?: (name: string) => void;
 }
 
 const NULL_WF_ID = 'WF00000000-0000-0000-0000-000000000000';
@@ -71,7 +77,13 @@ function MetaItem({ label, value, mono }: { label: string; value?: string; mono?
   );
 }
 
-function VarTable({ title, vars, badgeDirection }: { title: string; vars: SignatureVar[]; badgeDirection: string }) {
+function VarTable({ title, vars, badgeDirection, tracedVariable, onTraceVariable }: {
+  title: string;
+  vars: SignatureVar[];
+  badgeDirection: string;
+  tracedVariable?: string | null;
+  onTraceVariable?: (name: string) => void;
+}) {
   return (
     <div className="flow-var-table">
       <h5 className="flow-var-table__title">
@@ -92,7 +104,11 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
         <tbody>
           {vars.map((v) => (
             <tr key={v.id} className="sas-table__row">
-              <td className="sas-table__td flow-var-table__col-name" title={v.name}>{v.name}</td>
+              <td className="sas-table__td flow-var-table__col-name" title={onTraceVariable ? undefined : v.name}>
+                {onTraceVariable
+                  ? <TraceVariableButton name={v.name} traced={tracedVariable} onTrace={onTraceVariable} />
+                  : v.name}
+              </td>
               <td className="sas-table__td flow-var-table__col-desc" title={v.description ?? ''}>{v.description ?? ''}</td>
               <td className="sas-table__td">
                 <span className={directionBadgeClass(v.direction)}>
@@ -111,8 +127,9 @@ function VarTable({ title, vars, badgeDirection }: { title: string; vars: Signat
 }
 
 export default function FlowHeader({
-  flow, subDecisionCache, restApiCache, ruleSetCache, onShowWorkflowHistory,
+  flow, subDecisionCache, restApiCache, ruleSetCache, onShowWorkflowHistory, tracedVariable, onTraceVariable,
 }: FlowHeaderProps) {
+  const traceProps = { tracedVariable, onTraceVariable };
   const sig = flow.signature ?? [];
   const inputs = sig.filter((v) => v.direction === 'input' || v.direction === 'inOut');
   const outputs = sig.filter((v) => v.direction === 'output' || v.direction === 'inOut');
@@ -133,12 +150,16 @@ export default function FlowHeader({
           <h1 className="flow-header__title">{flow.name}</h1>
           {flow.description && <p className="flow-header__desc">{flow.description}</p>}
         </div>
-        <FlowExportButton
-          flow={flow}
-          subDecisionCache={subDecisionCache}
-          restApiCache={restApiCache}
-          ruleSetCache={ruleSetCache}
-        />
+        {/* Score this decision (journey-3); styles in coverage.css. */}
+        <div className="decision-mas__actions">
+          <FlowScoreAction flowId={flow.id} flowModifiedTimeStamp={flow.modifiedTimeStamp} />
+          <FlowExportButton
+            flow={flow}
+            subDecisionCache={subDecisionCache}
+            restApiCache={restApiCache}
+            ruleSetCache={ruleSetCache}
+          />
+        </div>
       </div>
 
       {/* Workflow status */}
@@ -183,9 +204,14 @@ export default function FlowHeader({
       {sig.length > 0 && (
         <CollapsibleSection title={`Variables (${sig.length})`} defaultOpen={false}>
           <div className="flow-header__vars">
-            {inputs.length > 0 && <VarTable title="Input" vars={inputs} badgeDirection="input" />}
-            {outputs.length > 0 && <VarTable title="Output" vars={outputs} badgeDirection="output" />}
-            {temps.length > 0 && <VarTable title="Temporary" vars={temps} badgeDirection="none" />}
+            {onTraceVariable && (
+              <p className="flow-header__vars-hint">
+                Select a variable name to see where it is used in the diagram.
+              </p>
+            )}
+            {inputs.length > 0 && <VarTable title="Input" vars={inputs} badgeDirection="input" {...traceProps} />}
+            {outputs.length > 0 && <VarTable title="Output" vars={outputs} badgeDirection="output" {...traceProps} />}
+            {temps.length > 0 && <VarTable title="Temporary" vars={temps} badgeDirection="none" {...traceProps} />}
           </div>
         </CollapsibleSection>
       )}

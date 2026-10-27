@@ -14,8 +14,10 @@ const AUTH_REQUIRED_MESSAGE = 'Authentication required. Please log in.';
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _csrfRetry?: boolean;
   _authRetry?: boolean;
-  /** Set on the one retry after the user signed in again. */
+  /** Set on the retry after the session was renewed (quietly or by signing in). */
   _sessionRetry?: boolean;
+  /** Set once the user was asked to sign in for this request; no further prompt. */
+  _sessionPrompted?: boolean;
 };
 
 const SASLOGON_RE = /\/SASLogon\//i;
@@ -83,12 +85,16 @@ const retryAfterSignIn = async (
   status: number | undefined
 ): Promise<AxiosResponse> => {
   const details = { ...requestDetails(config), status };
-  if (config._sessionRetry) {
+  // First time: the session may only need a quiet check or token refresh.
+  // Turned away again after that: ask the user to sign in, once.
+  if (config._sessionPrompted) {
     throw failure(AUTH_REQUIRED_MESSAGE, details);
   }
-  const renewal = await requestSessionRenewal();
+  const force = !!config._sessionRetry;
+  const renewal = await requestSessionRenewal({ force });
   if (renewal === 'renewed') {
     config._sessionRetry = true;
+    if (force) config._sessionPrompted = true;
     return client(config);
   }
   throw failure(renewal === 'dismissed' ? SESSION_EXPIRED_MESSAGE : AUTH_REQUIRED_MESSAGE, details);

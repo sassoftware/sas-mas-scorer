@@ -19,6 +19,9 @@
   margin-left: var(--sidebar-width);
   background-color: var(--sas-gray-100);
   min-height: calc(100vh - var(--header-height));
+  /* A flex item defaults to its content's width: without this a wide table
+     widens the whole page instead of scrolling in its own wrapper. */
+  min-width: 0;
 }
 
 .sas-layout__content {
