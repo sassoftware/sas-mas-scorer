@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { UIField } from '../../types/uiBuilder';
+import { StepParameter } from '../../types';
 import { TextWidget } from './widgets/TextWidget';
 import { NumberWidget } from './widgets/NumberWidget';
 import { SliderWidget } from './widgets/SliderWidget';
@@ -14,32 +15,43 @@ import { ReadonlyWidget } from './widgets/ReadonlyWidget';
 import { GaugeWidget } from './widgets/GaugeWidget';
 import { BadgeWidget } from './widgets/BadgeWidget';
 import { MarkdownWidget } from './widgets/MarkdownWidget';
+import { InputWidgetProps } from './widgets/types';
 
 interface Props {
   field: UIField;
   value: unknown;
   onChange?: (value: unknown) => void;
   disabled?: boolean;
+  parameter?: StepParameter;
+  id?: string;
+  labelId?: string;
+  describedBy?: string;
+  invalid?: boolean;
 }
 
-export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, disabled }) => {
-  const handleChange = onChange ?? (() => {});
+export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...rest }) => {
+  const inputProps: InputWidgetProps = {
+    field,
+    value,
+    onChange: onChange ?? (() => {}),
+    ...rest,
+  };
 
   switch (field.widget) {
     case 'text':
-      return <TextWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <TextWidget {...inputProps} />;
     case 'number':
-      return <NumberWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <NumberWidget {...inputProps} />;
     case 'slider':
-      return <SliderWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <SliderWidget {...inputProps} />;
     case 'dropdown':
-      return <DropdownWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <DropdownWidget {...inputProps} />;
     case 'radio':
-      return <RadioWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <RadioWidget {...inputProps} />;
     case 'toggle':
-      return <ToggleWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <ToggleWidget {...inputProps} />;
     case 'textarea':
-      return <TextareaWidget field={field} value={value} onChange={handleChange} disabled={disabled} />;
+      return <TextareaWidget {...inputProps} />;
     case 'readonly':
       return <ReadonlyWidget field={field} value={value} />;
     case 'gauge':

@@ -6,13 +6,6 @@ import { Alert, Button, Modal, Pagination, ProgressBar } from '../common';
 import { FolderBrowser } from '../scoring/FolderBrowser';
 import { useCasCatalog } from '../../hooks/useCasCatalog';
 import { createScoreDefinition } from '../../api/scoreDefinitions';
-import { createScoreExecution, waitForScoreExecution } from '../../api/scoreExecution';
-import { getFileText } from '../../api/files';
-import { getSasViyaUrl } from '../../config';
-import { buildDeepLink } from '../../utils/deepLinks';
-import { downloadTextFile } from '../../utils/csv';
-import { logExcerpt, type LogExcerpt } from '../../utils/segTree/runLog';
-import FlowDeepLink from '../flows/FlowDeepLink';
 import {
   casTableState,
   getAllTableRows,
@@ -27,6 +20,8 @@ import {
   casTableName,
   compareResults,
   emptyCustomRow,
+  EXPECTED_PREFIX,
+  PATH_ID_COLUMN,
   scenarioPayload,
   tableTestPayload,
   testTableCsv,
@@ -35,12 +30,16 @@ import {
   type TestRow,
   type TestRunResults,
 } from '../../utils/segTree/testRows';
+import { readTestResults, runFailureText, runScoreDefinition, type RunFailure } from './runTreeTest';
+import SegTreeRunFailure from './SegTreeRunFailure';
 
 export interface TestRunSummary {
   testName: string;
   ranAt: string;
   outputTable: string;
   results: TestRunResults;
+  /** Which tree revision the run scored, as shown to the user ("Ran against revision 1.3 (current)"). */
+  revisionNote?: string;
 }
 
 interface SegTreeTestDialogProps {
@@ -59,22 +58,6 @@ interface SegTreeTestDialogProps {
   onShowFailure?: () => void;
 }
 
-/** Why a test run did not complete, with what its log says. */
-interface RunFailure {
-  state: string;
-  message?: string;
-  logUri?: string;
-  log?: string;
-  excerpt?: LogExcerpt;
-  logError?: string;
-}
-
-const EXCERPT_TITLE: Record<LogExcerpt['kind'], string> = {
-  errors: 'Errors in the run log',
-  warnings: 'The run log has no errors; its warnings',
-  tail: 'The run log has no errors or warnings; its last lines',
-};
-
 type Step = 'rows' | 'save' | 'run';
 type Mode = 'test' | 'scenarios';
 
@@ -88,6 +71,9 @@ const savePref = (key: string, value: string): void => {
 
 const PAGE_SIZE = 25;
 const SAVE_CONCURRENCY = 4;
+/** Each scenario run is its own SAS job; past this many a table test is the better tool. */
+const SCENARIO_RUN_LIMIT = 25;
+const RUN_CONCURRENCY = 2;
 const NAME_INVALID_CHARS = /[/{}]/;
 
 function validateName(name: string): string | null {
@@ -139,6 +125,8 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
   const [summary, setSummary] = useState<TestRunSummary | null>(null);
   const [failure, setFailure] = useState<RunFailure | null>(null);
   const [created, setCreated] = useState<{ ok: number; failed: string[] } | null>(null);
+  /** Scenarios that were created but whose run did not complete, with the reason. */
+  const [runFailures, setRunFailures] = useState<string[]>([]);
   const stopRef = useRef(false);
 
   useEffect(() => {
@@ -262,43 +250,24 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
       return;
     }
 
-    setPhase('Running the test');
-    const execution = await createScoreExecution(definition.id, `Execution for ${name.trim()}`);
-    const finished = await waitForScoreExecution(execution.id, () => stopRef.current);
-    if (stopRef.current) return;
-    if (finished.state !== 'completed' || !finished.outputTable) {
-      // A failed execution has no error message of its own (verified live);
-      // its log, a Files resource at logFileUri, is what explains it.
-      const info: RunFailure = { state: finished.state, message: finished.error?.message, logUri: finished.logFileUri };
-      if (finished.logFileUri) {
-        setPhase('Reading the run log');
-        try {
-          info.log = await getFileText(finished.logFileUri);
-          info.excerpt = logExcerpt(info.log);
-        } catch (err) {
-          info.logError = message(err, 'unknown error');
-        }
-        setPhase('Running the test');
-      }
-      setFailure(info);
-      throw new Error(
-        `The test run ended as "${finished.state}"${info.message ? `: ${info.message}` : ''}.` +
-        (info.excerpt ? ' The run log below shows why.' : ' Open the test in SAS Intelligent Decisioning to see its log.')
-      );
+    const outcome = await runScoreDefinition(definition.id, `Execution for ${name.trim()}`, () => stopRef.current, setPhase);
+    if (outcome.kind === 'stopped') return;
+    if (outcome.kind === 'failed') {
+      // The error names the step that failed: the run itself, not the log read.
+      setPhase('Running the test');
+      setFailure(outcome.failure);
+      throw new Error(runFailureText(outcome.failure));
     }
 
     setPhase('Reading the results');
-    const out = finished.outputTable;
-    const [cols, data] = await Promise.all([
-      getTableColumns(out.serverName, out.libraryName, out.tableName),
-      getAllTableRows(out.serverName, out.libraryName, out.tableName),
-    ]);
-    const results = compareResults(cols.map((c) => c.name), data.rows, outputVariables);
+    const out = outcome.execution.outputTable;
+    const results = await readTestResults(out, outputVariables);
     const finishedRun: TestRunSummary = {
       testName: name.trim(),
       ranAt: new Date().toISOString(),
       outputTable: `${out.libraryName}.${out.tableName}`,
       results,
+      revisionNote: 'Ran against the revision on screen',
     };
     setSummary(finishedRun);
     // Shown on the tree right away: however the dialog is closed now, the
@@ -323,12 +292,14 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     setTotal(list.length);
     setDone(0);
     setPhase(`Creating ${list.length} scenario${list.length !== 1 ? 's' : ''}`);
+    const definitionIds: (string | null)[] = new Array(list.length).fill(null);
     let next = 0;
     const worker = async () => {
       while (next < list.length && !stopRef.current) {
         const i = next++;
         try {
-          await createScoreDefinition(scenarioPayload(names[i], desc, list[i], generated, index, target()), parentFolderUri);
+          const definition = await createScoreDefinition(scenarioPayload(names[i], desc, list[i], generated, index, target()), parentFolderUri);
+          definitionIds[i] = definition.id;
           ok += 1;
         } catch (err) {
           failed.push(`${names[i]}: ${message(err, 'failed')}`);
@@ -339,7 +310,88 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     await Promise.all(Array.from({ length: Math.min(SAVE_CONCURRENCY, list.length) }, worker));
     rememberLocation();
     setCreated({ ok, failed });
-    setPhase(stopRef.current ? 'Stopped' : 'Scenarios created');
+    if (stopRef.current) {
+      setPhase('Stopped');
+      return;
+    }
+    if (!runNow || list.length > SCENARIO_RUN_LIMIT || ok === 0) {
+      setPhase('Scenarios created');
+      return;
+    }
+    await runScenarios(list, names, definitionIds);
+  };
+
+  // Run each new scenario in SAS Intelligent Decisioning, read its output row
+  // and compare it with the row's expected values, the same way as a table test.
+  const runScenarios = async (list: TestRow[], names: string[], definitionIds: (string | null)[]) => {
+    const toRun = list.map((row, i) => ({ row, name: names[i], id: definitionIds[i] })).filter((s) => s.id);
+    const actuals = new Map<string, Record<string, string>>();
+    const outputTables: string[] = [];
+    const problems: string[] = [];
+    let lastFailure: RunFailure | null = null;
+
+    setTotal(toRun.length);
+    setDone(0);
+    setPhase(`Running ${toRun.length} scenario${toRun.length !== 1 ? 's' : ''}`);
+    let next = 0;
+    const worker = async () => {
+      while (next < toRun.length && !stopRef.current) {
+        const s = toRun[next++];
+        try {
+          const outcome = await runScoreDefinition(s.id!, `Execution for ${s.name}`, () => stopRef.current, () => {});
+          if (outcome.kind === 'completed') {
+            const out = outcome.execution.outputTable;
+            const [cols, data] = await Promise.all([
+              getTableColumns(out.serverName, out.libraryName, out.tableName),
+              getAllTableRows(out.serverName, out.libraryName, out.tableName),
+            ]);
+            const lower = cols.map((c) => c.name.toLowerCase());
+            const first = data.rows[0] ?? [];
+            const actual: Record<string, string> = {};
+            for (const v of outputVariables) {
+              const at = lower.indexOf(v.toLowerCase());
+              actual[v] = at >= 0 ? String(first[at] ?? '') : '';
+            }
+            actuals.set(s.row.key, actual);
+            outputTables.push(`${out.libraryName}.${out.tableName}`);
+          } else if (outcome.kind === 'failed') {
+            lastFailure = outcome.failure;
+            problems.push(`${s.name}: ${runFailureText(outcome.failure)}`);
+          }
+        } catch (err) {
+          problems.push(`${s.name}: ${message(err, 'the run could not be read')}`);
+        }
+        setDone((d) => d + 1);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(RUN_CONCURRENCY, toRun.length) }, worker));
+    setRunFailures(problems);
+    if (problems.length === 1 && lastFailure) setFailure(lastFailure);
+    if (actuals.size === 0) {
+      setPhase(stopRef.current ? 'Stopped' : 'Scenarios created');
+      return;
+    }
+
+    // The same comparison as a table test: one row per scenario with its
+    // actual outputs next to the row's expected values.
+    const columns = [PATH_ID_COLUMN, ...outputVariables, ...outputVariables.map((v) => `${EXPECTED_PREFIX}${v}`)];
+    const tableRows = toRun
+      .filter((s) => actuals.has(s.row.key))
+      .map((s) => {
+        const key = s.row.key;
+        const actual = actuals.get(key)!;
+        return [key, ...outputVariables.map((v) => actual[v]), ...outputVariables.map((v) => s.row.expected[v] ?? '')];
+      });
+    const finishedRun: TestRunSummary = {
+      testName: names.length === 1 ? names[0] : name.trim(),
+      ranAt: new Date().toISOString(),
+      outputTable: outputTables.length === 1 ? outputTables[0] : `${outputTables.length} output tables in ${caslib}`,
+      results: compareResults(columns, tableRows, outputVariables),
+      revisionNote: 'Ran against the revision on screen',
+    };
+    setSummary(finishedRun);
+    onResults(finishedRun);
+    setPhase('Scenarios finished');
   };
 
   const handleSave = async () => {
@@ -352,6 +404,7 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
     setSummary(null);
     setFailure(null);
     setCreated(null);
+    setRunFailures([]);
     try {
       if (mode === 'test') await runTableTest();
       else await createScenarios();
@@ -492,7 +545,7 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
           <input type="radio" name="segtree-test-mode" checked={mode === 'scenarios'} onChange={() => setMode('scenarios')} />
           <span>
             <strong>{rows.length === 1 ? 'One scenario' : `One scenario per selected row (${selectedRows.length.toLocaleString()})`}</strong>
-            <span className="save-scenario-dialog__hint">Each row becomes a scenario with its inputs and expected outputs; run them from the tree's Scenarios tab in SAS Intelligent Decisioning.</span>
+            <span className="save-scenario-dialog__hint">Each row becomes a scenario with its inputs and expected outputs. They can run right away, with the results shown on the tree, or later from the tree's Scenarios tab in SAS Intelligent Decisioning.</span>
           </span>
         </label>
       </fieldset>
@@ -588,6 +641,18 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
           </label>
         </>
       )}
+      {mode === 'scenarios' && (
+        selectedRows.length <= SCENARIO_RUN_LIMIT ? (
+          <label className="segtree-test__check">
+            <input type="checkbox" checked={runNow} onChange={(e) => setRunNow(e.target.checked)} />
+            {selectedRows.length === 1 ? 'Run the scenario now' : `Run the ${selectedRows.length} scenarios now`} and show the results on the tree
+          </label>
+        ) : (
+          <p className="save-scenario-dialog__hint">
+            Each scenario runs as its own job, so running them from here is offered for up to {SCENARIO_RUN_LIMIT}. For more rows, a table test runs them all at once.
+          </p>
+        )
+      )}
 
       {casError && <Alert variant="error">{casError}</Alert>}
     </div>
@@ -621,56 +686,19 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
           </Alert>
         </div>
       )}
-      {!busy && failure && (
-        <section className="segtree-test__failure" aria-labelledby="segtree-test-failure-title">
-          <h3 className="segtree-test__failure-title" id="segtree-test-failure-title">
-            {failure.excerpt ? EXCERPT_TITLE[failure.excerpt.kind] : 'Run log'}
-          </h3>
-          {failure.excerpt && failure.excerpt.lines.length > 0 && (
-            <pre className="segtree-test__log" tabIndex={0} aria-labelledby="segtree-test-failure-title">
-              {failure.excerpt.lines.join('\n')}
-              {failure.excerpt.clipped ? '\n…' : ''}
-            </pre>
-          )}
-          {failure.logError && <p className="segtree-test__failure-text">The run log could not be read: {failure.logError}</p>}
-          {!failure.logUri && <p className="segtree-test__failure-text">The run left no log to show.</p>}
-          <div className="segtree-test__failure-actions">
-            {failure.log && (
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => downloadTextFile(failure.log ?? '', `${casTableName(name)}_run.log`, 'text/plain;charset=utf-8;')}
-              >
-                Download the log
-              </Button>
-            )}
-            {failure.logUri && getSasViyaUrl() && (
-              <a
-                className="segtree-test__failure-link"
-                href={`${getSasViyaUrl()}${failure.logUri.replace(/\/content\/?$/, '')}/content`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open the log in SAS Viya<span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            )}
-            {(() => {
-              // The test lives on the tree's Tests tab; SID has no verified test URL.
-              const link = buildDeepLink('segmentationTree', index.tree.id);
-              return link ? <FlowDeepLink url={link.url} label="Open the tree's tests in SAS Intelligent Decisioning" showLabel /> : null;
-            })()}
-          </div>
-          {failure.log && (
-            <details className="segtree-test__full-log">
-              <summary>Full log ({failure.log.split('\n').length.toLocaleString()} lines)</summary>
-              <pre className="segtree-test__log segtree-test__log--full" tabIndex={0} aria-label="Full run log">{failure.log}</pre>
-            </details>
-          )}
-        </section>
+      {!busy && runFailures.length > 1 && (
+        <Alert variant="warning" title={`${runFailures.length} scenario runs did not complete`}>
+          <ul className="segtree-test__failures">
+            {runFailures.slice(0, 10).map((f) => <li key={f}>{f}</li>)}
+            {runFailures.length > 10 && <li>and {runFailures.length - 10} more</li>}
+          </ul>
+        </Alert>
       )}
+      {!busy && failure && <SegTreeRunFailure failure={failure} treeId={index.tree.id} logFileName={casTableName(name)} />}
       {!busy && created && (
         <Alert variant={created.failed.length ? 'warning' : 'success'}>
           {created.ok} scenario{created.ok !== 1 ? 's' : ''} created in {folderName ?? 'the selected folder'}.
+          {!summary && runFailures.length === 0 && ' Run them from the tree\'s Scenarios tab in SAS Intelligent Decisioning.'}
           {created.failed.length > 0 && (
             <ul className="segtree-test__failures">
               {created.failed.slice(0, 10).map((f) => <li key={f}>{f}</li>)}
@@ -698,7 +726,9 @@ export default function SegTreeTestDialog({ index, title, leafIds, onClose, onRe
         <>
           <Button variant="tertiary" onClick={() => setStep('rows')}>Back</Button>
           <Button variant="primary" disabled={!canSave} onClick={handleSave}>
-            {mode === 'test' ? (runNow ? 'Create and run test' : 'Create test') : `Create ${selectedRows.length} scenario${selectedRows.length !== 1 ? 's' : ''}`}
+            {mode === 'test'
+              ? (runNow ? 'Create and run test' : 'Create test')
+              : `${runNow && selectedRows.length <= SCENARIO_RUN_LIMIT ? 'Create and run' : 'Create'} ${selectedRows.length} scenario${selectedRows.length !== 1 ? 's' : ''}`}
           </Button>
         </>
       );

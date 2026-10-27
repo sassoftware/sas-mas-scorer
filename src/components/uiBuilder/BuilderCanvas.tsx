@@ -1,19 +1,29 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UIDefinition, UISection, UIField } from '../../types/uiBuilder';
-import { Step } from '../../types';
+import { Step, StepParameter } from '../../types';
 import { FieldConfigPanel } from './FieldConfigPanel';
 import { widgetLabels } from './widgetMap';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
 import { Badge } from '../common/Badge';
+import { MenuButton, MenuItem } from '../common/MenuButton';
+import { createFieldForParameter, findParameter } from '../../utils/uiDefaults';
+
+/**
+ * A canvas edit. `label` names it for Undo ("Remove field Age"); edits with
+ * the same `coalesceKey` in quick succession (typing a label) undo as one.
+ */
+export type CanvasChange = (definition: UIDefinition, label: string, coalesceKey?: string) => void;
 
 interface Props {
   definition: UIDefinition;
   step: Step | null;
-  onChange: (definition: UIDefinition) => void;
+  onChange: CanvasChange;
+  /** Bumped by the builder (after Undo) to drop a selection that may be stale. */
+  selectionResetKey?: number;
 }
 
 const ArrowUpIcon: React.FC = () => (
@@ -53,21 +63,39 @@ const directionBadgeText: Record<UIField['direction'], string> = {
   static: 'TXT',
 };
 
-export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) => {
+export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange, selectionResetKey }) => {
   const [selectedField, setSelectedField] = useState<{ sectionId: string; fieldIdx: number } | null>(null);
 
-  const updateSection = (sectionId: string, updater: (section: UISection) => UISection) => {
+  useEffect(() => {
+    if (selectionResetKey) setSelectedField(null);
+  }, [selectionResetKey]);
+
+  const updateSection = (
+    sectionId: string,
+    updater: (section: UISection) => UISection,
+    label: string,
+    coalesceKey?: string
+  ) => {
     const sections = definition.layout.sections.map(s =>
       s.id === sectionId ? updater(s) : s
     );
-    onChange({ ...definition, layout: { ...definition.layout, sections } });
+    onChange({ ...definition, layout: { ...definition.layout, sections } }, label, coalesceKey);
   };
 
   const handleFieldUpdate = (sectionId: string, fieldIdx: number, field: UIField) => {
-    updateSection(sectionId, section => ({
-      ...section,
-      fields: section.fields.map((f, i) => i === fieldIdx ? field : f),
-    }));
+    const before = definition.layout.sections.find(s => s.id === sectionId)?.fields[fieldIdx];
+    const remapped = !!before && before.parameterId !== field.parameterId;
+    updateSection(
+      sectionId,
+      section => ({
+        ...section,
+        fields: section.fields.map((f, i) => i === fieldIdx ? field : f),
+      }),
+      remapped ? `Remap ${before?.label ?? 'field'}` : `Edit ${field.label}`,
+      // Typing into one field's settings undoes as one step; a remap never
+      // merges with anything.
+      remapped ? undefined : `field:${sectionId}:${fieldIdx}`
+    );
   };
 
   const handleMoveField = (sectionId: string, fieldIdx: number, direction: -1 | 1) => {
@@ -82,7 +110,12 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
       // Swap positions
       [fields[fieldIdx], fields[targetIdx]] = [fields[targetIdx], fields[fieldIdx]];
       return { ...section, fields };
-    });
+    }, 'Move field');
+    // Keep the moved field selected at its new position.
+    if (selectedField?.sectionId === sectionId) {
+      if (selectedField.fieldIdx === fieldIdx) setSelectedField({ sectionId, fieldIdx: fieldIdx + direction });
+      else if (selectedField.fieldIdx === fieldIdx + direction) setSelectedField({ sectionId, fieldIdx });
+    }
   };
 
   const handleMoveSection = (idx: number, direction: -1 | 1) => {
@@ -90,11 +123,11 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
     const targetIdx = idx + direction;
     if (targetIdx < 0 || targetIdx >= sections.length) return;
     [sections[idx], sections[targetIdx]] = [sections[targetIdx], sections[idx]];
-    onChange({ ...definition, layout: { ...definition.layout, sections } });
+    onChange({ ...definition, layout: { ...definition.layout, sections } }, 'Move section');
   };
 
   const handleSectionTitleChange = (sectionId: string, title: string) => {
-    updateSection(sectionId, s => ({ ...s, title }));
+    updateSection(sectionId, s => ({ ...s, title }), 'Rename section', `section-title:${sectionId}`);
   };
 
   const handleAddSection = () => {
@@ -109,7 +142,7 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
         ...definition.layout,
         sections: [...definition.layout.sections, newSection],
       },
-    });
+    }, 'Add section');
   };
 
   const handleAddTextBlock = (sectionId: string) => {
@@ -126,16 +159,28 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
     updateSection(sectionId, section => ({
       ...section,
       fields: [...section.fields, { ...newField, order: section.fields.length }],
-    }));
+    }), 'Add text block');
+  };
+
+  const handleAddParameterField = (sectionId: string, param: StepParameter, direction: 'input' | 'output') => {
+    const section = definition.layout.sections.find(s => s.id === sectionId);
+    if (!section) return;
+    const order = section.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+    const field = createFieldForParameter(param, direction, order);
+    updateSection(sectionId, s => ({ ...s, fields: [...s.fields, field] }), `Add field ${param.name}`);
+    // Open the new field's settings: configuring it is the next step.
+    setSelectedField({ sectionId, fieldIdx: section.fields.length });
   };
 
   const handleRemoveField = (sectionId: string, fieldIdx: number) => {
+    const field = definition.layout.sections.find(s => s.id === sectionId)?.fields[fieldIdx];
     updateSection(sectionId, section => ({
       ...section,
       fields: section.fields.filter((_, i) => i !== fieldIdx),
-    }));
-    if (selectedField?.sectionId === sectionId && selectedField?.fieldIdx === fieldIdx) {
-      setSelectedField(null);
+    }), field?.direction === 'static' ? 'Remove text block' : `Remove field ${field?.label ?? ''}`.trim());
+    if (selectedField?.sectionId === sectionId) {
+      if (selectedField.fieldIdx === fieldIdx) setSelectedField(null);
+      else if (selectedField.fieldIdx > fieldIdx) setSelectedField({ sectionId, fieldIdx: selectedField.fieldIdx - 1 });
     }
   };
 
@@ -155,7 +200,7 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
       }
       return s;
     });
-    onChange({ ...definition, layout: { ...definition.layout, sections } });
+    onChange({ ...definition, layout: { ...definition.layout, sections } }, 'Move field to section');
     // Update selection to the new location
     const toSection = sections.find(s => s.id === toSectionId);
     if (toSection) {
@@ -170,7 +215,7 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
         ...definition.layout,
         sections: definition.layout.sections.filter(s => s.id !== sectionId),
       },
-    });
+    }, 'Remove section');
     if (selectedField?.sectionId === sectionId) setSelectedField(null);
   };
 
@@ -179,13 +224,34 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
     : [];
 
   const getParameter = (parameterId: string) => {
-    return allParameters.find(p => p.name === parameterId) ?? null;
+    return findParameter(allParameters, parameterId) ?? null;
   };
 
   // Collect all parameterId values currently used across all fields
   const usedParameterIds = new Set(
     definition.layout.sections.flatMap(s => s.fields.map(f => f.parameterId))
   );
+  const usedLower = new Set([...usedParameterIds].map(id => id.toLowerCase()));
+
+  // Step parameters with no field yet, for each section's Add field menu.
+  const unusedInputs = (step?.inputs ?? []).filter(p => !usedLower.has(p.name.toLowerCase()));
+  const unusedOutputs = (step?.outputs ?? []).filter(p => !usedLower.has(p.name.toLowerCase()));
+  const unusedCount = unusedInputs.length + unusedOutputs.length;
+
+  const addFieldItems = (sectionId: string): MenuItem[] => [
+    ...unusedInputs.map(p => ({
+      id: `in:${p.name}`,
+      label: p.name,
+      description: `Input · ${p.type}${p.size ? `, size ${p.size}` : ''}`,
+      onSelect: () => handleAddParameterField(sectionId, p, 'input'),
+    })),
+    ...unusedOutputs.map(p => ({
+      id: `out:${p.name}`,
+      label: p.name,
+      description: `Output · ${p.type}`,
+      onSelect: () => handleAddParameterField(sectionId, p, 'output'),
+    })),
+  ];
 
   const getSelectedField = (): UIField | null => {
     if (!selectedField) return null;
@@ -233,8 +299,8 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                 size="medium"
                 variant="danger"
                 onClick={() => handleRemoveSection(section.id)}
-                title="Remove section"
-                aria-label="Remove section"
+                title="Remove section (Undo restores it)"
+                aria-label={`Remove section ${section.title || ''}`.trim()}
               >
                 <CloseIcon />
               </IconButton>
@@ -244,6 +310,8 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
               {section.fields.map((field, fIdx) => {
                 const isSelected =
                   selectedField?.sectionId === section.id && selectedField?.fieldIdx === fIdx;
+                const notInSignature =
+                  !!step && field.direction !== 'static' && !getParameter(field.parameterId);
                 return (
                   <div
                     key={field.parameterId}
@@ -280,7 +348,12 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                       aria-pressed={isSelected}
                       onClick={() => setSelectedField({ sectionId: section.id, fieldIdx: fIdx })}
                     >
-                      <span className="ui-builder__field-label">{field.label}</span>
+                      <span className="ui-builder__field-label">
+                        {field.label}
+                        {field.direction === 'input' && field.validation?.required && (
+                          <span className="ui-builder__field-required"> (required)</span>
+                        )}
+                      </span>
                       <span className="ui-builder__field-meta">
                         <span
                           className={`sas-badge sas-badge--small ${directionBadgeClass[field.direction]}`}
@@ -297,17 +370,20 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                     </button>
                     <div className="ui-builder__field-badges">
                       {!field.visible && <Badge size="small" variant="default">Hidden</Badge>}
-                      {field.direction === 'static' && (
-                        <IconButton
-                          size="small"
-                          variant="danger"
-                          onClick={() => handleRemoveField(section.id, fIdx)}
-                          title="Remove text block"
-                          aria-label="Remove text block"
-                        >
-                          <CloseIcon />
-                        </IconButton>
+                      {notInSignature && (
+                        <Badge size="small" variant="warning">Not in signature</Badge>
                       )}
+                      <IconButton
+                        size="small"
+                        variant="danger"
+                        onClick={() => handleRemoveField(section.id, fIdx)}
+                        title={field.direction === 'static' ? 'Remove text block' : 'Remove field (Undo restores it)'}
+                        aria-label={field.direction === 'static'
+                          ? `Remove text block ${field.label}`
+                          : `Remove field ${field.label}`}
+                      >
+                        <CloseIcon />
+                      </IconButton>
                     </div>
                   </div>
                 );
@@ -318,6 +394,18 @@ export const BuilderCanvas: React.FC<Props> = ({ definition, step, onChange }) =
                 </div>
               )}
               <div className="ui-builder__field-list-actions">
+                <MenuButton
+                  label="+ Add field"
+                  ariaLabel={`Add field to ${section.title || 'section'}`}
+                  triggerClassName="sas-button sas-button--tertiary sas-button--small"
+                  items={addFieldItems(section.id)}
+                  disabled={!step || unusedCount === 0}
+                  title={!step
+                    ? 'The module step has not loaded'
+                    : unusedCount === 0
+                      ? 'Every parameter in the step signature already has a field'
+                      : `${unusedCount} parameter${unusedCount === 1 ? '' : 's'} without a field`}
+                />
                 <Button
                   variant="tertiary"
                   size="small"

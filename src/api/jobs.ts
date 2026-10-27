@@ -3,13 +3,14 @@
 
 // SAS Viya Job Execution + Compute log/listing + Files content endpoints.
 // All requests use the generic `sasViyaClient` (no basePath) since these
-// endpoints span multiple Viya services. All calls here are read-only — no
-// CSRF token handling needed beyond what the shared interceptor already does.
+// endpoints span multiple Viya services. The writes (cancel, delete, rerun)
+// need no CSRF handling beyond what the shared interceptor already does.
 
 import { sasViyaClient, SAS_CONTENT_TYPES } from './client';
 import {
   ExecutionJob,
   ExecutionJobCollection,
+  ExecutionJobDefinition,
   ExecutionJobState,
   LogLineCollection,
 } from '../types/jobExecution';
@@ -362,3 +363,126 @@ export const cancelJob = async (job: ExecutionJob): Promise<void> => {
     }
   }
 };
+
+// --- Rerun: submit a finished job's request again --------------------------
+//
+// The job record has no rerun link, so the request is rebuilt from the
+// stored jobRequest: name, the job definition (by URI when the request had
+// one, else the embedded definition — most requests embed {type, code} and
+// carry no jobDefinitionUri), the arguments and the properties. Ids, links
+// and server-set fields are left out.
+
+/**
+ * Applications whose submitted jobs may be re-submitted here, lower case:
+ * - jobexecution: the SAS Job Execution service and web app (job definitions
+ *   and ad-hoc jobs). The request is the user's own program and arguments;
+ *   running it again is what the Job Execution web app's resubmit does.
+ * - sasstudio / studio: SAS Studio background submissions, likewise plain
+ *   user programs.
+ * Anything else is a service that submits jobs as part of its own work
+ * (scoreExecution for score executions and SID tests, decisions for
+ * publishing validations, datamining for Model Studio pipelines, the
+ * scheduler, …). Those services keep their own record of each run; a job
+ * re-submitted behind their back would run without that record and could
+ * overwrite their outputs, so it is rerun from that application instead.
+ */
+const RERUNNABLE_APPLICATIONS = new Set(['jobexecution', 'sasjobexecution', 'sasstudio', 'studio']);
+
+export interface RerunEligibility {
+  allowed: boolean;
+  /** Why rerun is not offered (when `allowed` is false). */
+  reason?: string;
+  /** The application that submitted the job, as recorded in its request. */
+  application?: string;
+  /** How the definition is sent again. */
+  definition: 'uri' | 'embedded' | null;
+}
+
+export const getRerunEligibility = (job: ExecutionJob): RerunEligibility => {
+  const request = job.jobRequest;
+  const application = request?.createdByApplication ?? job.submittedByApplication;
+  const definition: RerunEligibility['definition'] = request?.jobDefinitionUri
+    ? 'uri'
+    : request?.jobDefinition?.code
+      ? 'embedded'
+      : null;
+  if (!definition) {
+    return {
+      allowed: false,
+      application,
+      definition,
+      reason: 'the stored request has neither a job definition URI nor the definition code to run again.',
+    };
+  }
+  if (application && !RERUNNABLE_APPLICATIONS.has(application.toLowerCase())) {
+    return {
+      allowed: false,
+      application,
+      definition,
+      reason:
+        `it was submitted by ${application}, which keeps its own record of each run. ` +
+        'Re-submitting the job here would run it without that record, so run it again from that application.',
+    };
+  }
+  return { allowed: true, application, definition };
+};
+
+/** The embedded definition without its id, links and server-set fields. */
+const definitionForSubmit = (definition: ExecutionJobDefinition): Record<string, unknown> => {
+  const body: Record<string, unknown> = {};
+  if (definition.name) body.name = definition.name;
+  if (definition.description) body.description = definition.description;
+  if (definition.type) body.type = definition.type;
+  if (definition.code !== undefined) body.code = definition.code;
+  if (definition.parameters?.length) {
+    body.parameters = definition.parameters.map(({ name, defaultValue, type, label, required }) => ({
+      name,
+      ...(defaultValue !== undefined ? { defaultValue } : {}),
+      ...(type !== undefined ? { type } : {}),
+      ...(label !== undefined ? { label } : {}),
+      ...(required !== undefined ? { required } : {}),
+    }));
+  }
+  if (definition.properties?.length) body.properties = definition.properties;
+  return body;
+};
+
+/**
+ * The POST body that runs `job` again, with `args` as its arguments (the
+ * original arguments when omitted).
+ */
+export const buildRerunRequest = (
+  job: ExecutionJob,
+  args?: Record<string, string>
+): Record<string, unknown> => {
+  const request = job.jobRequest;
+  const body: Record<string, unknown> = {};
+  if (request.name) body.name = request.name;
+  if (request.description) body.description = request.description;
+  if (request.jobDefinitionUri) {
+    body.jobDefinitionUri = request.jobDefinitionUri;
+  } else if (request.jobDefinition) {
+    body.jobDefinition = definitionForSubmit(request.jobDefinition);
+  }
+  body.arguments = { ...(args ?? request.arguments ?? {}) };
+  if (request.properties !== undefined && request.properties !== null) body.properties = request.properties;
+  // Keeps the rerun listed where the original was (the Job Execution web app
+  // filters on it); only rerunnable applications reach this point.
+  if (request.createdByApplication) body.createdByApplication = request.createdByApplication;
+  return body;
+};
+
+// POST /jobExecution/jobs — submit a job request; answers with the new job.
+export const submitJob = async (request: Record<string, unknown>): Promise<ExecutionJob> => {
+  const response = await sasViyaClient.post<ExecutionJob>('/jobExecution/jobs', request, {
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: JOB_ACCEPT,
+    },
+  });
+  return response.data;
+};
+
+/** Run a finished job again; resolves with the new job. */
+export const rerunJob = (job: ExecutionJob, args?: Record<string, string>): Promise<ExecutionJob> =>
+  submitJob(buildRerunRequest(job, args));

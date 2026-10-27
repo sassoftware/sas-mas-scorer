@@ -1,65 +1,30 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React from 'react';
 import { UIDefinition } from '../../types/uiBuilder';
-import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
-import { Button } from '../common/Button';
-import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
-import { DynamicForm } from '../uiRunner/DynamicForm';
+import { UIRunner } from '../uiRunner/UIRunner';
 
 interface Props {
   definition: UIDefinition;
+  isDirty: boolean;
 }
 
-export const BuilderPreview: React.FC<Props> = ({ definition }) => {
-  const [inputValues, setInputValues] = useState<Record<string, unknown>>({});
+const noop = () => {};
 
-  // Generate mock output values for preview
-  const mockOutputs: Record<string, unknown> = {};
-  for (const section of definition.layout.sections) {
-    for (const field of section.fields) {
-      if (field.direction === 'output') {
-        if (field.widget === 'gauge') mockOutputs[field.parameterId] = 0.73;
-        else if (field.widget === 'badge') mockOutputs[field.parameterId] = 'Approved';
-        else mockOutputs[field.parameterId] = 'Sample Value';
-      }
-    }
-  }
-
-  return (
-    <div className="ui-builder__preview">
-      <Alert variant="warning" title="Preview Mode">
-        This is a preview of how your UI App will look when running. Output fields show sample data.
-      </Alert>
-
-      <Card>
-        <CardHeader
-          actions={
-            <div className="ui-runner__header-actions">
-              {definition.settings.showExecutionTime && (
-                <Badge variant="default">142ms</Badge>
-              )}
-            </div>
-          }
-        >
-          <h3>{definition.settings.title || definition.name}</h3>
-        </CardHeader>
-        <CardBody>
-          <DynamicForm
-            layout={definition.layout}
-            inputValues={inputValues}
-            outputValues={mockOutputs}
-            onInputChange={setInputValues}
-          />
-        </CardBody>
-        <CardFooter>
-          <Button variant="primary" size="large" disabled>
-            {definition.settings.submitLabel || 'Execute'}
-          </Button>
-        </CardFooter>
-      </Card>
-    </div>
-  );
-};
+/**
+ * The real runner on the unsaved definition: authors see the module's actual
+ * outputs in their layout before saving. Runs execute the published module in
+ * MAS like any other run; nothing about the app is saved by running it.
+ */
+export const BuilderPreview: React.FC<Props> = ({ definition, isDirty }) => (
+  <div className="ui-builder__preview">
+    <Alert variant="info" title="Preview run">
+      This runs the published module in MAS with the layout as it is now
+      {isDirty ? ', including your unsaved changes' : ''}. Running it does not
+      save the app.
+    </Alert>
+    <UIRunner definition={definition} onBack={noop} onEdit={noop} preview />
+  </div>
+);

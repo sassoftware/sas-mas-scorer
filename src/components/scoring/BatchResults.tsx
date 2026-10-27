@@ -11,6 +11,9 @@ import { Pagination } from '../common/Pagination';
 import { DataGridModal } from './DataGridModal';
 import { isDatagrid, datagridShape } from '../../utils/datagrid';
 import { BatchResult, BatchStats, errorGroupKey } from './batchRunner';
+import { formatCheckValue, hasExpectation } from '../../utils/expectedValues';
+import { CheckBadge } from './CheckBadge';
+import { ComparisonRule } from './ComparisonRule';
 
 /** What the last "Retry failed rows" did. */
 export interface RetryOutcome {
@@ -46,9 +49,9 @@ const DEFAULT_PAGE_SIZE = 100;
 // Error groups listed before "Show all"
 const ERROR_GROUPS_SHOWN = 5;
 
-type StatusFilter = 'all' | 'succeeded' | 'failed';
+type StatusFilter = 'all' | 'succeeded' | 'failed' | 'mismatched';
 type SortDir = 'asc' | 'desc';
-/** 'row', 'status', 'runtime', or an output name prefixed 'out:' */
+/** 'row', 'status', 'check', 'runtime', or an output name prefixed 'out:' */
 type SortKey = string;
 
 interface ErrorGroup {
@@ -83,6 +86,11 @@ const sortValueOf = (result: BatchResult, key: SortKey): number | string | null 
   if (key === 'runtime') return result.executionTime;
   if (key === 'status') return statusOf(result);
   if (key === 'row') return result.rowIndex;
+  // Differs first, then matches; rows not checked sort last
+  if (key === 'check') {
+    const status = result.check?.status;
+    return status === 'fail' ? 0 : status === 'pass' ? 1 : null;
+  }
   const name = key.slice(4);
   const value = result.output?.outputs?.find(o => o.name === name)?.value;
   if (value === null || value === undefined) return null;
@@ -207,13 +215,27 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
   const lastClickedRef = useRef<number | null>(null);
 
   // Everything derived from the whole result set, once per result set
-  const { successCount, errorCount, successIndices, successSet, outputParams, errorKeys, errorGroups } = useMemo(() => {
+  const {
+    successCount, errorCount, successIndices, successSet, outputParams, errorKeys, errorGroups,
+    hasExpected, mismatchIndices, matchCount, uncheckedCount,
+  } = useMemo(() => {
     const indices: number[] = [];
+    // Each row's check was computed once when it was scored; only counted here
+    const mismatches: number[] = [];
+    let matches = 0;
+    let unchecked = 0;
+    let anyExpected = false;
     const keys: (string | null)[] = new Array(results.length);
     const groups = new Map<string, ErrorGroup & { message: string; varies: boolean }>();
     let errors = 0;
     results.forEach((r, i) => {
       if (isSelectable(r)) indices.push(i);
+      if (r.expected) anyExpected = true;
+      if (r.check) {
+        if (r.check.status === 'fail') mismatches.push(i);
+        else if (r.check.status === 'pass') matches++;
+        else unchecked++;
+      }
       if (r.error) {
         errors++;
         const key = errorGroupKey(r.error);
@@ -241,6 +263,10 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
       outputParams: results.find(r => r.output)?.output?.outputs?.map(o => o.name) ?? [],
       errorKeys: keys,
       errorGroups: groupList,
+      hasExpected: anyExpected,
+      mismatchIndices: mismatches,
+      matchCount: matches,
+      uncheckedCount: unchecked,
     };
   }, [results]);
 
@@ -263,11 +289,12 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
       return out;
     }
     if (statusFilter === 'succeeded') return successIndices;
+    if (statusFilter === 'mismatched') return mismatchIndices;
     errorKeys.forEach((key, i) => {
       if (key !== null) out.push(i);
     });
     return out;
-  }, [statusFilter, groupFilter, errorKeys, successIndices]);
+  }, [statusFilter, groupFilter, errorKeys, successIndices, mismatchIndices]);
 
   // The filtered indices in the chosen order; null means row order over all
   // rows. Recomputed only when the filter or the sort changes, never per page.
@@ -394,7 +421,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
   const jumpToRow = (index: number) => {
     const shown = groupFilter !== null
       ? errorKeys[index] === groupFilter
-      : statusFilter !== 'succeeded';
+      : statusFilter === 'all' || statusFilter === 'failed';
     if (!shown) {
       setGroupFilter(null);
       setStatusFilter('failed');
@@ -429,7 +456,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
 
   const activeGroup = groupFilter !== null ? errorGroups.find(g => g.key === groupFilter) : undefined;
   const shownGroups = showAllGroups ? errorGroups : errorGroups.slice(0, ERROR_GROUPS_SHOWN);
-  const columnCount = outputParams.length + 4 + (onSaveAsScenarios ? 1 : 0);
+  const columnCount = outputParams.length + 4 + (onSaveAsScenarios ? 1 : 0) + (hasExpected ? 1 : 0);
 
   const filterDescription = activeGroup
     ? `Showing ${viewLength.toLocaleString()} of ${results.length.toLocaleString()} rows: failed with “${activeGroup.label}”`
@@ -437,12 +464,17 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
     ? `Showing ${viewLength.toLocaleString()} failed of ${results.length.toLocaleString()} rows`
     : statusFilter === 'succeeded'
     ? `Showing ${viewLength.toLocaleString()} succeeded of ${results.length.toLocaleString()} rows`
+    : statusFilter === 'mismatched'
+    ? `Showing ${viewLength.toLocaleString()} of ${results.length.toLocaleString()} rows: outputs differ from expected`
     : `Showing all ${results.length.toLocaleString()} rows`;
 
   const statusChips: { value: StatusFilter; label: string; count: number }[] = [
     { value: 'all', label: 'All', count: results.length },
     { value: 'succeeded', label: 'Succeeded', count: successCount },
     { value: 'failed', label: 'Failed', count: errorCount },
+    ...(hasExpected
+      ? [{ value: 'mismatched' as StatusFilter, label: 'Mismatched', count: mismatchIndices.length }]
+      : []),
   ];
 
   return (
@@ -490,6 +522,13 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
           <div className="batch-results__summary">
             <Badge variant="success">{successCount} succeeded</Badge>
             {errorCount > 0 && <Badge variant="error">{errorCount} failed</Badge>}
+            {hasExpected && (
+              <CheckBadge
+                status={mismatchIndices.length > 0 ? 'fail' : matchCount > 0 ? 'pass' : 'none'}
+                size="medium"
+                label={`${mismatchIndices.length.toLocaleString()} differ from expected`}
+              />
+            )}
           </div>
         </div>
       </CardHeader>
@@ -552,6 +591,26 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                 </span>
                 <span className="batch-results__stat-label">Failed</span>
               </div>
+              {hasExpected && (
+                <div className="batch-results__stat-card">
+                  <span className={`batch-results__stat-value ${mismatchIndices.length > 0 ? 'batch-results__stat-value--error' : 'batch-results__stat-value--success'}`}>
+                    {mismatchIndices.length.toLocaleString()}
+                  </span>
+                  <span className="batch-results__stat-label">Mismatches</span>
+                </div>
+              )}
+              {hasExpected && (
+                <div className="batch-results__stat-card">
+                  <span className="batch-results__stat-value">{matchCount.toLocaleString()}</span>
+                  <span className="batch-results__stat-label">Match Expected</span>
+                </div>
+              )}
+              {hasExpected && uncheckedCount > 0 && (
+                <div className="batch-results__stat-card">
+                  <span className="batch-results__stat-value">{uncheckedCount.toLocaleString()}</span>
+                  <span className="batch-results__stat-label">Not Checked</span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -604,6 +663,18 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
           </section>
         )}
 
+        {hasExpected && (
+          <div className="batch-results__expected-note">
+            <p>
+              Rows are checked against the mapped expected-output columns: a row
+              &ldquo;Differs&rdquo; when at least one compared output is not the same as its expected
+              value, and is &ldquo;Not checked&rdquo; when all its expected cells are blank. Failed
+              rows are not compared.
+            </p>
+            <ComparisonRule />
+          </div>
+        )}
+
         {/* Filter by status */}
         <div className="batch-results__toolbar">
           <div className="batch-results__chips" role="group" aria-label="Show rows by status">
@@ -650,6 +721,9 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                 )}
                 <SortHeader sortKey="row" label="Row" current={sort.key} dir={sort.dir} onSort={handleSort} />
                 <SortHeader sortKey="status" label="Status" current={sort.key} dir={sort.dir} onSort={handleSort} />
+                {hasExpected && (
+                  <SortHeader sortKey="check" label="Expected" current={sort.key} dir={sort.dir} onSort={handleSort} />
+                )}
                 {outputParams.map(name => (
                   <SortHeader
                     key={name}
@@ -678,6 +752,7 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                 const result = results[index];
                 const selectable = isSelectable(result);
                 const outputByName = new Map(result.output?.outputs?.map(o => [o.name, o.value]) ?? []);
+                const differs = result.check?.failed;
                 return (
                   <React.Fragment key={index}>
                     <tr className={`sas-table__row${result.error ? ' batch-results__row--error' : ''}`}>
@@ -706,11 +781,34 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                           <Badge variant="default">Pending</Badge>
                         )}
                       </td>
-                      {outputParams.map(name => (
-                        <td key={name} className="sas-table__td batch-results__value">
-                          {outputByName.has(name) ? formatValue(outputByName.get(name), name, result.rowIndex + 1) : '-'}
+                      {hasExpected && (
+                        <td className="sas-table__td">
+                          {result.check ? (
+                            <CheckBadge
+                              status={result.check.status}
+                              label={result.check.status === 'fail'
+                                ? `Differs (${result.check.failed.length})`
+                                : undefined}
+                            />
+                          ) : '-'}
                         </td>
-                      ))}
+                      )}
+                      {outputParams.map(name => {
+                        const cellDiffers = !!differs && differs.includes(name);
+                        return (
+                          <td
+                            key={name}
+                            className={`sas-table__td batch-results__value${cellDiffers ? ' batch-results__value--differs' : ''}`}
+                          >
+                            {outputByName.has(name) ? formatValue(outputByName.get(name), name, result.rowIndex + 1) : '-'}
+                            {cellDiffers && (
+                              <span className="batch-results__expected-value">
+                                expected {formatCheckValue(result.expected?.[name]) || '(missing)'}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="sas-table__td batch-results__value">{formatTime(result.executionTime)}</td>
                       <td className="sas-table__td">
                         <Button
@@ -745,6 +843,35 @@ export const BatchResults: React.FC<BatchResultsProps> = ({
                               </div>
                             ) : null}
                           </div>
+                          {result.expected && result.check && (
+                            <table className="sas-table sas-table--compact batch-results__check-table">
+                              <caption className="batch-results__check-caption">Expected and actual outputs</caption>
+                              <thead className="sas-table__head">
+                                <tr>
+                                  <th className="sas-table__th" scope="col">Output</th>
+                                  <th className="sas-table__th" scope="col">Expected</th>
+                                  <th className="sas-table__th" scope="col">Actual</th>
+                                  <th className="sas-table__th" scope="col">Check</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Object.entries(result.expected).map(([name, exp]) => {
+                                  const checked = hasExpectation(exp);
+                                  const failed = result.check?.failed.includes(name) ?? false;
+                                  return (
+                                    <tr className="sas-table__row" key={name}>
+                                      <td className="sas-table__td">{name}</td>
+                                      <td className="sas-table__td batch-results__value">{checked ? formatCheckValue(exp) : '(blank)'}</td>
+                                      <td className="sas-table__td batch-results__value">{formatCheckValue(outputByName.get(name)) || '(missing)'}</td>
+                                      <td className="sas-table__td">
+                                        <CheckBadge status={!checked ? 'none' : failed ? 'fail' : 'pass'} />
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
                           {result.retries ? (
                             <p className="batch-results__retry-note">
                               Sent {result.retries + 1} times: the first {result.retries === 1 ? 'attempt' : `${result.retries} attempts`} failed

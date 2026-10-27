@@ -1595,3 +1595,359 @@
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
 }
+
+/* ─── Find in tree and the stepper ─── */
+
+.segtree-find {
+  margin-bottom: var(--space-3);
+}
+
+.segtree-find__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.segtree-find__search {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.segtree-find__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+}
+
+.segtree-find__status {
+  min-width: 9em;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-800);
+}
+
+.segtree-find__keys {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.segtree-find__keys summary,
+.segtree-vars > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min);
+  color: var(--sas-blue-primary);
+  cursor: pointer;
+}
+
+.segtree-find__keys summary:focus-visible,
+.segtree-vars > summary:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.segtree-find__keys ul {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
+.segtree-find__keys kbd {
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  background: var(--sas-gray-100);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+}
+
+/* A match: tinted and underlined, so it does not rely on colour alone. */
+.segtree-find-hit {
+  padding: 0;
+  color: inherit;
+  background: #FFF3B0;
+  text-decoration: underline;
+  text-decoration-color: #5B2A86;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.segtree-outline__row--match:not(.segtree-outline__row--selected) {
+  border-left: 3px dotted #5B2A86;
+}
+
+.segtree-icicle__swatch--match {
+  background: transparent;
+  border: 2px dashed;
+}
+
+.segtree-chip--neutral {
+  color: var(--sas-gray-800);
+  background: var(--sas-gray-100);
+}
+
+/* ─── Variables summary ─── */
+
+.segtree-vars {
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
+}
+
+.segtree-vars__wrap {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.segtree-vars__table {
+  width: 100%;
+}
+
+.segtree-vars__name {
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.segtree-vars__values {
+  min-width: 200px;
+  font-size: var(--font-size-xs);
+}
+
+.segtree-vars__opaque {
+  color: var(--sas-warning-dark);
+}
+
+.segtree-vars__find {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  color: var(--sas-blue-primary);
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.segtree-vars__find:hover {
+  background: var(--sas-blue-lighter);
+}
+
+.segtree-vars__find:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* ─── Find path for a record ─── */
+
+.segtree-trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.segtree-trace__intro {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.segtree-trace__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.segtree-trace__json {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: var(--font-size-sm);
+}
+
+.segtree-trace__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.segtree-trace__form legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.segtree-trace__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-sm);
+}
+
+.segtree-trace__type {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.segtree-trace__empty {
+  color: var(--sas-text-muted);
+}
+
+.segtree-trace__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.segtree-trace__caveat {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+}
+
+.segtree-trace__notes {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.segtree-trace__steps {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.segtree-trace__step {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.segtree-trace__step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.segtree-trace__var {
+  font-weight: var(--font-weight-semibold);
+}
+
+.segtree-trace__tried {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.segtree-trace__tried li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.segtree-trace__mark {
+  width: 1em;
+  font-weight: var(--font-weight-bold);
+}
+
+.segtree-trace__tried--hit .segtree-trace__mark {
+  color: var(--sas-success-dark);
+}
+
+.segtree-trace__tried--miss {
+  color: var(--sas-text-muted);
+}
+
+.segtree-trace__verdict {
+  font-size: var(--font-size-xs);
+  font-style: italic;
+}
+
+/* ─── Tests on this tree ─── */
+
+.segtree-tests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.segtree-tests__intro,
+.segtree-tests__note,
+.segtree-tests__empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.segtree-tests__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.segtree-tests__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.segtree-tests__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.segtree-tests__item--compact {
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+}
+
+.segtree-tests__main {
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.segtree-tests__name {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.segtree-tests__meta {
+  flex-basis: 100%;
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.segtree-tests__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.segtree-tests__confirm,
+.segtree-tests__outcome {
+  flex-basis: 100%;
+}
+
+.segtree-tests__confirm {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  background: var(--sas-gray-50);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.segtree-tests__confirm p {
+  margin: 0 0 var(--space-2);
+}

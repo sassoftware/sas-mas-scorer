@@ -339,8 +339,69 @@
 
 .job-detail__header-actions {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* Why a finished job offers no Rerun (submitted by another service). */
+.job-detail__rerun-note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+/* ─── Rerun dialog ─── */
+
+.job-rerun__code {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  word-break: break-all;
+}
+
+.job-rerun__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 50vh;
+  overflow-y: auto;
+  /* Room for the inputs' focus ring inside the scroll box. */
+  padding: 2px;
+}
+
+.job-rerun__hint,
+.job-rerun__summary {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.job-rerun__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.job-rerun__label {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+}
+
+.job-rerun__name {
+  font-family: var(--font-family-mono);
+}
+
+.job-rerun__input {
+  width: 100%;
+  font-family: var(--font-family-mono);
+}
+
+.job-rerun__field-hint {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
 }
 
 .job-detail__meta {

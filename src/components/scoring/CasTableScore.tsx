@@ -25,13 +25,21 @@ import {
   scanMappedRows,
 } from '../../utils/fileFormats';
 import { ColumnMappingGrid } from './ColumnMappingGrid';
+import { ExpectedOutputsMapping } from './ExpectedOutputsMapping';
+import { LoadTestDialog } from './LoadTestDialog';
+import { buildReverseNameLookup } from './scenarioMapping';
+import { DecisionSignatureVariable } from '../../api/modules';
+import { ScoreTestDefinition } from '../../api/scoreTests';
 import {
+  ExpectedSources,
   InputSource,
   InputSources,
   MappingNote,
   autoMapColumns,
   columnMappingsOf,
   describeIssue,
+  expectedRowsOf,
+  suggestExpectedColumns,
   fixedInputValues,
   mergeNotes,
   notesFromReport,
@@ -52,10 +60,39 @@ export interface CasTableTestInfo {
 
 interface CasTableScoreProps {
   parameters: StepParameter[];
-  onExecuteBatch: (rows: Record<string, unknown>[], concurrency: number) => void;
+  /** The step's outputs, for the optional expected-output columns */
+  outputParameters?: StepParameter[];
+  /** `expected` holds each row's expected outputs, or null when nothing is compared */
+  onExecuteBatch: (
+    rows: Record<string, unknown>[],
+    concurrency: number,
+    expected?: Record<string, unknown>[] | null
+  ) => void;
   executing: boolean;
   onSaveAsTest?: (info: CasTableTestInfo) => void;
+  /** Enables "Load Test…" for a decision: its source URI and signature */
+  testSource?: {
+    sourceURI: string;
+    signature: DecisionSignatureVariable[];
+    /** Called when the dialog opens (lets the panel retry a failed signature fetch) */
+    onOpen?: () => void;
+  };
 }
+
+/** A loaded test's table and mapping, waiting for the selections to reach it. */
+interface TestPreset {
+  testName: string;
+  serverName: string;
+  libraryName: string;
+  tableName: string;
+  /** MAS input → CAS column, as the test maps it */
+  columns: Record<string, string>;
+  /** Mapped decision variables that match no input of this step */
+  unknownVariables: string[];
+}
+
+const NO_OUTPUTS: StepParameter[] = [];
+const NO_EXPECTED: ExpectedSources = {};
 
 interface FetchProgress {
   loaded: number;
@@ -158,13 +195,17 @@ const fetchRowsUpTo = async (
 
 export const CasTableScore: React.FC<CasTableScoreProps> = ({
   parameters,
+  outputParameters = NO_OUTPUTS,
   onExecuteBatch,
   executing,
   onSaveAsTest,
+  testSource,
 }) => {
   // Browse state. The server/caslib catalogue comes from the shared session
   // cache; tables are still fetched per caslib (cas.ts is unchanged).
   const [tables, setTables] = useState<CasTableInfo[]>([]);
+  // `${server}|${caslib}` the tables were listed for ('' while none are)
+  const [tablesFor, setTablesFor] = useState('');
   const [selectedServer, setSelectedServer] = useState('');
   const [selectedCaslib, setSelectedCaslib] = useState('');
   const [selectedTable, setSelectedTable] = useState('');
@@ -188,6 +229,14 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
   // Mapping & execution config
   const [sources, setSources] = useState<InputSources>({});
+  // Optional expected-output columns, and what was suggested by name
+  const [expectedSources, setExpectedSources] = useState<ExpectedSources>(NO_EXPECTED);
+  const [suggestedExpected, setSuggestedExpected] = useState<ExpectedSources>(NO_EXPECTED);
+  // Load Test: the dialog, the test on its way through the selections and what was applied
+  const [showLoadTest, setShowLoadTest] = useState(false);
+  const presetRef = useRef<TestPreset | null>(null);
+  const [presetTick, setPresetTick] = useState(0);
+  const [loadedTestNote, setLoadedTestNote] = useState<string | null>(null);
   const [scoreFullTable, setScoreFullTable] = useState(false);
   const [rowLimit, setRowLimit] = useState<number>(DEFAULT_ROW_LIMIT);
   const [concurrency, setConcurrency] = useState<number>(2);
@@ -198,6 +247,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   // held until the user confirms sending them as missing (or cancels).
   const [pendingRun, setPendingRun] = useState<{
     rows: Record<string, unknown>[];
+    expected: Record<string, unknown>[] | null;
     report: ConversionReport;
   } | null>(null);
 
@@ -216,10 +266,22 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   }, [servers, selectedServer]);
 
   // Prefer the "Public" caslib of whatever server is selected, else the first.
+  // A test being loaded wants its own caslib instead.
   useEffect(() => {
     if (caslibs.length === 0) {
       setSelectedCaslib('');
       return;
+    }
+    const preset = presetRef.current;
+    if (preset) {
+      const lib = caslibs.find(c => c.name === preset.libraryName)
+        ?? caslibs.find(c => c.name.toLowerCase() === preset.libraryName.toLowerCase());
+      if (lib) {
+        setSelectedCaslib(lib.name);
+        return;
+      }
+      presetRef.current = null;
+      setNotice(`The test “${preset.testName}” reads caslib ${preset.libraryName}, which is not available to you on ${preset.serverName}. Only the server was changed.`);
     }
     const publicLib = caslibs.find(c => c.name.toLowerCase() === 'public');
     setSelectedCaslib(publicLib?.name ?? caslibs[0].name);
@@ -234,6 +296,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setSelectedCaslib('');
     setSelectedTable('');
     setTables([]);
+    setTablesFor('');
     setColumns([]);
     setPreviewRows([]);
     setLoadingRows(false);
@@ -245,6 +308,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   useEffect(() => {
     if (!selectedServer || !selectedCaslib) {
       setTables([]);
+      setTablesFor('');
       return;
     }
 
@@ -252,6 +316,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     const load = async () => {
       invalidateSelection();
       setLoadingTables(true);
+      setTablesFor('');
       setSelectedTable('');
       setColumns([]);
       setPreviewRows([]);
@@ -262,6 +327,7 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         const result = await getCasTables(selectedServer, selectedCaslib, 0, 500);
         if (cancelled) return;
         setTables(result.items.filter(t => (t.rowCount ?? 0) > 0));
+        setTablesFor(`${selectedServer}|${selectedCaslib}`);
       } catch (err: unknown) {
         if (cancelled) return;
         const e = err as { message?: string };
@@ -277,7 +343,8 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
   }, [selectedServer, selectedCaslib]);
 
   // Load column metadata and preview rows when table is selected
-  const handleSelectTable = useCallback(async (tableName: string) => {
+  // `preset` is a loaded test's mapping, applied instead of the auto-mapping
+  const handleSelectTable = useCallback(async (tableName: string, preset?: TestPreset) => {
     const generation = invalidateSelection();
     const isCurrent = () => generation === selectionRef.current;
 
@@ -285,9 +352,12 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     setColumns([]);
     setPreviewRows([]);
     setSources({});
+    setExpectedSources(NO_EXPECTED);
+    setSuggestedExpected(NO_EXPECTED);
     setError(null);
     setNotice(null);
     setPendingRun(null);
+    if (!preset) setLoadedTestNote(null);
 
     if (!tableName) return;
 
@@ -302,9 +372,47 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       if (!isCurrent()) return;
       setColumns(cols);
 
-      // Auto-map columns to parameters
+      // Auto-map columns to parameters, or apply the loaded test's mapping
       const colNames = cols.map(c => c.name);
-      setSources(autoMapColumns(colNames, parameters));
+      let nextSources: InputSources;
+      if (preset) {
+        const byLower = new Map(colNames.map(n => [n.toLowerCase(), n] as const));
+        nextSources = {};
+        const absent: string[] = [];
+        let mapped = 0;
+        let missing = 0;
+        for (const param of parameters) {
+          const wanted = preset.columns[param.name];
+          if (!wanted) {
+            // A test leaves an input without a mapping missing
+            nextSources[param.name] = { kind: 'missing' };
+            missing++;
+            continue;
+          }
+          const column = byLower.get(wanted.toLowerCase());
+          if (column) {
+            nextSources[param.name] = { kind: 'column', column };
+            mapped++;
+          } else {
+            nextSources[param.name] = { kind: 'unset' };
+            absent.push(`${param.name} → ${wanted}`);
+          }
+        }
+        setLoadedTestNote(
+          `Loaded test “${preset.testName}”: ${mapped} input${mapped === 1 ? '' : 's'} mapped to columns` +
+          (missing ? `, ${missing} sent as missing (the test does not map them)` : '') + '.'
+        );
+        const problems: string[] = [];
+        if (absent.length) problems.push(`These mapped columns are not in the table, so their inputs need a source: ${absent.join(', ')}.`);
+        if (preset.unknownVariables.length) problems.push(`These mapped decision variables match no input of this step and were skipped: ${preset.unknownVariables.join(', ')}.`);
+        if (problems.length) setNotice(problems.join(' '));
+      } else {
+        nextSources = autoMapColumns(colNames, parameters);
+      }
+      setSources(nextSources);
+      const suggestions = suggestExpectedColumns(colNames, outputParameters, nextSources);
+      setSuggestedExpected(suggestions);
+      setExpectedSources(suggestions);
 
       // Fetch a small row preview (best-effort — don't fail if this errors)
       try {
@@ -326,7 +434,88 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
     } finally {
       if (isCurrent()) setLoadingRows(false);
     }
-  }, [selectedServer, selectedCaslib, parameters, tables]);
+  }, [selectedServer, selectedCaslib, parameters, outputParameters, tables]);
+
+  // A loaded test reaches its table once the tables of its caslib are listed
+  useEffect(() => {
+    const preset = presetRef.current;
+    if (!preset || loadingTables) return;
+    if (tablesFor !== `${preset.serverName}|${preset.libraryName}`) return;
+    presetRef.current = null;
+    const table = tables.find(t => t.name === preset.tableName)
+      ?? tables.find(t => t.name.toLowerCase() === preset.tableName.toLowerCase());
+    if (!table) {
+      setNotice(
+        `The test “${preset.testName}” reads table ${preset.tableName}, which is not listed in ${preset.libraryName} ` +
+        '(only tables with rows are listed). Load it into CAS, then load the test again.'
+      );
+      return;
+    }
+    handleSelectTable(table.name, preset);
+  }, [tables, tablesFor, loadingTables, presetTick, handleSelectTable]);
+
+  // Apply a test chosen in Load Test: server, caslib and table in turn (each
+  // resets what lies below it), then the test's mapping instead of the auto-map.
+  const handleLoadTest = useCallback((test: ScoreTestDefinition) => {
+    const data = test.inputData;
+    const serverName = data?.serverName;
+    const libraryName = data?.libraryName;
+    const tableName = data?.tableName;
+    if (!serverName || !libraryName || !tableName) return;
+    setError(null);
+    setNotice(null);
+    setLoadedTestNote(null);
+    if (!servers.some(s => s.name === serverName)) {
+      setNotice(`The test “${test.name}” reads from CAS server ${serverName}, which is not available here. Nothing was changed.`);
+      return;
+    }
+    const resolve = buildReverseNameLookup(testSource?.signature ?? [], parameters);
+    const columns: Record<string, string> = {};
+    const unknownVariables: string[] = [];
+    for (const m of test.mappings ?? []) {
+      if (m.mappingType !== 'datasource' || typeof m.mappingValue !== 'string' || !m.mappingValue) continue;
+      const input = resolve(m.variableName);
+      if (input) columns[input] = m.mappingValue;
+      else unknownVariables.push(m.variableName);
+    }
+    presetRef.current = {
+      testName: test.name,
+      serverName,
+      libraryName,
+      tableName,
+      columns,
+      unknownVariables,
+    };
+    setTableFilter('');
+    if (serverName !== selectedServer) {
+      handleServerChange(serverName);
+      return;
+    }
+    const lib = caslibs.find(c => c.name === libraryName)
+      ?? caslibs.find(c => c.name.toLowerCase() === libraryName.toLowerCase());
+    if (!lib) {
+      presetRef.current = null;
+      setNotice(`The test “${test.name}” reads caslib ${libraryName}, which is not available to you on ${serverName}. Nothing was changed.`);
+      return;
+    }
+    if (lib.name === selectedCaslib) setPresetTick(n => n + 1);
+    else setSelectedCaslib(lib.name);
+  }, [servers, caslibs, selectedServer, selectedCaslib, parameters, testSource, handleServerChange]);
+
+  const handleExpectedChange = useCallback((output: string, column: string | null) => {
+    setPendingRun(null);
+    setExpectedSources(prev => {
+      const next = { ...prev };
+      if (column) next[output] = column;
+      else delete next[output];
+      return next;
+    });
+  }, []);
+
+  const handleClearExpected = useCallback(() => {
+    setPendingRun(null);
+    setExpectedSources(NO_EXPECTED);
+  }, []);
 
   const handleSourceChange = useCallback((paramName: string, source: InputSource) => {
     setPendingRun(null);
@@ -422,15 +611,25 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
         mappedCasColumns(columns, parameters, sources),
         fixedInputValues(parameters, sources)
       );
+      // Expected values as the table holds them (cells are trimmed text; SAS
+      // missing is '.'); the comparison normalises them
+      const columnIndex = new Map<string, number>();
+      columns.forEach((c, i) => {
+        if (!columnIndex.has(c.name)) columnIndex.set(c.name, i);
+      });
+      const expected = expectedRowsOf(fetched, expectedSources, (row, column) => {
+        const index = columnIndex.get(column);
+        return index === undefined ? undefined : getCellValue(row, column, index);
+      });
       // `fetched` (the raw cells) is released when this handler returns, which
       // is before the first scoring request completes: onExecuteBatch is not
       // awaited, so only the converted input records stay for the run.
       if (report.issueCount > 0) {
-        setPendingRun({ rows, report });
+        setPendingRun({ rows, expected, report });
         return;
       }
 
-      onExecuteBatch(rows, concurrency);
+      onExecuteBatch(rows, concurrency, expected);
     } catch (err: unknown) {
       // Stopped (or the panel unmounted, where the notice goes nowhere)
       if (axios.isCancel(err)) {
@@ -444,12 +643,12 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
       setFetchingForScore(false);
       setFetchProgress(null);
     }
-  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, sources, parameters, concurrency, onExecuteBatch]);
+  }, [selectedServer, selectedCaslib, selectedTable, scoreFullTable, totalRowCount, rowLimit, columns, sources, expectedSources, parameters, concurrency, onExecuteBatch]);
 
   const handleConfirmPendingRun = useCallback(() => {
     if (!pendingRun) return;
     setPendingRun(null);
-    onExecuteBatch(pendingRun.rows, concurrency);
+    onExecuteBatch(pendingRun.rows, concurrency, pendingRun.expected);
   }, [pendingRun, concurrency, onExecuteBatch]);
 
   // Mapping notes: a column whose CAS type conflicts with the input's type,
@@ -505,7 +704,22 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
 
   return (
     <Card className="cas-table-score">
-      <CardHeader>
+      <CardHeader
+        actions={testSource ? (
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => {
+              testSource.onOpen?.();
+              setShowLoadTest(true);
+            }}
+            disabled={executing || fetchingForScore || loadingServers}
+            title="Select the table and apply the column mapping of a test saved for this decision"
+          >
+            Load Test…
+          </Button>
+        ) : undefined}
+      >
         <h3>CAS Table</h3>
       </CardHeader>
       <CardBody>
@@ -521,7 +735,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                   id="cas-server-select"
                   className="sas-input"
                   value={selectedServer}
-                  onChange={e => handleServerChange(e.target.value)}
+                  onChange={e => {
+                    presetRef.current = null;
+                    handleServerChange(e.target.value);
+                  }}
                   disabled={executing}
                 >
                   {servers.length === 0 && <option value="">No servers available</option>}
@@ -541,7 +758,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                   id="cas-caslib-select"
                   className="sas-input"
                   value={selectedCaslib}
-                  onChange={e => setSelectedCaslib(e.target.value)}
+                  onChange={e => {
+                    presetRef.current = null;
+                    setSelectedCaslib(e.target.value);
+                  }}
                   disabled={executing || !selectedServer}
                 >
                   {caslibs.length === 0 && <option value="">No caslibs available</option>}
@@ -585,7 +805,10 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
                       key={t.name}
                       type="button"
                       className={`cas-table-score__table-item ${selectedTable === t.name ? 'cas-table-score__table-item--selected' : ''}`}
-                      onClick={() => handleSelectTable(t.name)}
+                      onClick={() => {
+                        presetRef.current = null;
+                        handleSelectTable(t.name);
+                      }}
                       disabled={executing}
                       aria-pressed={selectedTable === t.name}
                     >
@@ -612,6 +835,12 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
           <Alert variant="error" title="Error">{casError}</Alert>
         )}
 
+        {loadedTestNote && (
+          <Alert variant="info" dismissible onClose={() => setLoadedTestNote(null)}>
+            {loadedTestNote}
+          </Alert>
+        )}
+
         {notice && (
           <Alert variant="warning" dismissible onClose={() => setNotice(null)}>
             {notice}
@@ -635,6 +864,17 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
               onChange={handleSourceChange}
               onSetUnsetToMissing={handleUnsetToMissing}
               notes={notes}
+              disabled={executing || fetchingForScore}
+            />
+
+            <ExpectedOutputsMapping
+              idPrefix="cas-expected"
+              outputs={outputParameters}
+              columns={columns.map(col => ({ name: col.name, label: `${col.name} (${col.type})` }))}
+              expected={expectedSources}
+              suggested={suggestedExpected}
+              onChange={handleExpectedChange}
+              onClearAll={handleClearExpected}
               disabled={executing || fetchingForScore}
             />
 
@@ -847,6 +1087,14 @@ export const CasTableScore: React.FC<CasTableScoreProps> = ({
             </span>
           )}
         </CardFooter>
+      )}
+
+      {showLoadTest && testSource && (
+        <LoadTestDialog
+          sourceURI={testSource.sourceURI}
+          onLoad={handleLoadTest}
+          onClose={() => setShowLoadTest(false)}
+        />
       )}
     </Card>
   );

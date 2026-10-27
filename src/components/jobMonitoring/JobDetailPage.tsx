@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useId, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../layout/Layout';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
@@ -14,13 +14,14 @@ import {
   removeJobFromCache,
   updateJobStateInCache,
 } from '../../hooks/useJobMonitoring';
-import { cancelJob, deleteJob } from '../../api/jobs';
-import { isTerminalState } from '../../types/jobExecution';
+import { cancelJob, deleteJob, getRerunEligibility } from '../../api/jobs';
+import { ExecutionJob, isTerminalState } from '../../types/jobExecution';
 import { JobStateBadge } from './JobStateBadge';
 import { JobLogViewer } from './JobLogViewer';
 import { JobCodePanel } from './JobCodePanel';
 import { JobParametersPanel } from './JobParametersPanel';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RerunJobDialog } from './RerunJobDialog';
 import { elapsedSince, formatDuration, formatTimestamp, sanitizeFilename } from './utils';
 import { firstErrorLine } from './logSearch';
 import { useNowTick } from './useNowTick';
@@ -63,12 +64,21 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
   // Confirmation dialog state for the destructive job actions. `pending`
   // tracks which action is awaiting confirmation; `busy` toggles while
   // the underlying request is in flight; `error` surfaces any failure.
-  const [pendingAction, setPendingAction] = useState<'cancel' | 'delete' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'cancel' | 'delete' | 'rerun' | 'rerunWithChanges' | null>(null);
+  const navigate = useNavigate();
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const job = detail.job;
   const isTerminal = job ? isTerminalState(job.state) : false;
+  const rerun = useMemo(() => (job ? getRerunEligibility(job) : null), [job]);
+
+  // The rerun was accepted: open the new job (Log tab, live) in place of this one.
+  const handleRerunSubmitted = (newJob: ExecutionJob) => {
+    setPendingAction(null);
+    setActionError(null);
+    navigate(`/jobs/${encodeURIComponent(newJob.id)}`);
+  };
   const now = useNowTick(1000, !isTerminal && !!job);
 
   // A failed job's first ERROR line, shown in the header as the reason.
@@ -260,6 +270,16 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
               <Button variant="secondary" size="small" onClick={detail.refresh}>
                 Refresh
               </Button>
+              {isTerminal && rerun?.allowed && (
+                <>
+                  <Button variant="secondary" size="small" onClick={() => setPendingAction('rerun')}>
+                    Rerun
+                  </Button>
+                  <Button variant="secondary" size="small" onClick={() => setPendingAction('rerunWithChanges')}>
+                    Rerun with changes…
+                  </Button>
+                </>
+              )}
               {isTerminal ? (
                 <Button
                   variant="danger"
@@ -289,7 +309,13 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
             <span><strong>Ended:</strong> {formatTimestamp(job.endTimeStamp)}</span>
           )}
           <span><strong>ID:</strong> {job.id}</span>
+          {rerun?.application && (
+            <span><strong>Application:</strong> {rerun.application}</span>
+          )}
         </div>
+        {isTerminal && rerun && !rerun.allowed && (
+          <p className="job-detail__rerun-note">Rerun is not offered: {rerun.reason}</p>
+        )}
         {failureReason && (
           <p className="job-detail__failure">
             <strong>
@@ -357,6 +383,17 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
           error={actionError}
           onConfirm={handleConfirmCancel}
           onCancel={dismissDialog}
+        />
+      )}
+
+      {(pendingAction === 'rerun' || pendingAction === 'rerunWithChanges') && rerun?.allowed && (
+        <RerunJobDialog
+          job={job}
+          name={name}
+          eligibility={rerun}
+          withChanges={pendingAction === 'rerunWithChanges'}
+          onSubmitted={handleRerunSubmitted}
+          onCancel={() => setPendingAction(null)}
         />
       )}
 

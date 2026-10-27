@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { Modal } from '../common/Modal';
+import { Modal, type ModalSize } from '../common/Modal';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 
@@ -21,6 +21,10 @@ interface ConfirmDialogProps {
   error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Dialog width; 'small' (the default) suits a sentence, 'medium' a form. */
+  size?: ModalSize;
+  /** Element to focus on open (a form's first field); defaults to the dialog. */
+  initialFocusRef?: React.RefObject<HTMLElement>;
 }
 
 // The chrome (scrim, z-index, Escape, focus trap, labelled dialog role) is
@@ -35,6 +39,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   error,
   onConfirm,
   onCancel,
+  size = 'small',
+  initialFocusRef,
 }) => {
   const handleClose = () => {
     if (!busy) onCancel();
@@ -43,7 +49,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <Modal
       title={title}
-      size="small"
+      size={size}
+      initialFocusRef={initialFocusRef}
       onClose={handleClose}
       closeOnBackdropClick={!busy}
       footer={

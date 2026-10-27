@@ -18,11 +18,15 @@ import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
 import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
 import { decodeUIDefinition } from './utils/shareLink';
+import { runWithLeaveGuard } from './components/uiBuilder/leaveGuard';
 import { initViyaUrl } from './config';
 import { applyEnvironmentColor } from './utils/envColor';
 import { clearAllViewCaches } from './utils/viewCaches';
 import { buildListSearch, parsePageParam, readListParams, RESET_LIST_STATE } from './utils/listUrlState';
 import { clearCasCatalog } from './hooks/useCasCatalog';
+// Loaded eagerly so logout clears scoring drafts and run history even when
+// the lazy score view was never opened after a reload.
+import './components/scoring/scoringSession';
 import { OPEN_SETTINGS_EVENT } from './components/common/AuthErrorModal';
 import { DownloadFallback } from './components/common/DownloadFallback';
 import './styles/index.css';
@@ -718,6 +722,7 @@ function App() {
           definition={activeUIDefinition}
           onBack={handleBackToUIApps}
           onSaved={handleUIAppSaved}
+          onSavedInPlace={loadRecentUIApps}
         />
       );
     }
@@ -730,6 +735,7 @@ function App() {
           moduleId={uiAppNewModuleId}
           onBack={handleBackToUIApps}
           onSaved={handleUIAppSaved}
+          onSavedInPlace={loadRecentUIApps}
         />
       );
     }
@@ -885,14 +891,15 @@ function App() {
     <>
       <Layout
         activeView={getActiveView()}
-        onNavigate={handleNavigate}
+        // Sidebar exits ask first while the UI Builder has unsaved changes.
+        onNavigate={(view) => runWithLeaveGuard(() => handleNavigate(view))}
         selectedModule={selectedModule}
         recentModules={recentModules}
-        onSelectModule={handleSelectModule}
+        onSelectModule={(module) => runWithLeaveGuard(() => handleSelectModule(module))}
         onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
         activeConnectionName={activeConnectionName}
         recentUIApps={recentUIApps}
-        onSelectUIApp={handleRunUIApp}
+        onSelectUIApp={(id) => runWithLeaveGuard(() => handleRunUIApp(id))}
       >
         {renderContent()}
       </Layout>

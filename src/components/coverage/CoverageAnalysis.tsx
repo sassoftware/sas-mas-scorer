@@ -19,20 +19,28 @@ import {
   collectionGaps,
   COVERAGE_TOTAL_STEPS,
   describeCollectionStatus,
+  describeLastRun,
+  describeTestChanges,
   generateCoverageCSV,
   generateCoverageMarkdown,
   getContentTypeLabel,
   getDeepLink,
+  isAtRisk,
+  shortId,
+  testHealthLabel,
   testsNotCollected,
   type CoverageRunResult,
+  type RunScanStatus,
 } from '../../api/coverage';
-import { ContentType, CollectionProgress } from '../../types/coverage';
+import { masModuleRoute } from '../../api/modelPublish';
+import { AssetTestHealth, ContentType, CollectionProgress, TestScenarioInfo } from '../../types/coverage';
+import { ScoreIcon, useDecisionMasIndex } from './DecisionScoreAction';
 
 type FilterType = 'all' | ContentType;
-type CoverageFilter = 'all' | 'covered' | 'uncovered';
+type CoverageFilter = 'all' | 'covered' | 'uncovered' | 'at-risk';
 
 const TYPE_FILTERS = ['all', 'decision', 'businessRule', 'codeFile', 'model', 'treatment', 'segmentationTree'] as const satisfies readonly FilterType[];
-const COVERAGE_FILTERS = ['all', 'covered', 'uncovered'] as const satisfies readonly CoverageFilter[];
+const COVERAGE_FILTERS = ['all', 'covered', 'uncovered', 'at-risk'] as const satisfies readonly CoverageFilter[];
 /** URL defaults for the detail table; left out of the URL when unchanged. */
 const LIST_DEFAULTS = { q: '', type: 'all', coverage: 'all' };
 type SortField = 'name' | 'contentType' | 'testScenarioCount' | 'modifiedTimestamp';
@@ -206,6 +214,8 @@ export const CoverageAnalysis: React.FC = () => {
       items = items.filter(i => i.hasTestScenario);
     } else if (coverageFilter === 'uncovered') {
       items = items.filter(i => !i.hasTestScenario);
+    } else if (coverageFilter === 'at-risk') {
+      items = items.filter(isAtRisk);
     }
     const term = debouncedSearch.trim().toLowerCase();
     if (term) {
@@ -249,7 +259,7 @@ export const CoverageAnalysis: React.FC = () => {
 
   const handleExportCSV = useCallback(() => {
     if (!result) return;
-    const csv = generateCoverageCSV(sortedItems, !testsNotCollected(result));
+    const csv = generateCoverageCSV(sortedItems, !testsNotCollected(result), result.health.runScan);
     downloadFile(csv, 'test-coverage.csv', 'text/csv');
   }, [result, sortedItems]);
 
@@ -270,6 +280,15 @@ export const CoverageAnalysis: React.FC = () => {
     () => new Set(gaps.filter(g => g.status === 'skipped').map(g => g.key)),
     [gaps],
   );
+  // The asset and test walks; the latest-run scan is reported on its own.
+  const assetGaps = useMemo(() => gaps.filter(g => g.key !== 'scoreExecution'), [gaps]);
+  const runGap = gaps.find(g => g.key === 'scoreExecution');
+  const health = result?.health;
+  const showHealth = !!result && !noTests && result.stats.overall.itemsWithTests > 0;
+
+  // Score links for decision rows: one modelPublish query for every flow,
+  // only once a result lists decisions.
+  const mas = useDecisionMasIndex(!!result && result.stats.byType.decision.total > 0);
 
   return (
     <div className="coverage-analysis">
@@ -370,12 +389,12 @@ export const CoverageAnalysis: React.FC = () => {
       {/* Results */}
       {result && (
         <>
-          {gaps.length > 0 && (
+          {assetGaps.length > 0 && (
             <Alert
               variant="warning"
               title={noTests
                 ? 'Test coverage could not be determined'
-                : `${gaps.length} collection${gaps.length === 1 ? ' was' : 's were'} not read completely`}
+                : `${assetGaps.length} collection${assetGaps.length === 1 ? ' was' : 's were'} not read completely`}
             >
               <p className="coverage-gaps__intro">
                 {noTests
@@ -383,12 +402,25 @@ export const CoverageAnalysis: React.FC = () => {
                   : 'The figures below cover only what was collected; assets in these collections are missing or incomplete.'}
               </p>
               <ul className="coverage-gaps__list">
-                {gaps.map(g => (
+                {assetGaps.map(g => (
                   <li key={g.key}>
                     <strong>{g.label}</strong>: {describeCollectionStatus(g)}
                   </li>
                 ))}
               </ul>
+            </Alert>
+          )}
+
+          {!noTests && runGap && (
+            <Alert
+              variant="info"
+              title={runGap.status === 'skipped' ? 'Last runs could not be read' : 'Last runs are incomplete'}
+            >
+              <p className="coverage-gaps__intro">
+                {runGap.status === 'skipped'
+                  ? `The score executions could not be read${runGap.httpStatus ? ` (HTTP ${runGap.httpStatus})` : ''}, so no test shows a last run. Coverage itself is not affected.`
+                  : `The newest-first scan of score executions ${describeCollectionStatus(runGap)}. Those tests show "No run in scan": a run may exist further back.`}
+              </p>
             </Alert>
           )}
 
@@ -441,6 +473,60 @@ export const CoverageAnalysis: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Test health: what the latest runs and the asset changes say */}
+          {showHealth && health && (
+            <Card className="coverage-health-card">
+              <CardHeader
+                actions={health.atRisk > 0 ? (
+                  // One button that toggles, so keyboard focus stays on it.
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => setCoverageFilter(coverageFilter === 'at-risk' ? 'all' : 'at-risk')}
+                  >
+                    {coverageFilter === 'at-risk'
+                      ? 'Show all assets'
+                      : `Show the ${health.atRisk} covered but failing or changed`}
+                  </Button>
+                ) : undefined}
+              >
+                <h3>Test Health</h3>
+              </CardHeader>
+              <CardBody>
+                <ul className="coverage-health__counts" aria-label="Covered assets by test health">
+                  <HealthCount health="healthy" count={health.healthy} runScan={health.runScan}
+                    hint="no latest run failed, at least one completed" />
+                  <HealthCount health="failing" count={health.failing} runScan={health.runScan}
+                    hint="a test's latest run failed" />
+                  <HealthCount health="noRun" count={health.noRun} runScan={health.runScan}
+                    hint="no completed or failed run recorded" />
+                  {health.unknown > 0 && (
+                    <HealthCount health="unknown" count={health.unknown} runScan={health.runScan}
+                      hint={health.runScan === 'failed' ? 'the executions could not be read' : 'a run may exist further back'} />
+                  )}
+                  <li className="coverage-health__count coverage-health__count--changed">
+                    {CHANGED_ICON}
+                    <span className="coverage-health__value">{health.changedSinceTests}</span>
+                    <span className="coverage-health__label">
+                      Changed since tests
+                      <span className="coverage-health__hint">every test predates the asset's current state</span>
+                    </span>
+                  </li>
+                </ul>
+                <p className="coverage-health__note">
+                  Last run is the state SAS recorded for the newest score execution of each test; "completed"
+                  means the run finished, not that its expected values matched. "Changed since test" means the
+                  test targets another revision than the asset's current one, or the asset was modified after the
+                  test was created; it does not say the test would now fail.
+                  {' '}Latest runs found for {health.testsWithRun} of {health.tests} tests
+                  {health.runScan === 'capped'
+                    ? `, from the ${health.executionsRead.toLocaleString()} newest score executions (the scan limit).`
+                    : health.runScan === 'failed' ? ' (the score executions could not be read).' : '.'}
+                </p>
+              </CardBody>
+            </Card>
+          )}
 
           {/* Coverage by Type Bars */}
           <Card className="coverage-by-type-card">
@@ -569,6 +655,7 @@ export const CoverageAnalysis: React.FC = () => {
                       <option value="all">All Coverage</option>
                       <option value="covered">Covered</option>
                       <option value="uncovered">Uncovered</option>
+                      <option value="at-risk">Covered, but failing or changed since tests</option>
                     </select>
                   </label>
                 </div>
@@ -585,15 +672,16 @@ export const CoverageAnalysis: React.FC = () => {
                       <SortHeader field="contentType" label="Type" current={sortField} dir={sortDir} onSort={handleSort} width="140px" />
                       <th className="sas-table__th" style={{ width: '90px', textAlign: 'center' }}>Coverage</th>
                       <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="right" />
+                      <th className="sas-table__th" style={{ width: '170px' }}>Test health</th>
                       <th className="sas-table__th" style={{ width: '120px' }}>Created By</th>
                       <SortHeader field="modifiedTimestamp" label="Modified" current={sortField} dir={sortDir} onSort={handleSort} width="110px" />
-                      <th className="sas-table__th" style={{ width: '100px', textAlign: 'center' }}>Link</th>
+                      <th className="sas-table__th" style={{ width: '120px', textAlign: 'center' }}>Links</th>
                     </tr>
                   </thead>
                   <tbody className="sas-table__body">
                     {pageItems.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="sas-table__td coverage-detail__empty">
+                        <td colSpan={8} className="sas-table__td coverage-detail__empty">
                           No assets match the current filters.
                         </td>
                       </tr>
@@ -654,12 +742,60 @@ export const CoverageAnalysis: React.FC = () => {
                                   <Badge variant="info" size="small">{item.testScenarioCount}</Badge>
                                 )}
                               </td>
+                              <td className="sas-table__td">
+                                {!noTests && item.testHealth && (
+                                  <span className="coverage-health__cell">
+                                    <HealthBadge health={item.testHealth} runScan={health?.runScan} />
+                                    {item.changedSinceTests && (
+                                      <Badge variant="warning" size="small">
+                                        <span className="coverage-health__badge">
+                                          {CHANGED_ICON}
+                                          Changed since tests
+                                        </span>
+                                      </Badge>
+                                    )}
+                                  </span>
+                                )}
+                              </td>
                               <td className="sas-table__td">{item.createdBy}</td>
                               <td className="sas-table__td">
                                 {item.modifiedTimestamp ? new Date(item.modifiedTimestamp).toLocaleDateString() : ''}
                               </td>
                               <td className="sas-table__td" style={{ textAlign: 'center' }}>
                                 <span className="coverage-detail__links">
+                                  {item.contentType === 'decision' && (() => {
+                                    // Only a module MAS was found to have (see findMasModulesForDecisions).
+                                    const module = mas.index?.[item.id]?.latest;
+                                    if (!module) return null;
+                                    const checked = mas.index?.[item.id]?.verified !== false;
+                                    return (
+                                      <a
+                                        href={`#${masModuleRoute(module.publishName)}`}
+                                        className="sas-deep-link"
+                                        title={`Score in MAS module ${module.publishName}${checked ? '' : ' (from the publish history; MAS could not be checked)'}`}
+                                        aria-label={`Score ${item.name} in MAS module ${module.publishName}`}
+                                        onClick={e => e.stopPropagation()}
+                                      >
+                                        <ScoreIcon className="sas-deep-link__icon" />
+                                      </a>
+                                    );
+                                  })()}
+                                  {item.contentType === 'segmentationTree' && (
+                                    <a
+                                      href={`#/segmentation-trees/${encodeURIComponent(item.id)}`}
+                                      className="sas-deep-link"
+                                      title="Open in Segmentation Tree Explorer"
+                                      aria-label={`Open ${item.name} in the Segmentation Tree Explorer`}
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <rect x="9" y="2" width="6" height="5" rx="1" />
+                                        <rect x="2" y="17" width="6" height="5" rx="1" />
+                                        <rect x="16" y="17" width="6" height="5" rx="1" />
+                                        <path d="M12 7v5M5 17v-5h14v5" />
+                                      </svg>
+                                    </a>
+                                  )}
                                   {item.contentType === 'decision' && (
                                     <a
                                       href={`#/flows/${item.id}`}
@@ -698,14 +834,16 @@ export const CoverageAnalysis: React.FC = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="coverage-expand-row">
-                                <td colSpan={7} className="coverage-expand-cell">
+                                <td colSpan={8} className="coverage-expand-cell">
                                   <div className="coverage-scenarios">
                                     <div className="coverage-scenarios__header">Test Scenarios</div>
                                     <table className="coverage-scenarios__table sas-table sas-table--compact">
                                       <thead className="sas-table__head">
                                         <tr>
                                           <th className="sas-table__th">Name</th>
-                                          <th className="sas-table__th" style={{ width: '140px' }}>Type</th>
+                                          <th className="sas-table__th" style={{ width: '120px' }}>Type</th>
+                                          <th className="sas-table__th" style={{ width: '190px' }}>Last run</th>
+                                          <th className="sas-table__th">Changed since test</th>
                                           <th className="sas-table__th">Description</th>
                                         </tr>
                                       </thead>
@@ -717,6 +855,12 @@ export const CoverageAnalysis: React.FC = () => {
                                               <Badge variant={getScenarioTypeBadgeVariant(ts.scenarioType)} size="small">
                                                 {ts.scenarioType}
                                               </Badge>
+                                            </td>
+                                            <td className="sas-table__td">
+                                              <LastRunCell test={ts} cap={health?.executionCap} />
+                                            </td>
+                                            <td className="sas-table__td coverage-scenarios__changes">
+                                              <ChangesCell test={ts} />
                                             </td>
                                             <td className="sas-table__td coverage-scenarios__desc">
                                               {ts.description || <span className="coverage-scenarios__none">No description</span>}
@@ -802,6 +946,126 @@ const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onS
     </th>
   );
 };
+
+// Test health: state as text and icon, never the colour alone.
+
+const svgProps = {
+  width: 14,
+  height: 14,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+  className: 'coverage-health__icon',
+};
+
+const HEALTH_ICON: Record<AssetTestHealth, React.ReactNode> = {
+  healthy: <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>,
+  failing: <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></svg>,
+  noRun: <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></svg>,
+  unknown: <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 015 .5c0 1.5-2.5 2-2.5 3.5M12 17h.01" /></svg>,
+};
+
+const CHANGED_ICON = (
+  <svg {...svgProps}>
+    <path d="M12 9v4M12 17h.01" />
+    <path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
+  </svg>
+);
+
+const HEALTH_VARIANT = {
+  healthy: 'success',
+  failing: 'error',
+  noRun: 'default',
+  unknown: 'default',
+} as const satisfies Record<AssetTestHealth, string>;
+
+const HealthBadge: React.FC<{ health: AssetTestHealth; runScan?: RunScanStatus }> = ({ health, runScan }) => (
+  <Badge variant={HEALTH_VARIANT[health]} size="small">
+    <span className="coverage-health__badge">
+      {HEALTH_ICON[health]}
+      {testHealthLabel(health, runScan)}
+    </span>
+  </Badge>
+);
+
+const HealthCount: React.FC<{ health: AssetTestHealth; count: number; runScan: RunScanStatus; hint: string }> = ({
+  health, count, runScan, hint,
+}) => (
+  <li className={`coverage-health__count coverage-health__count--${health}`}>
+    {HEALTH_ICON[health]}
+    <span className="coverage-health__value">{count}</span>
+    <span className="coverage-health__label">
+      {testHealthLabel(health, runScan)}
+      <span className="coverage-health__hint">{hint}</span>
+    </span>
+  </li>
+);
+
+/** Execution states mapped to a badge; the state's own word is always shown. */
+function runVariant(state: string) {
+  switch (state) {
+    case 'completed': return 'success' as const;
+    case 'failed': return 'error' as const;
+    case 'canceled': return 'warning' as const;
+    default: return 'info' as const;
+  }
+}
+
+function runIcon(state: string): React.ReactNode {
+  if (state === 'completed') return HEALTH_ICON.healthy;
+  if (state === 'failed') return HEALTH_ICON.failing;
+  return HEALTH_ICON.noRun;
+}
+
+const LastRunCell: React.FC<{ test: TestScenarioInfo; cap?: number }> = ({ test, cap }) => {
+  const run = test.lastRun;
+  if (!run) {
+    return <span className="coverage-scenarios__none">{capitalize(describeLastRun(test, cap))}</span>;
+  }
+  return (
+    <span className="coverage-run">
+      <Badge variant={runVariant(run.state)} size="small">
+        <span className="coverage-health__badge">
+          {runIcon(run.state)}
+          {capitalize(run.state)}
+        </span>
+      </Badge>
+      {run.timestamp && (
+        <time className="coverage-run__date" dateTime={run.timestamp} title={new Date(run.timestamp).toLocaleString()}>
+          {new Date(run.timestamp).toLocaleDateString()}
+        </time>
+      )}
+    </span>
+  );
+};
+
+const ChangesCell: React.FC<{ test: TestScenarioInfo }> = ({ test }) => {
+  if (test.changes.length === 0) {
+    return <span className="coverage-scenarios__none">None shown in the metadata</span>;
+  }
+  return (
+    <ul className="coverage-changes" title={describeTestChanges(test)}>
+      {test.changes.map(change => (
+        <li key={change.kind} className="coverage-changes__item">
+          {CHANGED_ICON}
+          <span>
+            {change.kind === 'revision'
+              ? `Targets revision ${shortId(change.testedRevisionId)}; the asset is now at ${shortId(change.currentRevisionId)}`
+              : `Asset modified ${new Date(change.assetModified).toLocaleDateString()}, after this test was created (${new Date(change.testCreated).toLocaleDateString()})`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+function capitalize(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
 
 // Helpers
 

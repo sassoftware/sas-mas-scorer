@@ -18,10 +18,14 @@ import {
   scanMappedRows,
 } from '../../utils/fileFormats';
 import { ColumnMappingGrid } from './ColumnMappingGrid';
+import { ExpectedOutputsMapping } from './ExpectedOutputsMapping';
 import {
+  ExpectedSources,
   InputSource,
   InputSources,
   autoMapColumns,
+  expectedRowsOf,
+  suggestExpectedColumns,
   fixedInputValues,
   notesFromReport,
   sourceOf,
@@ -31,9 +35,19 @@ import {
 
 interface FileUploadProps {
   parameters: StepParameter[];
-  onExecuteBatch: (rows: Record<string, unknown>[], concurrency: number) => void;
+  /** The step's outputs, for the optional expected-output columns */
+  outputParameters?: StepParameter[];
+  /** `expected` holds each row's expected outputs, or null when nothing is compared */
+  onExecuteBatch: (
+    rows: Record<string, unknown>[],
+    concurrency: number,
+    expected?: Record<string, unknown>[] | null
+  ) => void;
   executing: boolean;
 }
+
+const NO_OUTPUTS: StepParameter[] = [];
+const NO_EXPECTED: ExpectedSources = {};
 
 const formatCell = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -73,6 +87,7 @@ const mappedColumnsOf = (
 
 export const FileUpload: React.FC<FileUploadProps> = ({
   parameters,
+  outputParameters = NO_OUTPUTS,
   onExecuteBatch,
   executing,
 }) => {
@@ -89,6 +104,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [delimiter, setDelimiter] = useState<string | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState<string>('');
   const [dragOver, setDragOver] = useState(false);
+  // Optional expected-output columns, and what was suggested by name
+  const [expectedSources, setExpectedSources] = useState<ExpectedSources>(NO_EXPECTED);
+  const [suggestedExpected, setSuggestedExpected] = useState<ExpectedSources>(NO_EXPECTED);
 
   const runAdapter = useCallback(async (
     adapter: FileFormatAdapter,
@@ -107,14 +125,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
       setTable(parsed);
       setFormatLabel(adapter.label);
-      setSources(autoMapColumns(parsed.headers, parameters));
+      const autoSources = autoMapColumns(parsed.headers, parameters);
+      setSources(autoSources);
+      const suggestions = suggestExpectedColumns(parsed.headers, outputParameters, autoSources);
+      setSuggestedExpected(suggestions);
+      setExpectedSources(suggestions);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to parse file';
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [parameters]);
+  }, [parameters, outputParameters]);
 
   // One path for the file picker and a drop onto the upload area
   const handleFile = useCallback(async (file: File) => {
@@ -194,9 +216,22 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setSources(prev => unsetToMissing(parameters, prev));
   }, [parameters]);
 
+  const handleExpectedChange = useCallback((output: string, column: string | null) => {
+    setExpectedSources(prev => {
+      const next = { ...prev };
+      if (column) next[output] = column;
+      else delete next[output];
+      return next;
+    });
+  }, []);
+
+  const handleClearExpected = useCallback(() => setExpectedSources(NO_EXPECTED), []);
+
   const handleClear = useCallback(() => {
     setTable(null);
     setSources({});
+    setExpectedSources(NO_EXPECTED);
+    setSuggestedExpected(NO_EXPECTED);
     setFileName(null);
     setFormatLabel(null);
     setError(null);
@@ -235,8 +270,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       mappedColumnsOf(table, parameters, sources),
       fixedInputValues(parameters, sources)
     );
-    onExecuteBatch(rows, concurrency);
-  }, [table, summary.ready, parameters, sources, onExecuteBatch, concurrency]);
+    // Expected values are read as they are in the file; the comparison
+    // normalises them (numbers as text, blanks, SAS missing values)
+    const headerIndex = new Map<string, number>();
+    table.headers.forEach((h, i) => {
+      if (!headerIndex.has(h)) headerIndex.set(h, i);
+    });
+    const expected = expectedRowsOf(table.rows, expectedSources, (row, column) => {
+      const index = headerIndex.get(column);
+      return index === undefined ? undefined : row[index];
+    });
+    onExecuteBatch(rows, concurrency, expected);
+  }, [table, summary.ready, parameters, sources, expectedSources, onExecuteBatch, concurrency]);
 
   const supportedFormats = adapters.map(a => a.label).join(', ');
 
@@ -358,6 +403,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               onChange={handleSourceChange}
               onSetUnsetToMissing={handleUnsetToMissing}
               notes={notes}
+              disabled={executing}
+            />
+
+            <ExpectedOutputsMapping
+              idPrefix="file-expected"
+              outputs={outputParameters}
+              columns={table.headers.map(header => ({ name: header }))}
+              expected={expectedSources}
+              suggested={suggestedExpected}
+              onChange={handleExpectedChange}
+              onClearAll={handleClearExpected}
               disabled={executing}
             />
 

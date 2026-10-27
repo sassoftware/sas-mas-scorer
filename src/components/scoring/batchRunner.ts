@@ -8,6 +8,7 @@
 
 import axios from 'axios';
 import { StepOutput } from '../../types';
+import { RowCheck } from '../../utils/expectedValues';
 
 export interface BatchResult {
   rowIndex: number;
@@ -17,6 +18,10 @@ export interface BatchResult {
   executionTime: number; // in milliseconds, of the last attempt
   /** Automatic retries spent on this row after transient failures. */
   retries?: number;
+  /** Expected output values of this row (output name → cell), when columns were mapped */
+  expected?: Record<string, unknown>;
+  /** The row's outputs checked against `expected`, computed once when the row was scored */
+  check?: RowCheck;
 }
 
 export interface BatchStats {

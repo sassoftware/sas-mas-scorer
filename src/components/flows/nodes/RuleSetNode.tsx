@@ -3,6 +3,7 @@
 
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { SidNodeData } from '../../../types/sid';
+import NodeFrame, { isUnavailable } from './NodeFrame';
 import { NODE_COLORS } from '../../../flow/constants';
 
 type RuleSetNodeType = Node<SidNodeData, 'ruleset'>;
@@ -15,7 +16,7 @@ const pill = {
 } as const;
 
 /** Rule count, kind and invalid-element count arrive once the rules are fetched. */
-export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
+export default function RuleSetNode({ id, data, selected }: NodeProps<RuleSetNodeType>) {
   const colors = NODE_COLORS.ruleset;
   const ruleCount = typeof data.ruleCount === 'number' ? data.ruleCount : null;
   const ruleSetType = typeof data.ruleSetType === 'string' ? data.ruleSetType : '';
@@ -31,51 +32,53 @@ export default function RuleSetNode({ data }: NodeProps<RuleSetNodeType>) {
   return (
     <>
       <Handle type="target" position={Position.Top} />
-      <div style={{ position: 'relative', minWidth: '160px' }}>
-        {/* Trapezoid shape via clip-path */}
-        <div
-          style={{
-            padding: '12px 20px',
-            textAlign: 'center',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            backgroundColor: colors.bg,
-            border: `2px solid ${colors.border}`,
-            borderRadius: '4px',
-            clipPath: 'polygon(8% 0%, 92% 0%, 100% 100%, 0% 100%)',
-          }}
-        >
+      <NodeFrame id={id} selected={selected} unavailable={isUnavailable(data)}>
+        <div style={{ position: 'relative', minWidth: '160px' }}>
+          {/* Trapezoid shape via clip-path */}
           <div
             style={{
-              fontSize: '10px',
-              fontWeight: 600,
-              marginBottom: '4px',
-              display: 'flex',
-              gap: '4px',
-              justifyContent: 'center',
+              padding: '12px 20px',
+              textAlign: 'center',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              backgroundColor: colors.bg,
+              border: `2px solid ${colors.border}`,
+              borderRadius: '4px',
+              clipPath: 'polygon(8% 0%, 92% 0%, 100% 100%, 0% 100%)',
             }}
           >
-            <span style={{ ...pill, color: 'var(--sas-white)', backgroundColor: colors.badge }}>
-              Rule Set
-            </span>
-            {issues > 0 && (
-              <span
-                style={{ ...pill, color: 'var(--sas-white)', backgroundColor: 'var(--sas-error-dark)' }}
-                title={`${issues} element${issues === 1 ? '' : 's'} reported invalid by SAS Intelligent Decisioning`}
-              >
-                &#9888; {issues}
+            <div
+              style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                marginBottom: '4px',
+                display: 'flex',
+                gap: '4px',
+                justifyContent: 'center',
+              }}
+            >
+              <span style={{ ...pill, color: 'var(--sas-white)', backgroundColor: colors.badge }}>
+                Rule Set
               </span>
+              {issues > 0 && (
+                <span
+                  style={{ ...pill, color: 'var(--sas-white)', backgroundColor: 'var(--sas-error-dark)' }}
+                  title={`${issues} element${issues === 1 ? '' : 's'} reported invalid by SAS Intelligent Decisioning`}
+                >
+                  &#9888; {issues}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
+              {data.label}
+            </div>
+            {subtitle && (
+              <div style={{ fontSize: '10px', color: 'var(--sas-gray-600)', marginTop: '2px' }}>
+                {subtitle}
+              </div>
             )}
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text }}>
-            {data.label}
-          </div>
-          {subtitle && (
-            <div style={{ fontSize: '10px', color: 'var(--sas-gray-600)', marginTop: '2px' }}>
-              {subtitle}
-            </div>
-          )}
         </div>
-      </div>
+      </NodeFrame>
       <Handle type="source" position={Position.Bottom} />
     </>
   );

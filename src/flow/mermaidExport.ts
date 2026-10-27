@@ -14,6 +14,9 @@ import { buildDeepLink, buildDecisionDeepLink, buildRuleSetDeepLink, buildModelD
 import { getRuleSet, getRuleSetBundle, type RuleSetDetail, type BusinessRule, type RuleSetBundle } from '../api/rulesets';
 import { buildRuleSetView, type RuleElementView, type RuleSetView } from '../utils/ruleSetView';
 import { ruleSetViewOf } from './ruleSetViewCache';
+import {
+  buildVariableUsageIndex, MAPPED_CAVEAT, TRACE_CAVEAT, TRACE_ROLE_LABELS, type UsageNode,
+} from './variableUsage';
 import { getSidModel, type SidModelDetail } from '../api/sidModels';
 import { getCodeFileDetail, getFileContent, stripLeadingJsonComment, type CodeFileDetail } from '../api/codeFiles';
 import { getTreatmentGroupByUri, getTreatmentDefinitionByRevision, type TreatmentGroupDetail, type TreatmentDefinitionDetail } from '../api/treatments';
@@ -505,6 +508,24 @@ interface FetchedNodeDetails {
   segmentationTree?: SegmentationTreeDetail;
   subDecisionFlow?: DecisionFlow;
   restApi?: RestApiDefinitionDetail;
+  /** What could not be loaded for this node, one sentence each. */
+  failures?: string[];
+}
+
+/** A read the export could not complete, as the "Incomplete sections" list shows it. */
+interface ExportFailure {
+  /** The node section it belongs to (its anchor), or none for a document-level section. */
+  anchor?: string;
+  /** The section's title in the list. */
+  section: string;
+  /** What is missing, with the reason. */
+  detail: string;
+}
+
+/** The reason a read failed, as one line (the API client's message carries the HTTP status). */
+function reasonText(reason: unknown): string {
+  const text = reason instanceof Error ? reason.message : String(reason);
+  return text.replace(/\s+/g, ' ').trim() || 'unknown error';
 }
 
 /**
@@ -513,11 +534,11 @@ interface FetchedNodeDetails {
  * a model or code file is often reused across branches). Storing the promise
  * rather than the value lets concurrent members of one fetch batch share a
  * single request. A rejected promise is shared too, which is fine here: every
- * caller already swallows the failure and omits the section.
+ * caller records the failure on its own node and omits that part.
  */
 interface SharedObjectFetches {
   models: Map<string, Promise<SidModelDetail>>;
-  codeFiles: Map<string, Promise<{ codeFile: CodeFileDetail; codeContent?: string }>>;
+  codeFiles: Map<string, Promise<{ codeFile: CodeFileDetail; codeContent?: string; contentError?: string }>>;
   nodeTypes: Map<string, Promise<DecisionNodeTypeDetail>>;
 }
 
@@ -534,7 +555,7 @@ function memoFetch<T>(cache: Map<string, Promise<T>>, key: string, fetch: () => 
   return pending;
 }
 
-async function fetchCodeFileWithContent(uri: string): Promise<{ codeFile: CodeFileDetail; codeContent?: string }> {
+async function fetchCodeFileWithContent(uri: string): Promise<{ codeFile: CodeFileDetail; codeContent?: string; contentError?: string }> {
   const codeFile = await getCodeFileDetail(uri);
   const fileContentLink = codeFile.links?.find(
     (l) => l.rel === 'content' || (l.href ?? l.uri ?? '').includes('/files/files/'),
@@ -544,8 +565,8 @@ async function fetchCodeFileWithContent(uri: string): Promise<{ codeFile: CodeFi
   try {
     const raw = await getFileContent(contentPath);
     return { codeFile, codeContent: stripLeadingJsonComment(raw).code };
-  } catch {
-    return { codeFile };
+  } catch (e) {
+    return { codeFile, contentError: reasonText(e) };
   }
 }
 
@@ -557,11 +578,13 @@ async function fetchNodeDetails(
   shared: SharedObjectFetches = newSharedObjectFetches(),
 ): Promise<FetchedNodeDetails> {
   const details: FetchedNodeDetails = {};
+  const failures: string[] = [];
+  const failed = (what: string, e: unknown) => failures.push(`${what} could not be loaded (${reasonText(e)}).`);
 
   if (step.ruleset?.id) {
     let bundle = ruleSetCache.get(step.ruleset.id);
     if (!bundle) {
-      try { bundle = await getRuleSetBundle(step.ruleset.id); } catch { /* skip */ }
+      try { bundle = await getRuleSetBundle(step.ruleset.id); } catch (e) { failed('The rule set and its rules', e); }
     }
     if (bundle) {
       details.ruleSet = bundle.detail;
@@ -574,7 +597,7 @@ async function fetchNodeDetails(
     const modelId = step.model.id;
     try {
       details.model = await memoFetch(shared.models, modelId, () => getSidModel(modelId));
-    } catch { /* skip */ }
+    } catch (e) { failed('The model details', e); }
   }
 
   const customObjType = step.customObject?.type ?? '';
@@ -582,12 +605,13 @@ async function fetchNodeDetails(
     ? step.customObject.uri : null;
   if (codeFileUri) {
     try {
-      const { codeFile, codeContent } = await memoFetch(
+      const { codeFile, codeContent, contentError } = await memoFetch(
         shared.codeFiles, codeFileUri, () => fetchCodeFileWithContent(codeFileUri),
       );
       details.codeFile = codeFile;
       details.codeContent = codeContent;
-    } catch { /* skip */ }
+      if (contentError) failures.push(`The source code could not be loaded (${contentError}).`);
+    } catch (e) { failed('The code file and its source', e); }
   }
 
   const ntLink = step.links?.find(
@@ -598,7 +622,7 @@ async function fetchNodeDetails(
     if (ntId) {
       try {
         details.nodeType = await memoFetch(shared.nodeTypes, ntId, () => getDecisionNodeType(ntId));
-      } catch { /* skip */ }
+      } catch (e) { failed('The node type description', e); }
     }
   }
 
@@ -615,9 +639,13 @@ async function fetchNodeDetails(
         details.treatmentDefs = defResults
           .filter((r): r is PromiseFulfilledResult<TreatmentDefinitionDetail> => r.status === 'fulfilled')
           .map((r) => r.value);
+        const defFailures = defResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (defFailures.length > 0) {
+          failures.push(`${defFailures.length} treatment definition${defFailures.length === 1 ? '' : 's'} could not be loaded (${reasonText(defFailures[0].reason)}).`);
+        }
 
         const rsMap = new Map<string, RuleSetDetail>();
-        await Promise.allSettled(
+        const eligibilityResults = await Promise.allSettled(
           (details.treatmentDefs ?? [])
             .filter((d) => d.eligibility?.ruleSetUri)
             .map(async (d) => {
@@ -629,12 +657,16 @@ async function fetchNodeDetails(
             }),
         );
         details.treatmentEligibilityRuleSets = rsMap;
+        const eligibilityFailures = eligibilityResults.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+        if (eligibilityFailures.length > 0) {
+          failures.push(`${eligibilityFailures.length} eligibility rule set${eligibilityFailures.length === 1 ? '' : 's'} could not be loaded (${reasonText(eligibilityFailures[0].reason)}).`);
+        }
       }
-    } catch { /* skip */ }
+    } catch (e) { failed('The treatment group', e); }
   }
 
   if (step.customObject?.type === 'segmentationTree' && step.customObject?.uri) {
-    try { details.segmentationTree = await getSegmentationTree(step.customObject.uri); } catch { /* skip */ }
+    try { details.segmentationTree = await getSegmentationTree(step.customObject.uri); } catch (e) { failed('The segmentation tree', e); }
   }
 
   if (step.customObject?.type === 'decision' && step.customObject?.uri) {
@@ -647,10 +679,11 @@ async function fetchNodeDetails(
     if (cached) {
       details.restApi = cached;
     } else {
-      try { details.restApi = await getRestApiDefinitionByUri(uri); } catch { /* skip */ }
+      try { details.restApi = await getRestApiDefinitionByUri(uri); } catch (e) { failed('The REST API definition', e); }
     }
   }
 
+  if (failures.length > 0) details.failures = failures;
   return details;
 }
 
@@ -759,13 +792,22 @@ function heading(depth: number, base: number = 3): string {
   return '#'.repeat(Math.min(base + depth, 6));
 }
 
-function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDetails): string {
+/** The note an incomplete node section opens with. */
+function incompleteNote(notes: string[]): string {
+  if (notes.length === 0) return '';
+  let md = '> ⚠ **Incomplete section.** Some details could not be loaded from SAS Viya when this file was generated:\n>\n';
+  for (const note of notes) md += `> - ${mdCell(note)}\n`;
+  return md + '\n';
+}
+
+function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDetails, notes: string[] = []): string {
   const { step, depth } = node;
   const h = heading(depth);
   const hSub = heading(depth, 4);
 
   if (node.isSubDecisionStart) {
     let md = `${h} ${index + 1}. Sub-Decision: ${node.name}\n\n`;
+    md += incompleteNote(notes);
     md += deepLinkMd(buildDeepLink('decision', step.customObject!.uri));
     md += `- **Type**: Sub-Decision\n`;
     md += `- **URI**: \`${step.customObject!.uri}\`\n`;
@@ -802,6 +844,7 @@ function formatNodeSection(node: NodeInfo, index: number, details: FetchedNodeDe
   }
 
   let md = `${h} ${index + 1}. ${node.name}\n\n`;
+  md += incompleteNote(notes);
   md += `- **Type**: ${node.typeLabel}\n`;
 
   if (details.nodeType?.description) {
@@ -1148,6 +1191,7 @@ function extractSubDecisionUris(steps: Step[]): string[] {
 async function fetchAllSubDecisions(
   flow: DecisionFlow,
   cache: Map<string, DecisionFlow>,
+  failed: Map<string, string>,
   maxDepth: number = 3,
 ): Promise<void> {
   let frontier: DecisionFlow[] = [flow];
@@ -1167,6 +1211,8 @@ async function fetchAllSubDecisions(
       if (result.status === 'fulfilled') {
         cache.set(newUris[i], result.value);
         frontier.push(result.value);
+      } else {
+        failed.set(newUris[i], reasonText(result.reason));
       }
     });
   }
@@ -1237,10 +1283,15 @@ export async function generateMarkdownExport(
   existingSubDecisionCache?: Map<string, DecisionFlow>,
   existingRestApiCache?: Map<string, RestApiDefinitionDetail>,
   existingRuleSetCache?: Map<string, RuleSetBundle>,
+  /** Told how many parts of the export could not be loaded (0 when complete). */
+  onIncomplete?: (failureCount: number) => void,
 ): Promise<string> {
   const subDecisionCache = new Map<string, DecisionFlow>(existingSubDecisionCache ?? []);
+  // Everything that could not be read, for the "Incomplete sections" list.
+  const failures: ExportFailure[] = [];
+  const failedSubDecisions = new Map<string, string>();
   onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching sub-decisions...' });
-  await fetchAllSubDecisions(flow, subDecisionCache);
+  await fetchAllSubDecisions(flow, subDecisionCache, failedSubDecisions);
   // Both read only the sub-decision cache, so they can run together.
   onProgress?.({ current: 0, total: 0, nodeName: '', phase: 'Fetching REST API definitions and rule sets...' });
   const [restApiCache, ruleSetCache] = await Promise.all([
@@ -1276,11 +1327,23 @@ export async function generateMarkdownExport(
     }
   }
 
+  // Which nodes read, write or map each variable (structured metadata only).
+  const usageNodes: UsageNode[] = nodes
+    .filter((n) => !n.isSubDecisionEnd)
+    .map((n) => ({ id: n.anchor, nodeType: n.type, step: n.step, expanded: n.isSubDecisionStart === true }));
+  const usageIndex = buildVariableUsageIndex(
+    usageNodes,
+    [sig, ...[...subDecisionCache.values()].map((f) => f.signature ?? [])],
+    ruleSetCache,
+  );
+  const nodeByAnchor = new Map(nodes.map((n) => [n.anchor, n]));
+
   // Table of Contents
   let toc = '## Table of Contents\n\n';
   toc += '- [Overview](#overview)\n';
   toc += '  - [Workflow](#workflow)\n';
   if (inputs.length > 0 || outputs.length > 0) toc += '- [Variables](#variables)\n';
+  if (usageIndex.byVariable.size > 0) toc += '- [Variable Usage](#variable-usage)\n';
   if (nodes.some((n) => n.type === 'rest_api')) toc += '- [External Endpoints](#external-endpoints)\n';
   if (ruleSetNodes.length > 0) toc += '- [Rule Sets](#rule-sets)\n';
   if (referenceRows.length > 0) toc += '- [Lookup Tables & Lists](#lookup-tables--lists)\n';
@@ -1297,10 +1360,8 @@ export async function generateMarkdownExport(
   }
   toc += '\n';
 
-  // Overview
-  let md = `# ${flow.name}\n\n`;
-  md += toc;
-  md += '## Overview\n\n';
+  // Overview (the title, the incomplete-sections list and the TOC are put in front at the end)
+  let md = '## Overview\n\n';
   if (decisionDL) md += `> [${decisionDL.label}](${decisionDL.url})\n\n`;
   md += `- **ID**: \`${flow.id}\`\n`;
   md += `- **Version**: ${flow.majorRevision}.${flow.minorRevision}\n`;
@@ -1337,8 +1398,9 @@ export async function generateMarkdownExport(
           md += `| ${h.statusChangedFrom} | ${h.statusChangedTo} | ${h.modifiedBy} | ${date} | ${h.version} | ${h.comments ?? ''} |\n`;
         }
       }
-    } catch {
-      // Workflow history not available — skip
+    } catch (e) {
+      md += '\n> ⚠ **Incomplete section.** The workflow history could not be loaded.\n';
+      failures.push({ section: 'Workflow history', detail: `The workflow history could not be loaded (${reasonText(e)}).` });
     }
   } else {
     md += 'No workflow is assigned to this decision.\n';
@@ -1350,6 +1412,30 @@ export async function generateMarkdownExport(
     md += '| Name | Type | Direction | Length | Description |\n|------|------|-----------|--------|-------------|\n';
     for (const v of [...inputs, ...outputs]) {
       md += `| \`${v.name}\` | ${v.dataType} | ${v.direction} | ${v.length ?? '\u2014'} | ${v.description ?? ''} |\n`;
+    }
+  }
+
+  // Variable usage — static lineage from the decision's structured metadata
+  if (usageIndex.byVariable.size > 0) {
+    const link = (anchor: string) => `[${mdCell(nodeByAnchor.get(anchor)?.name ?? anchor)}](#${anchor})`;
+    md += '\n## Variable Usage\n\n';
+    md += `*${TRACE_CAVEAT} ${MAPPED_CAVEAT}*\n\n`;
+    md += '| Variable | Direction | Written by | Read by | Mapped in / out |\n';
+    md += '|----------|-----------|------------|---------|-----------------|\n';
+    const byName = [...usageIndex.byVariable.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    for (const v of byName) {
+      const of = (roles: string[]) => v.nodes.filter((x) => roles.includes(x.role));
+      const written = of(['writes', 'both']).map((x) => link(x.id));
+      const read = of(['reads', 'both']).map((x) => link(x.id));
+      const mapped = of(['mapped-in', 'mapped-out', 'mapped-both'])
+        .map((x) => `${link(x.id)} (${TRACE_ROLE_LABELS[x.role].replace('Mapped ', '')})`);
+      const none = '\u2014';
+      md += `| \`${mdCell(v.name)}\` | ${v.direction ?? none} | ${written.join(', ') || none} |`;
+      md += ` ${read.join(', ') || none} | ${mapped.join(', ') || none} |\n`;
+    }
+    if (usageIndex.opaqueNodes.length > 0) {
+      md += `\n**Not checked** (no mappings declared, so they may use any variable): `;
+      md += `${usageIndex.opaqueNodes.map(link).join(', ')}\n`;
     }
   }
 
@@ -1452,6 +1538,10 @@ export async function generateMarkdownExport(
       batchResults.forEach((result, bi) => {
         if (result.status === 'fulfilled') {
           detailsMap.set(batchItems[bi].index, result.value);
+        } else {
+          detailsMap.set(batchItems[bi].index, {
+            failures: [`The details of this node could not be loaded (${reasonText(result.reason)}).`],
+          });
         }
       });
     }
@@ -1464,12 +1554,33 @@ export async function generateMarkdownExport(
         continue;
       }
       const details = detailsMap.get(i) ?? {};
+      const notes = [...(details.failures ?? [])];
+      const subUri = node.step.customObject?.type === 'decision' ? node.step.customObject.uri : undefined;
+      const subFailure = subUri ? failedSubDecisions.get(subUri) : undefined;
+      if (subFailure) notes.unshift(`The sub-decision could not be loaded (${subFailure}), so its nodes are not included.`);
+      for (const detail of notes) failures.push({ anchor: node.anchor, section: node.name, detail });
       md += `<a id="${node.anchor}"></a>\n\n`;
-      md += formatNodeSection(node, i, details);
+      md += formatNodeSection(node, i, details, notes);
     }
   }
 
   md += '\n---\n\n*Generated by SAS MAS Scorer*\n';
 
-  return md;
+  // Incomplete sections first, so a reader cannot miss that parts are absent.
+  let incomplete = '';
+  if (failures.length > 0) {
+    const sections = new Set(failures.map((f) => f.anchor ?? f.section)).size;
+    toc = toc.replace('## Table of Contents\n\n', '## Table of Contents\n\n- [Incomplete Sections](#incomplete-sections)\n');
+    incomplete += '## Incomplete Sections\n\n';
+    incomplete += `> ⚠ **This export is incomplete.** ${sections} section${sections === 1 ? ' is' : 's are'} missing details`;
+    incomplete += ' that could not be loaded from SAS Viya when this file was generated. Export again to retry.\n\n';
+    for (const f of failures) {
+      const title = f.anchor ? `[${mdCell(f.section)}](#${f.anchor})` : mdCell(f.section);
+      incomplete += `- ${title} — ${mdCell(f.detail)}\n`;
+    }
+    incomplete += '\n';
+  }
+  onIncomplete?.(failures.length);
+
+  return `# ${flow.name}\n\n${incomplete}${toc}${md}`;
 }

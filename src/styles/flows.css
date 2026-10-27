@@ -920,3 +920,405 @@ pre.flow-code-modal__code {
   color: var(--sas-text-muted);
   font-size: var(--font-size-xs);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Diagram toolbar: Find node, trace summary                          */
+/* ------------------------------------------------------------------ */
+
+.flow-diagram__toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.flow-finder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: min(360px, 100%);
+}
+
+.flow-finder__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+}
+
+.flow-finder__field {
+  position: relative;
+}
+
+/* Over the canvas (React Flow keeps its own stacking context at z-index 0)
+   and under the side panel and modals. */
+.flow-finder__list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-1) 0;
+  list-style: none;
+  background: var(--sas-white);
+  border: 1px solid var(--sas-gray-300);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.flow-finder__list[hidden] {
+  display: none;
+}
+
+.flow-finder__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+/* The active option: a tint plus a left bar, not the tint alone. */
+.flow-finder__option--active {
+  background: var(--sas-blue-light);
+  border-left-color: var(--sas-blue-primary);
+}
+
+.flow-finder__option-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.flow-finder__option-meta {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.flow-finder__empty {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.flow-trace-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  background: var(--sas-blue-lighter);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+.flow-trace-bar__legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.flow-trace-bar__key {
+  padding: 0 var(--space-1);
+}
+
+.flow-trace-bar__key--writes { border-bottom: 2px solid var(--sas-success-dark); }
+.flow-trace-bar__key--reads { border-bottom: 2px dashed var(--sas-info-dark); }
+.flow-trace-bar__key--mapped { border-bottom: 2px dotted var(--sas-gray-700); }
+
+.flow-trace__var {
+  font-family: var(--font-family-mono);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Node state: selection, keyboard focus, trace, unavailable          */
+/* ------------------------------------------------------------------ */
+
+/* React Flow removes the focus outline of selectable nodes
+   (.react-flow__node.selectable:focus-visible); give it back. */
+.flow-diagram__canvas .react-flow__node.selectable:focus-visible,
+.flow-diagram__canvas .react-flow__node:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 10px;
+  border-radius: var(--radius-lg);
+}
+
+.flow-node {
+  position: relative;
+  transition: opacity var(--transition-fast);
+}
+
+/* Rings are drawn outside the shape, so the node keeps its measured size. */
+.flow-node::before,
+.flow-node::after {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+.flow-node--selected::after {
+  content: '';
+  inset: -7px;
+  border: 3px solid var(--sas-blue-primary);
+  box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
+.flow-node--trace-writes::before,
+.flow-node--trace-reads::before,
+.flow-node--trace-both::before,
+.flow-node--trace-mapped-in::before,
+.flow-node--trace-mapped-out::before,
+.flow-node--trace-mapped-both::before {
+  content: '';
+  inset: -4px;
+}
+
+/* Line style carries the meaning (solid writes, dashed reads, dotted
+   mapped); the direction colours repeat it, and every ring has a text tag. */
+.flow-node--trace-writes::before { border: 3px solid var(--sas-success-dark); }
+.flow-node--trace-reads::before { border: 3px dashed var(--sas-info-dark); }
+.flow-node--trace-both::before { border: 4px double var(--sas-gray-800); }
+.flow-node--trace-mapped-in::before { border: 3px dotted var(--sas-info-dark); }
+.flow-node--trace-mapped-out::before { border: 3px dotted var(--sas-success-dark); }
+.flow-node--trace-mapped-both::before { border: 3px dotted var(--sas-gray-800); }
+
+.flow-node--dimmed {
+  opacity: 0.3;
+}
+
+/* Might use the variable: kept readable, without a ring. */
+.flow-node--trace-unknown {
+  opacity: 0.6;
+}
+
+.flow-node__tags {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--space-1);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.flow-node__tag {
+  box-shadow: 0 0 0 1px var(--sas-white);
+}
+
+.flow-diagram__canvas--tracing .react-flow__edge {
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-node {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Variable trace: name toggles and the side panel section            */
+/* ------------------------------------------------------------------ */
+
+/* A variable name that starts a trace: reads as the name, acts as a toggle. */
+.flow-trace-var {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 2px;
+  font: inherit;
+  color: var(--sas-blue-primary);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.flow-trace-var:hover {
+  color: var(--sas-blue-dark);
+  text-decoration-style: solid;
+}
+
+/* Inside the header's truncating name cell (overflow: hidden) an outset
+   ring would be clipped. */
+.flow-trace-var:focus-visible {
+  outline-offset: -2px;
+}
+
+/* The traced one: filled, bold and underlined solid, not colour alone. */
+.flow-trace-var--active {
+  color: var(--sas-blue-dark);
+  font-weight: var(--font-weight-semibold);
+  text-decoration-style: solid;
+  background: var(--sas-blue-light);
+}
+
+.flow-trace-var-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1) var(--space-3);
+}
+
+.flow-header__vars-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.flow-side-panel__header--trace {
+  background: var(--sas-blue-lighter);
+  border-bottom-color: var(--sas-blue-primary);
+}
+
+.flow-trace {
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.flow-trace__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.flow-trace__title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.flow-trace__caveat,
+.flow-trace__empty {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  color: var(--sas-text-muted);
+}
+
+.flow-trace__empty {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+.flow-trace__list {
+  margin: var(--space-2) 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.flow-trace__jump {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.flow-trace__jump:hover {
+  background: var(--sas-gray-100);
+}
+
+/* The node whose details are open: tint plus a left bar. */
+.flow-trace__jump[aria-current='true'] {
+  background: var(--sas-blue-light);
+  box-shadow: inset 3px 0 0 var(--sas-blue-primary);
+}
+
+.flow-trace__role {
+  flex-shrink: 0;
+  min-width: 92px;
+  justify-content: center;
+}
+
+.flow-trace__node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flow-trace__node-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.flow-trace__node-meta {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.flow-trace__unchecked > summary {
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Load failures and export status                                    */
+/* ------------------------------------------------------------------ */
+
+.flow-detail__failure-intro {
+  margin: 0 0 var(--space-2);
+}
+
+.flow-detail__failure-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.flow-export {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: 360px;
+}
+
+.flow-export__message {
+  width: 100%;
+}
+
+.flow-export__status {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--sas-warning-dark);
+  text-align: right;
+}
+
+.flow-export__status:empty {
+  display: none;
+}

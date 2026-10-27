@@ -293,6 +293,36 @@ export function compareResults(
   return results;
 }
 
+/**
+ * The output variables a test checks, read back from its output table: every
+ * `expected_<name>` column. Used for a test this page did not just create
+ * (re-run, or the last results of a saved test).
+ */
+export function expectedVariables(columns: string[]): string[] {
+  const prefix = EXPECTED_PREFIX.toLowerCase();
+  return columns
+    .filter((c) => c.toLowerCase().startsWith(prefix) && c.length > prefix.length)
+    .map((c) => c.slice(prefix.length));
+}
+
+/** True for the `_pathId` of a row the user added in the test dialog (not a path). */
+export const isCustomRowId = (pathId: string): boolean => pathId.startsWith('custom-');
+
+/**
+ * Result rows whose `_pathId` is not a path of this tree revision: the path
+ * was removed, or gained a split below it, since the test was made. Rows the
+ * user added are not paths to begin with and are left out.
+ */
+export function stalePathIds(index: TreeIndex, results: TestRunResults): string[] {
+  const stale: string[] = [];
+  for (const id of results.byPath.keys()) {
+    if (isCustomRowId(id)) continue;
+    const b = index.branches.get(id);
+    if (!b || b.childSplitId) stale.push(id);
+  }
+  return stale;
+}
+
 /** A CAS-safe table name derived from a test name. */
 export function casTableName(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^([^A-Za-z_])/, '_$1');

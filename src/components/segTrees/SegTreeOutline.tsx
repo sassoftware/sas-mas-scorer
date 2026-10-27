@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TreeIndex } from '../../utils/segTree/treeIndex';
 import { visibleRows } from '../../utils/segTree/treeView';
 import { countInRange, type LeafPrefix } from '../../utils/segTree/leafCounts';
+import { highlightParts, type FindResult } from '../../utils/segTree/findInTree';
 import type { ResultPrefixes } from './SegTreeSplitView';
 
 interface SegTreeOutlineProps {
@@ -15,6 +16,18 @@ interface SegTreeOutlineProps {
   shadowedPrefix: LeafPrefix;
   results: ResultPrefixes | null;
   onNavigate: (branchId: string) => void;
+  /** Find-in-tree matches to mark; null when nothing is being searched. */
+  find?: FindResult | null;
+}
+
+/** `text` with the parts matching the find marked (a <mark> is styled with more than colour). */
+function Marked({ text, needle }: { text: string; needle: string | null }) {
+  if (!needle) return <>{text}</>;
+  return (
+    <>
+      {highlightParts(text, needle).map((p, i) => (p.hit ? <mark key={i} className="segtree-find-hit">{p.text}</mark> : p.text))}
+    </>
+  );
 }
 
 const CHEVRON = (
@@ -36,6 +49,7 @@ export default function SegTreeOutline({
   shadowedPrefix,
   results,
   onNavigate,
+  find = null,
 }: SegTreeOutlineProps) {
   const rows = useMemo(() => visibleRows(index, expanded), [index, expanded]);
   const [cursor, setCursor] = useState<string | null>(focusId);
@@ -68,6 +82,8 @@ export default function SegTreeOutline({
     const row = rows[i];
     const b = index.branches.get(row.branchId)!;
     const isOpen = expanded.has(row.branchId);
+    // Alt+arrows belong to the page's stepper (SegTreeFindBar).
+    if (e.altKey) return;
     switch (e.key) {
       case 'ArrowDown': e.preventDefault(); moveTo(rows[i + 1]?.branchId); break;
       case 'ArrowUp': e.preventDefault(); moveTo(rows[i - 1]?.branchId); break;
@@ -111,6 +127,8 @@ export default function SegTreeOutline({
         const failed = results ? countInRange(results.fail, b.leafStart, b.leafEnd) : 0;
         const passed = results ? countInRange(results.pass, b.leafStart, b.leafEnd) : 0;
         const selected = b.id === focusId;
+        const hit = !!find && find.rowIds.has(b.id);
+        const needle = hit ? find!.query : null;
         return (
           <div
             key={b.id}
@@ -125,7 +143,7 @@ export default function SegTreeOutline({
             aria-expanded={isLeaf ? undefined : isOpen}
             aria-selected={selected}
             tabIndex={b.id === cursorId ? 0 : -1}
-            className={`segtree-outline__row${selected ? ' segtree-outline__row--selected' : ''}`}
+            className={`segtree-outline__row${selected ? ' segtree-outline__row--selected' : ''}${hit ? ' segtree-outline__row--match' : ''}`}
             style={{ paddingLeft: `calc(${row.level - 1} * 14px + var(--space-2))` }}
             onClick={() => { setCursor(b.id); onNavigate(b.id); }}
             onKeyDown={(e) => onKeyDown(e, i)}
@@ -142,14 +160,15 @@ export default function SegTreeOutline({
               </span>
             )}
             <span className="segtree-outline__main">
-              <span className="segtree-outline__var">{split.variable}</span>
-              <span className="segtree-outline__cond">{b.label}</span>
+              <span className="segtree-outline__var"><Marked text={split.variable} needle={needle} /></span>
+              <span className="segtree-outline__cond"><Marked text={b.label} needle={needle} /></span>
               <span className="segtree-outline__target">
                 <span aria-hidden="true">→ </span>
                 {isLeaf
-                  ? <span className="segtree-branch__outcome">{b.outcomeName ?? '(no outcome)'}</span>
-                  : index.splits.get(b.childSplitId!)?.variable}
+                  ? <span className="segtree-branch__outcome">{b.outcomeName ? <Marked text={b.outcomeName} needle={needle} /> : '(no outcome)'}</span>
+                  : <Marked text={index.splits.get(b.childSplitId!)?.variable ?? ''} needle={needle} />}
               </span>
+              {hit && <span className="sr-only">, matches the search</span>}
             </span>
             <span className="segtree-outline__meta">
               {!isLeaf && (

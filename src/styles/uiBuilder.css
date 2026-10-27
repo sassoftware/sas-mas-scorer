@@ -35,7 +35,55 @@
 
 .ui-builder__toolbar-right {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* Save state: text plus a dot, so it does not rely on colour */
+.ui-builder__save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  white-space: nowrap;
+}
+
+.ui-builder__save-status--dirty {
+  color: var(--sas-warning-dark);
+  font-weight: var(--font-weight-medium);
+}
+
+.ui-builder__save-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sas-warning-dark);
+}
+
+/* Signature banner */
+.ui-builder__drift-list {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.ui-builder__drift-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ui-builder__field-required {
+  font-weight: var(--font-weight-normal);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.ui-builder__config-warning {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--sas-warning-dark);
 }
 
 .ui-builder__name-group {
@@ -547,6 +595,47 @@
   font-weight: var(--font-weight-normal);
   color: var(--sas-text-muted);
   font-size: var(--font-size-xs);
+}
+
+.replace-module__hint {
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+.replace-module__item-current {
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+}
+
+/* Parameters with no field: a fieldset without the browser frame */
+.replace-module__new-params {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.replace-module__new-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.replace-module__new-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.replace-module__new-item .replace-module__param-name {
+  display: inline;
 }
 
 /* === Share Dialog === */

@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { leafExpectedOutputs, NO_OUTCOME, type TreeIndex } from '../../utils/segTree/treeIndex';
 import { countInRange, leafPrefix, type LeafPrefix } from '../../utils/segTree/leafCounts';
 import { icicleLayout, icicleZoomFor, type IcicleCell } from '../../utils/segTree/icicle';
+import { ROOT_KEY, type FindResult } from '../../utils/segTree/findInTree';
 import { Button } from '../common';
 import type { ResultPrefixes } from './SegTreeSplitView';
 
@@ -15,6 +16,8 @@ interface SegTreeIcicleProps {
   shadowedPrefix: LeafPrefix;
   results: ResultPrefixes | null;
   onNavigate: (branchId: string | null) => void;
+  /** Find-in-tree matches to mark; null when nothing is being searched. */
+  find?: FindResult | null;
 }
 
 const ROW_HEIGHT = 28;
@@ -40,6 +43,8 @@ const FILL_PASSED = '#4CAF50';
 const TINT_PASSED = '#E8F5E9';
 const INK = '#1A1A1A';
 const INK_ON_DARK = '#FFFFFF';
+// Find matches: a dark purple frame, apart from every fill and status colour above.
+const MATCH_INK = '#5B2A86';
 
 type ShadeMode = 'structure' | 'share' | 'issues';
 
@@ -83,7 +88,7 @@ function IcicleTip({ x, y, children }: { x: number; y: number; children: React.R
  * below. Clicking a block selects it and zooms into it; the arrow keys walk
  * the tree from one tab stop (↑ parent, ↓ first child, ←/→ siblings).
  */
-export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results, onNavigate }: SegTreeIcicleProps) {
+export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results, onNavigate, find = null }: SegTreeIcicleProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const [mode, setMode] = useState<ShadeMode>('structure');
@@ -175,6 +180,7 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
     // A 2px surface gap between neighbours, kept only where the block is wide enough.
     const gap = w > 3 ? 1 : 0;
     const selected = cell.branchId === focusId && focusId !== null;
+    const isMatch = !!find && find.position.has(cell.branchId ?? ROOT_KEY);
     const text = labelOf(cell);
     const max = Math.floor((w - 8) / CHAR_WIDTH);
     const shown = w >= LABEL_MIN_WIDTH ? (text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text) : '';
@@ -190,6 +196,24 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
           strokeWidth={selected ? 2 : undefined}
           rx={2}
         />
+        {/* A match gets a dashed frame and a corner notch, not just a colour. */}
+        {isMatch && (
+          <>
+            <rect
+              x={x + gap + 2}
+              y={y + 3}
+              width={Math.max(0.5, w - gap * 2 - 4)}
+              height={ROW_HEIGHT - 6}
+              fill="none"
+              stroke={MATCH_INK}
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              rx={2}
+              pointerEvents="none"
+            />
+            {w > 10 && <path d={`M${x + gap} ${y + 1} h8 l-8 8 z`} fill={MATCH_INK} pointerEvents="none" />}
+          </>
+        )}
         {shown && (
           <text x={x + w / 2} y={y + ROW_HEIGHT / 2 + 4} textAnchor="middle" fontSize={11} fill={ink} pointerEvents="none">
             {shown}
@@ -199,7 +223,7 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
     );
     // styleOf/labelOf read only the values listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [layout, width, mode, matchPrefix, results, shadowedPrefix, focusId, index]);
+  }), [layout, width, mode, matchPrefix, results, shadowedPrefix, focusId, index, find]);
 
   const cellAt = (target: EventTarget | null): IcicleCell | null => {
     const g = (target as Element | null)?.closest?.('[data-cell]');
@@ -208,6 +232,8 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // Alt+arrows belong to the page's stepper (SegTreeFindBar).
+    if (e.altKey) return;
     const b = focusId ? index.branches.get(focusId) : undefined;
     const split = b ? index.splits.get(b.splitId) : undefined;
     let next: string | null | undefined;
@@ -249,6 +275,7 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
         ...(mode === 'share' ? [`${shareVar} = ${value}: ${match.toLocaleString()} of ${paths.toLocaleString()} paths (${pct(match, paths)})`] : []),
         ...(dead ? [`Dead ends: ${dead.toLocaleString()}`] : []),
         ...(results && (failed || passed) ? [`Last test: ${passed.toLocaleString()} passed, ${failed.toLocaleString()} failed`] : []),
+        ...(find && find.position.has(cell.branchId ?? ROOT_KEY) ? ['Matches the search'] : []),
       ],
     };
   };
@@ -317,6 +344,12 @@ export default function SegTreeIcicle({ index, focusId, shadowedPrefix, results,
             {results && <span className="segtree-icicle__key"><span className="segtree-icicle__swatch" style={{ background: FILL_PASSED }} />Passed</span>}
             <span className="segtree-icicle__key"><span className="segtree-icicle__swatch" style={{ background: FILL_NONE }} />{results ? 'Not tested' : 'No dead ends'}</span>
           </>
+        )}
+        {find && find.matches.length > 0 && (
+          <span className="segtree-icicle__key">
+            <span className="segtree-icicle__swatch segtree-icicle__swatch--match" style={{ borderColor: MATCH_INK }} />
+            Matches "{find.query}" ({find.matches.length.toLocaleString()})
+          </span>
         )}
       </div>
 

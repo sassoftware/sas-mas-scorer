@@ -1,26 +1,54 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StepOutput, StepParameter } from '../../types';
 import { Badge, StatusBadge, TypeBadge } from '../common/Badge';
 import { Card, CardHeader, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
 import { DatagridTable } from './DatagridTable';
-import { isDatagrid } from '../../utils/datagrid';
+import { coerceDatagridValue, isDatagrid } from '../../utils/datagrid';
+import { checkOutputs, hasExpectation, unwrapValue } from '../../utils/expectedValues';
+import { CheckBadge } from './CheckBadge';
+import { ComparisonRule } from './ComparisonRule';
+
+// A stored expectation as it is shown: unwrapped, and a datagrid saved as
+// JSON text drawn as the grid it holds
+const expectedForDisplay = (value: unknown): unknown => {
+  const v = unwrapValue(value);
+  return coerceDatagridValue(v) ?? v;
+};
 
 interface OutputDisplayProps {
   output: StepOutput;
   parameters: StepParameter[];
   executionTime?: number | null;
+  /**
+   * Expected values by output name (a loaded scenario's). When given, the
+   * table gains Expected and Check columns; null values are not checked.
+   */
+  expected?: Record<string, unknown> | null;
+  /** Where the expected values come from, e.g. the scenario name */
+  expectedSource?: string;
 }
 
 export const OutputDisplay: React.FC<OutputDisplayProps> = ({
   output,
   parameters,
   executionTime,
+  expected,
+  expectedSource,
 }) => {
   const [viewMode, setViewMode] = useState<'table' | 'json'>('table');
+
+  // Compared once per run (or per loaded scenario), not per render
+  const checks = useMemo(
+    () => (expected ? checkOutputs(output.outputs, expected) : null),
+    [output.outputs, expected]
+  );
+  const overall = checks
+    ? checks.failed > 0 ? 'fail' : checks.passed > 0 ? 'pass' : 'none'
+    : null;
 
   const getParameterType = (name: string): string => {
     // Try exact match first, then case-insensitive match
@@ -120,6 +148,21 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
           </div>
         </CardHeader>
         <CardBody>
+          {checks && overall && (
+            <div className="output-display__check-summary" role="status" aria-live="polite">
+              <CheckBadge
+                status={overall}
+                size="medium"
+                label={overall === 'fail' ? 'Differs from expected' : overall === 'pass' ? 'Matches expected' : 'Nothing to check'}
+              />
+              <span>
+                {expectedSource ? <>Scenario <strong>{expectedSource}</strong>: </> : 'Expected values: '}
+                {checks.passed} match, {checks.failed} differ
+                {checks.unchecked > 0 ? `, ${checks.unchecked} not checked (no expected value)` : ''}
+              </span>
+              <ComparisonRule />
+            </div>
+          )}
           {output.executionState === 'timedOut' ? (
             <div className="output-display__timeout">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -144,23 +187,60 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
                     <th className="sas-table__th">Output Name</th>
                     <th className="sas-table__th">Type</th>
                     <th className="sas-table__th">Value</th>
+                    {checks && <th className="sas-table__th">Expected</th>}
+                    {checks && <th className="sas-table__th">Check</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {(output.outputs ?? []).map((variable) => (
-                    <tr className="sas-table__row" key={variable.name}>
-                      <td className="sas-table__td output-display__name">{variable.name}</td>
+                  {(output.outputs ?? []).map((variable) => {
+                    const check = checks?.byName.get(variable.name.toLowerCase());
+                    return (
+                      <tr
+                        className={`sas-table__row${check?.status === 'fail' ? ' output-display__row--fail' : ''}`}
+                        key={variable.name}
+                      >
+                        <td className="sas-table__td output-display__name">{variable.name}</td>
+                        <td className="sas-table__td">
+                          <TypeBadge type={getParameterType(variable.name)} />
+                        </td>
+                        <td className="sas-table__td output-display__value">
+                          {formatValue(variable.value)}
+                        </td>
+                        {checks && (
+                          <td className="sas-table__td output-display__value">
+                            {check && hasExpectation(check.expected)
+                              ? formatValue(expectedForDisplay(check.expected))
+                              : <span className="output-display__null">n/a</span>}
+                          </td>
+                        )}
+                        {checks && (
+                          <td className="sas-table__td">
+                            <CheckBadge status={check?.status ?? 'none'} />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {checks?.notReturned.map((check) => (
+                    <tr className="sas-table__row output-display__row--fail" key={`missing-${check.name}`}>
+                      <td className="sas-table__td output-display__name">{check.name}</td>
                       <td className="sas-table__td">
-                        <TypeBadge type={getParameterType(variable.name)} />
+                        <TypeBadge type={getParameterType(check.name)} />
                       </td>
                       <td className="sas-table__td output-display__value">
-                        {formatValue(variable.value)}
+                        <span className="output-display__null">not returned</span>
+                      </td>
+                      <td className="sas-table__td output-display__value">
+                        {formatValue(expectedForDisplay(check.expected))}
+                      </td>
+                      <td className="sas-table__td">
+                        <CheckBadge status="fail" />
                       </td>
                     </tr>
                   ))}
                   {(output.outputs?.length ?? 0) === 0 && (
                     <tr>
-                      <td colSpan={3} className="sas-table__td output-display__empty">
+                      <td colSpan={checks ? 5 : 3} className="sas-table__td output-display__empty">
                         No output values returned
                       </td>
                     </tr>
