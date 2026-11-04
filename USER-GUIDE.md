@@ -25,7 +25,8 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 17. [Job Monitoring](#17-job-monitoring)
 18. [Schema → Code](#18-schema--code)
 19. [Business Rules Import](#19-business-rules-import)
-20. [Keyboard and Interaction Tips](#20-keyboard-and-interaction-tips)
+20. [SAS Container Runtime Endpoints](#20-sas-container-runtime-endpoints)
+21. [Keyboard and Interaction Tips](#21-keyboard-and-interaction-tips)
 
 ---
 
@@ -39,7 +40,8 @@ The SAS MAS Scorer gives you a visual interface to:
 - Score individual rows by filling in a form, or score thousands of rows in parallel from an uploaded file (CSV, TSV, JSON/JSONL, Excel, or Parquet) or a CAS table.
 - Save scoring setups back to SAS Intelligent Decisioning as **Scenarios** (static input/expected output pairs) or **Tests** (CAS table-backed batch tests), and load, run and check them again from the app.
 - Compare results with expected values: a loaded scenario, a batch file's or CAS table's expected-output columns, or two runs from the run history.
-- Build lightweight custom UIs on top of any module so that business users can score without seeing the underlying technical details.
+- Score models and decisions deployed to SAS Container Runtime containers, by their endpoint URL alone.
+- Build lightweight custom UIs on top of any module or SCR endpoint so that business users can score without seeing the underlying technical details.
 - Visualize SAS Intelligent Decisioning flows as interactive diagrams.
 - Analyze test coverage across all your Decisioning and Model Manager assets.
 
@@ -112,6 +114,7 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 | Page | Description |
 |------|-------------|
 | **All Modules** | Browse, search, and filter all published modules |
+| **SCR Endpoints** | Score models and decisions running in SAS Container Runtime containers by their URL, see what each container is, and find its source in SAS Viya |
 | **UI Apps** | Create and manage custom scoring UIs |
 | **View Flows** | Visualize SAS Intelligent Decisioning flows |
 | **Segmentation Trees** | Navigate and search large segmentation trees path by path, copy any path, predict a record's path, and turn paths into SID scenarios or tests |
@@ -595,8 +598,9 @@ There are two ways to start:
 
 1. From the **UI Apps** page, click **Create New**, then select a module.
 2. From a Module Details page, click **Build UI**.
+3. From an SCR endpoint's page, click **Build UI** (see [Build UI for an Endpoint](#build-ui-for-an-endpoint)).
 
-Both take you to the UI Builder.
+All three take you to the UI Builder.
 
 ### The UI Builder
 
@@ -740,7 +744,7 @@ The shared URL follows the pattern: `#/ui-apps/{appId}?def={encodedDefinition}&s
 
 ### Managing UI Apps
 
-The **UI Apps** list page shows all your apps as cards.
+The **UI Apps** list page shows all your apps as cards. Each card says whether the app scores a **MAS** module or an **SCR** endpoint, and names it.
 
 | Action | Description |
 |--------|-------------|
@@ -1387,7 +1391,92 @@ Edits that change rule set names or folder paths mark the checks as stale — re
 
 ---
 
-## 20. Keyboard and Interaction Tips
+## 20. SAS Container Runtime Endpoints
+
+Models and decisions published to a container destination run in **SAS Container Runtime** (SCR) outside MAS: in Docker, Kubernetes or a cloud container service. The **SCR Endpoints** page scores them with nothing but the endpoint's URL. Everything the page shows comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records. The app does not run container commands, read container logs or log in to a registry.
+
+### Adding an Endpoint
+
+1. Open **SCR Endpoints** from the sidebar (second item, below All Modules).
+2. Paste the **Score URL**: the container address followed by the model or decision name, for example `https://scr-host:8080/my_model`. For Python models the name is case-sensitive.
+3. Optionally give it a **Name** for the list.
+4. Click **Connect**. The app reads the endpoint's signature from `{score URL}/apiMeta/api` and saves the endpoint only if it answers.
+
+Saved endpoints are kept **in this browser or desktop install only**: they are not stored in SAS Viya and do not follow you to another machine. **Remove** deletes an endpoint from the list; the container is not touched.
+
+**Which endpoints can be reached:** SCR sends no CORS headers, so a browser only lets a page call an endpoint on its own host.
+
+| Build | Reaches |
+|-------|---------|
+| Desktop app | Any endpoint the computer can reach |
+| Web server and SAS Job Execution / Visual Analytics | Endpoints on the same host as the app, for example an SCR routed under the SAS Viya ingress (`https://viya-host/llm/my_model/my_model`), or behind a proxy that adds CORS headers |
+
+When an endpoint cannot be reached from where the app runs, the page says so before saving.
+
+### What This Endpoint Is
+
+The endpoint page opens with a facts card:
+
+| Fact | Meaning |
+|------|---------|
+| **Runtime** | **SAS Container Runtime** (SAS models, decisions, rule sets), **SAS Python Runtime**, or the **Python model image** Model Manager builds for Python models. Told apart by the signature document the endpoint serves |
+| **Mode** | **Single record** (one record per request) or **Batch** (the container runs with `SAS_SCR_REST_API_TYPE=BATCH` and takes many rows per request) |
+| **Content** | Known after the first score: the response's step id says whether the container holds a model (`score`), a decision or rule set (`execute`) or a Python model (`scoreModel`) |
+| **Signature** | Number of inputs and outputs. Python images require every input |
+| **Health** | **Live** / **Ready** from the container's health checks, where it serves them |
+| **Metrics** | For SAS Container Runtime: requests, executions, average execution time and memory, from `/prometheus`. Python images serve no metrics |
+| **Request log** | Python images keep a log of each request that can be read over HTTP; it is shown under each result. SAS Container Runtime writes its logs to the container's standard output only, so the app cannot show them |
+| **Transport** | HTTP or HTTPS |
+
+The container's runtime version is not shown: no image serves it over HTTP. **Refresh** reads the signature, health and metrics again.
+
+### Likely Source in SAS Viya
+
+When you are signed in to SAS Viya, the page looks for the content the container was published from. It searches SAS Viya's container publish records, first by the name of the image each publish built, then by publish name. For each candidate it compares the candidate's current signature with the endpoint's:
+
+- **Matched** — the image or publish name is the endpoint's name, and the inputs and outputs are the same.
+- **Likely** — the name matches only with a version suffix removed, or the signatures differ but share inputs (the source may have changed since the image was built), or there is no signature to compare.
+- **Weak** — a loose name match with nothing to confirm it, or signatures that share no inputs.
+
+Each candidate shows the reasons, the publish date and destination, who published it, the image, the project, and a link to **SAS Model Manager** or **SAS Intelligent Decisioning**. A note appears when the publish record itself says the publish failed. **Search again** repeats the search. This is a match on names and signatures from publish records, not proof: a container can be rebuilt from other content under the same name.
+
+### Score One Record
+
+The **Score one record** card has the familiar input form, built from the endpoint's signature. Click **Score**.
+
+- Outputs are listed in signature order. Padded SAS strings are shown trimmed.
+- **Step**, **Module**, the runtime's own elapsed time and the round trip are shown above the outputs.
+- **Show response JSON** shows the response exactly as received.
+- On a batch-mode container, the record is sent as a batch of one.
+- Values that are not numbers in a numeric input are reported before sending; Python images also need every input filled in.
+
+When a score fails, the endpoint's error is shown. Python images often answer only with the last line of a traceback (`^^^^`); the app then reads that request's log and shows the real error, for example `ModuleNotFoundError: No module named 'sklearn'` when the image lacks a Python package. The full request log appears below the result.
+
+### Score a File
+
+The **Score a file** card scores a CSV file with a header row:
+
+1. Click **Choose CSV file**. Columns are matched to inputs by name (ignoring case).
+2. Read the checks before sending:
+   - **Columns the endpoint does not have** — SCR ignores unknown names and scores those inputs as missing.
+   - **Inputs with no column** — sent as missing; Python images reject those rows.
+   - Values that are not numbers in numeric inputs are listed by row. **Rows with errors are held back**, because on a batch-mode container one bad value fails every row in the request. Longer-than-allowed strings are warnings only.
+3. Click **Score N rows**. Batch-mode containers get 200 rows per request; others get one request per row, 4 at a time. **Stop** sends no further requests; rows not yet sent are marked *not sent*.
+4. The results table shows each row's status, outputs, elapsed time and error, previewing up to 100 rows. For failed Python rows the real error is read from the request log (for the first 25 failed rows).
+5. **Download results (CSV)** saves every row with `_row`, `_status`, the inputs, the outputs, `_elapsed_ms`, `_error` and `_request_id`.
+
+### Build UI for an Endpoint
+
+**Build UI** on the endpoint page opens the [UI Builder](#12-ui-apps) on the endpoint's signature. The app stores the endpoint's score URL instead of a MAS module and scores the endpoint when run, in the builder's preview too. For Python images every input field is marked required.
+
+- UI App cards and the runner say **MAS** or **SCR**, so you can tell which kind an app scores.
+- **Replace / Re-sync Module** is not offered for SCR apps.
+- When the endpoint's signature changes, the builder and runner show the same notice as for a changed MAS module.
+- A shared link to an SCR app works only where the endpoint is reachable from (see the table above).
+
+---
+
+## 21. Keyboard and Interaction Tips
 
 The application meets **WCAG 2.1 AA**: every control can be reached and operated from the keyboard, has a visible focus ring, and has a name a screen reader can announce.
 
