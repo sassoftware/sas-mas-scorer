@@ -2,7 +2,7 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
-## [2.13.0] - Unreleased
+## [2.13.0] - 2026-11-04
 
 SAS Container Runtime endpoints: score models and decisions deployed as SCR containers with nothing but the endpoint URL, see what kind of container it is, and find the SAS Viya content it was published from. Everything shown comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records; nothing is read from inside the container.
 
