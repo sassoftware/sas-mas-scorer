@@ -2,6 +2,25 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.13.0] - Unreleased
+
+SAS Container Runtime endpoints: score models and decisions deployed as SCR containers with nothing but the endpoint URL, see what kind of container it is, and find the SAS Viya content it was published from. Everything shown comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records; nothing is read from inside the container.
+
+### Added
+
+- **SCR Endpoints** — a page of its own, second in the navigation. Paste a score URL (`https://host/path/model_name`); the app reads the signature from `/apiMeta/api` before saving it. Endpoints are kept in this browser or desktop install only
+- **What this endpoint is** — the runtime (SAS Container Runtime, SAS Python Runtime, or the Python model image Model Manager builds), single-record or batch mode (`SAS_SCR_REST_API_TYPE=BATCH`), inputs and outputs with types and string lengths, live/ready health, request and execution counts and memory from `/prometheus` where the image serves it, HTTP or HTTPS. After the first score, the step id in the response says whether it holds a model (`score`), a decision or rule set (`execute`) or a Python model (`scoreModel`).
+- **Likely source in SAS Viya** — the endpoint's name is matched against SAS Viya's container publish records (by the image the publish built, then by publish name), and the candidate's current signature is compared with the endpoint's. Each candidate is labelled **Matched** (name and signature agree), **Likely** or **Weak**, with the reasons, the publish date, the image and a link to SAS Model Manager or SAS Intelligent Decisioning
+- **Score one record** — the familiar input form; outputs in signature order, padded SAS strings trimmed, response JSON one click away, with the runtime's own elapsed time next to the round trip. A batch-mode container is sent a batch of one
+- **Score a file** — a CSV is matched to the inputs by name. Columns the endpoint does not have are listed (SCR silently ignores unknown names and scores them as missing), inputs with no column are listed (Python images reject those rows), and values that are not numbers are reported by row. Rows with errors are held back, because on a batch-mode container one bad value fails every row in the request. Batch-mode containers get 200 rows per request, others one request per row, 4 at a time; results download as CSV
+- **Build UI for SCR endpoints** — the endpoint page has a Build UI button. The UI App stores the score URL instead of a MAS module, is built from the endpoint's signature (every input is marked required for Python images, which reject a record that leaves one out), and scores the endpoint when run, in the builder's preview too. A failed Python score shows the error from its request log. UI App cards and the runner say **MAS** or **SCR**. Replace Module is not offered for SCR apps
+- **Python request logs** — for Python images, the log of each request is read from `/query/{id}/log` and shown under the result, also when the score failed (for example the traceback of a missing Python package)
+
+### Notes
+
+- SAS Container Runtime sends no CORS headers. The desktop app reaches any endpoint; the web app and the Job Execution / Visual Analytics build reach endpoints served from the same host as the app (for example an SCR routed under the SAS Viya ingress), or behind a proxy that adds CORS headers
+- Classic SCR serves no logs over HTTP (it writes them to the container's standard output); the app does not read container logs
+
 ## [2.12.0] - 2026-10-27
 
 Close the testing loop: scenarios, tests and batch files now say whether results match what was expected, saved tests can be run and reloaded from the app, flows and trees can be searched and traced, and UI Apps follow changes to their module. Every result comes from a real MAS or SAS Intelligent Decisioning run or from the decision's own metadata; the app does not interpret DS2 or other code.

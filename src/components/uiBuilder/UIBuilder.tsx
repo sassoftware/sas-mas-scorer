@@ -27,12 +27,17 @@ import {
   hasSignatureDrift,
 } from '../../utils/uiDefaults';
 import { getScoreableStep } from '../../utils/moduleHelper';
+import { inspectEndpoint, scrStep } from '../../api/scr';
 
 interface UIBuilderProps {
   /** Existing definition to edit, or null for new */
   definition: UIDefinition | null;
   /** Module ID for creating new UIs */
   moduleId?: string;
+  /** SCR score URL for creating a new UI on an SCR endpoint (instead of moduleId). */
+  scrUrl?: string;
+  /** Display name for a new SCR-based app (the saved endpoint's label). */
+  scrLabel?: string;
   onBack: () => void;
   /** After "Save & Run": opens the saved app in the runner. */
   onSaved: (id: string) => void;
@@ -72,11 +77,15 @@ const newSectionId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 
 export const UIBuilder: React.FC<UIBuilderProps> = ({
   definition: initialDef,
   moduleId,
+  scrUrl: newScrUrl,
+  scrLabel,
   onBack,
   onSaved,
   onSavedInPlace,
 }) => {
-  const effectiveModuleId = initialDef?.moduleId ?? moduleId ?? '';
+  // An SCR app has no MAS module: its signature comes from the endpoint.
+  const scrUrl = initialDef ? initialDef.scrUrl : newScrUrl;
+  const effectiveModuleId = scrUrl ? '' : initialDef?.moduleId ?? moduleId ?? '';
 
   const [module, setModule] = useState<Module | null>(null);
   const [step, setStep] = useState<Step | null>(null);
@@ -111,8 +120,44 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
 
   const { steps } = useSteps(effectiveModuleId);
 
+  // SCR: read the endpoint's signature; it stands in for the module's step.
+  useEffect(() => {
+    if (!scrUrl) return;
+    let cancelled = false;
+    setLoading(true);
+    inspectEndpoint(scrUrl)
+      .then(info => {
+        if (cancelled) return;
+        const current = defRef.current;
+        const endpointStep = scrStep(info, current?.stepId);
+        setStep(endpointStep);
+        if (!current) {
+          const generated = generateDefaultUI(info.name, endpointStep, `${scrLabel || info.name} UI`);
+          generated.scrUrl = info.scoreUrl;
+          // Python images reject a record that leaves any input out.
+          if (info.inputsRequired) {
+            for (const section of generated.layout.sections) {
+              for (const f of section.fields) {
+                if (f.direction === 'input') f.validation = { ...f.validation, required: true };
+              }
+            }
+          }
+          setDef(generated);
+          setBaseline(serialize(generated));
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          setLoadError(`The SCR endpoint ${scrUrl} did not answer: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [scrUrl, scrLabel]);
+
   // Load module
   useEffect(() => {
+    if (scrUrl) return;
     if (!effectiveModuleId) {
       setLoadError('No module specified');
       setLoading(false);
@@ -127,7 +172,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [effectiveModuleId]);
+  }, [effectiveModuleId, scrUrl]);
 
   // Pick the step: the definition's own step when editing, the scoreable one
   // (with a generated layout) when creating. `steps` belong to the module the
@@ -328,7 +373,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     setAnnouncement(`Removed ${n} field${n === 1 ? '' : 's'}. Undo restores ${n === 1 ? 'it' : 'them'}.`);
   };
 
-  if (loading) return <Loading message="Loading module..." />;
+  if (loading) return <Loading message={scrUrl ? 'Reading the endpoint signature...' : 'Loading module...'} />;
 
   if (loadError || !def) {
     return (
@@ -348,7 +393,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     <div className="ui-builder">
       <PageHeader
         title={initialDef ? `Edit: ${def.name}` : 'Create UI App'}
-        subtitle={module ? `Module: ${module.name}` : undefined}
+        subtitle={scrUrl ? `SCR endpoint: ${scrUrl}` : module ? `MAS module: ${module.name}` : undefined}
         breadcrumbs={[
           { label: 'UI Apps', onClick: handleBack },
           { label: def.name },
@@ -368,7 +413,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
       {!driftDismissed && hasSignatureDrift(drift) && (
         <Alert
           variant="warning"
-          title={`Compared with the module's current step signature: ${describeSignatureDrift(drift)}`}
+          title={`Compared with the ${scrUrl ? "endpoint's current" : "module's current step"} signature: ${describeSignatureDrift(drift)}`}
           dismissible
           onClose={() => setDriftDismissed(true)}
           actions={
@@ -427,7 +472,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         onSaveAndRun={handleSaveAndRun}
         onPreview={() => setIsPreview(!isPreview)}
         onShare={() => setShowShare(true)}
-        onReplaceModule={initialDef ? () => setShowReplaceModule(true) : undefined}
+        onReplaceModule={initialDef && !scrUrl ? () => setShowReplaceModule(true) : undefined}
         onUndo={handleUndo}
         undoLabel={isPreview ? null : undoLabel}
         isDirty={isDirty}

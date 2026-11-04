@@ -12,7 +12,8 @@ import { PageHeader } from '../layout/Layout';
 import { DynamicForm } from './DynamicForm';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
-import { Module } from '../../types';
+import { Module, Step } from '../../types';
+import { inspectEndpoint, scoreForApp, scrStep, type ScrEndpointInfo } from '../../api/scr';
 import {
   buildRunValues,
   computeSignatureDrift,
@@ -77,9 +78,34 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const [blockedRuns, setBlockedRuns] = useState(0);
   const [driftDismissed, setDriftDismissed] = useState(false);
 
+  // An SCR app scores its endpoint directly; MAS hooks get empty ids (no-ops).
+  const scrUrl = definition.scrUrl;
+  const masModuleId = scrUrl ? '' : definition.moduleId;
+  const masStepId = scrUrl ? '' : definition.stepId;
+
   // The step signature gates execution; the definition itself (layout, fields,
   // defaults) is already in hand, so the form renders before either fetch lands.
-  const { step, error: stepError } = useStep(definition.moduleId, definition.stepId);
+  const { step: masStep, error: masStepError } = useStep(masModuleId, masStepId);
+
+  const [scrInfo, setScrInfo] = useState<ScrEndpointInfo | null>(null);
+  const [scrLoadError, setScrLoadError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scrUrl) return;
+    let cancelled = false;
+    setScrInfo(null);
+    setScrLoadError(null);
+    inspectEndpoint(scrUrl)
+      .then(info => { if (!cancelled) setScrInfo(info); })
+      .catch(err => { if (!cancelled) setScrLoadError(err instanceof Error ? err.message : String(err)); });
+    return () => { cancelled = true; };
+  }, [scrUrl]);
+  const scrStepSig = useMemo<Step | null>(
+    () => (scrInfo ? scrStep(scrInfo, definition.stepId) : null),
+    [scrInfo, definition.stepId]
+  );
+
+  const step = scrUrl ? scrStepSig : masStep;
+  const stepError = scrUrl ? null : masStepError;
 
   // Load the module. It only feeds the module-name badge (which falls back to
   // the id) and the "removed from MAS" error, so it does not gate rendering;
@@ -88,19 +114,34 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     let cancelled = false;
     setModule(null);
     setModuleError(null);
-    getModule(definition.moduleId)
+    if (!masModuleId) return;
+    getModule(masModuleId)
       .then(m => { if (!cancelled) setModule(m); })
       .catch(err => {
         if (!cancelled) setModuleError(err instanceof Error ? err.message : 'Failed to load module');
       });
     return () => { cancelled = true; };
-  }, [definition.moduleId]);
+  }, [masModuleId]);
 
-  const loadError = moduleError
+  const loadError = (scrLoadError ? `The SCR endpoint ${scrUrl} did not answer: ${scrLoadError}` : null)
+    ?? moduleError
     ?? (stepError ? `Step "${definition.stepId}" could not be loaded: ${stepError}` : null);
 
-  const { output, executing, error, executionTime, executeWithValues, reset } =
-    useStepExecution(definition.moduleId, definition.stepId);
+  const masRun = useStepExecution(masModuleId, masStepId);
+  const { reset: masReset, executeWithValues: masExecute } = masRun;
+
+  // SCR execution: same contract as the MAS hook, scored against the endpoint.
+  const [scrRun, setScrRun] = useState<{ executing: boolean; error: string | null; ms: number | null }>(
+    { executing: false, error: null, ms: null }
+  );
+  const executing = scrUrl ? scrRun.executing : masRun.executing;
+  const error = scrUrl ? scrRun.error : masRun.error;
+  const executionTime = scrUrl ? scrRun.ms : masRun.executionTime;
+  const output = scrUrl ? null : masRun.output;
+  const reset = useCallback(() => {
+    if (scrUrl) setScrRun({ executing: false, error: null, ms: null });
+    else masReset();
+  }, [scrUrl, masReset]);
 
   // Stored fields compared with the step's current signature; only once the
   // step has loaded, or every field would look removed.
@@ -138,11 +179,28 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       // Converted by the signature's types; fields whose parameter the step
       // no longer lists are left out, and step inputs without a field go out
       // as null (buildStepInput fills every step input).
-      await executeWithValues(step, buildRunValues(definition, step, inputValues));
+      const values = buildRunValues(definition, step, inputValues);
+      if (scrUrl) {
+        if (!scrInfo) return;
+        // Every signature input goes out; one without a field as null.
+        const data: Record<string, unknown> = {};
+        for (const p of step.inputs) data[p.name] = values[p.name] ?? null;
+        setScrRun({ executing: true, error: null, ms: null });
+        setOutputValues({});
+        try {
+          const result = await scoreForApp(scrInfo, data);
+          setOutputValues(result.outputs);
+          setScrRun({ executing: false, error: null, ms: result.elapsedMs });
+        } catch (err) {
+          setScrRun({ executing: false, error: err instanceof Error ? err.message : String(err), ms: null });
+        }
+        return;
+      }
+      await masExecute(step, values);
     } catch {
       // Error handled by hook
     }
-  }, [step, definition, inputValues, executeWithValues]);
+  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo]);
 
   const handleReset = useCallback(() => {
     setInputValues(getInitialInputValues(definition));
@@ -161,7 +219,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           />
         )}
         <Alert variant="error" title="Failed to load">
-          {loadError}. The module "{definition.moduleId}" may have been removed from MAS.
+          {scrUrl
+            ? loadError
+            : `${loadError}. The module "${definition.moduleId}" may have been removed from MAS.`}
         </Alert>
       </div>
     );
@@ -211,7 +271,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             actions={
               <div className="ui-runner__header-actions">
                 {leadingBadges}
-                <Badge variant="info">{module?.name ?? definition.moduleId}</Badge>
+                <Badge variant={scrUrl ? 'warning' : 'info'}>{scrUrl ? 'SCR' : 'MAS'}</Badge>
+                <Badge variant="default">{module?.name ?? definition.moduleId}</Badge>
                 <Button variant="tertiary" onClick={handleOpenStandalone}>Standalone</Button>
                 {shareToken ? (
                   onSaveCopy && <Button variant="secondary" onClick={onSaveCopy}>Save to My UI Apps</Button>
@@ -232,7 +293,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const driftNotice = !preview && !driftDismissed && hasSignatureDrift(drift) && (
     <Alert
       variant="warning"
-      title="This app's fields differ from the module's current step signature"
+      title={`This app's fields differ from the ${scrUrl ? "endpoint's" : "module's current step"} signature`}
       dismissible
       onClose={() => setDriftDismissed(true)}
     >
