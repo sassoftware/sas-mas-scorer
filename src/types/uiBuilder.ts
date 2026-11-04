@@ -9,6 +9,12 @@ export interface UIDefinition {
   description?: string;
   moduleId: string;
   stepId: string;
+  /**
+   * Set when the app scores a SAS Container Runtime endpoint instead of a MAS
+   * module: the endpoint's score URL. moduleId then holds the endpoint's name
+   * and stepId its step id. Unset means MAS (every definition before 2.13).
+   */
+  scrUrl?: string;
   createdAt: string;
   updatedAt: string;
   layout: UILayout;
@@ -21,6 +27,7 @@ export interface UIDefinitionSummary {
   description?: string;
   moduleId: string;
   stepId: string;
+  scrUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,0 +1,221 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* SCR Endpoints */
+.scr-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.scr-page .sas-page-header {
+  margin-bottom: 0;
+}
+
+.scr-page .sas-page-header__subtitle {
+  overflow-wrap: anywhere;
+}
+
+.scr-add__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.scr-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 12rem;
+}
+
+.scr-field--grow {
+  flex: 1 1 24rem;
+}
+
+.scr-field__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--sas-gray-800);
+}
+
+.scr-hint,
+.scr-muted {
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.scr-hint {
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.scr-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--sas-blue-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.scr-link:hover {
+  text-decoration: underline;
+}
+
+.scr-url {
+  font-family: var(--font-family-mono, monospace);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.scr-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scr-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+}
+
+.scr-facts dt {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.scr-facts dd {
+  margin: 0;
+  color: var(--sas-gray-900);
+}
+
+.scr-facts__badges {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.scr-facts__source {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  margin-top: var(--space-1);
+}
+
+.scr-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scr-source {
+  border: 1px solid var(--sas-gray-200);
+  border-radius: 4px;
+  padding: var(--space-3);
+}
+
+.scr-source__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.scr-source__reasons {
+  margin: var(--space-2) 0 0 var(--space-5);
+  font-size: var(--font-size-sm);
+}
+
+.scr-source__meta {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.scr-result {
+  margin-top: var(--space-4);
+}
+
+.scr-result__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.scr-value {
+  font-family: var(--font-family-mono, monospace);
+  max-width: 40rem;
+  overflow-wrap: anywhere;
+}
+
+.scr-pre {
+  background: var(--sas-gray-50);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: 4px;
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.scr-log {
+  margin-top: var(--space-4);
+}
+
+.scr-log__title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-2);
+}
+
+.scr-batch__pick,
+.scr-batch__run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.scr-batch__run .sas-progress {
+  flex: 1 1 12rem;
+}
+
+.scr-batch__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.scr-batch__table {
+  max-height: 32rem;
+  overflow: auto;
+}
+
+.scr-issues {
+  margin: var(--space-1) 0 var(--space-1) var(--space-5);
+}
+
+.scr-error-text {
+  color: var(--sas-error-dark);
+}
+
+.scr-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}

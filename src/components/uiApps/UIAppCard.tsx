@@ -22,13 +22,18 @@ export const UIAppCard: React.FC<Props> = ({ app, onRun, onEdit, onDuplicate, on
       <CardBody>
         <div className="ui-app-card__header">
           <h3 className="ui-app-card__name">{app.name}</h3>
-          <Badge variant="info">{app.stepId}</Badge>
+          <span className="ui-app-card__badges">
+            <Badge variant={app.scrUrl ? 'warning' : 'info'} size="small">{app.scrUrl ? 'SCR' : 'MAS'}</Badge>
+            <Badge variant="default" size="small">{app.stepId}</Badge>
+          </span>
         </div>
         {app.description && (
           <p className="ui-app-card__description">{app.description}</p>
         )}
         <div className="ui-app-card__meta">
-          <span className="ui-app-card__module">Module: {app.moduleId}</span>
+          <span className="ui-app-card__module" title={app.scrUrl}>
+            {app.scrUrl ? 'SCR endpoint' : 'MAS module'}: {app.moduleId}
+          </span>
           <span className="ui-app-card__date">
             Updated: {new Date(app.updatedAt).toLocaleDateString()}
           </span>

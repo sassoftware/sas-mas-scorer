@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Module } from '../../types';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 
-export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'segtrees' | 'segtree-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder' | 'rules-import';
+export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-app-run' | 'ui-app-edit' | 'ui-app-new' | 'flows' | 'flow-detail' | 'segtrees' | 'segtree-detail' | 'coverage' | 'publishing-overview' | 'job-monitoring' | 'job-detail' | 'schema-builder' | 'rules-import' | 'scr' | 'scr-detail';
 
 interface SidebarProps {
   activeView: ViewType;
@@ -85,6 +85,22 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                   <path d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
                 <span>All Modules</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={`sas-sidebar__menu-item ${
+                  activeView === 'scr' || activeView === 'scr-detail' ? 'sas-sidebar__menu-item--active' : ''
+                }`}
+                onClick={() => onNavigate('scr')}
+              title={collapsed ? 'SCR Endpoints' : undefined}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+                  <path d="M3 8v8l9 5 9-5V8" />
+                  <path d="M12 13v8" />
+                </svg>
+                <span>SCR Endpoints</span>
               </button>
             </li>
             <li>

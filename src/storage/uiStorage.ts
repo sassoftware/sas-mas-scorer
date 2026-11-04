@@ -32,6 +32,7 @@ function toSummary(def: UIDefinition): UIDefinitionSummary {
     description: def.description,
     moduleId: def.moduleId,
     stepId: def.stepId,
+    scrUrl: def.scrUrl,
     createdAt: def.createdAt,
     updatedAt: def.updatedAt,
   };

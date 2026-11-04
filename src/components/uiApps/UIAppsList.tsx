@@ -141,7 +141,7 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
         apps.length === 0 ? (
           <EmptyState
             title="No UI apps yet"
-            hint='Create your first custom scoring interface by clicking "Create New" or by navigating to a module and clicking "Build UI".'
+            hint='Create your first custom scoring interface by clicking "Create New" or by opening a MAS module or an SCR endpoint and clicking "Build UI".'
           />
         ) : (
           <EmptyState title={`No apps match "${searchTerm}"`} />

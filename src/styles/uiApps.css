@@ -47,6 +47,12 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.ui-app-card__badges {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+}
+
 .ui-app-card__description {
   color: var(--sas-text-muted);
   font-size: var(--font-size-sm);

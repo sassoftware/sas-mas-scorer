@@ -17,6 +17,7 @@ import { useModules, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
 import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
+import { getScrEndpoint } from './storage/scrEndpoints';
 import { decodeUIDefinition } from './utils/shareLink';
 import { runWithLeaveGuard } from './components/uiBuilder/leaveGuard';
 import { initViyaUrl } from './config';
@@ -72,6 +73,12 @@ const JobMonitoringPage = lazy(() =>
 const JobDetailPage = lazy(() =>
   import('./components/jobMonitoring').then((m) => ({ default: m.JobDetailPage }))
 );
+const ScrEndpointsPage = lazy(() =>
+  import('./components/scr/ScrEndpointsPage').then((m) => ({ default: m.ScrEndpointsPage }))
+);
+const ScrEndpointPage = lazy(() =>
+  import('./components/scr/ScrEndpointPage').then((m) => ({ default: m.ScrEndpointPage }))
+);
 const SchemaBuilder = lazy(() =>
   import('./components/schemaBuilder/SchemaBuilder').then((m) => ({ default: m.SchemaBuilder }))
 );
@@ -116,6 +123,8 @@ const VIEW_TITLES: Record<ViewType, string> = {
   'job-detail': 'Job',
   'schema-builder': 'Schema → Code',
   'rules-import': 'Rules Import',
+  scr: 'SCR Endpoints',
+  'scr-detail': 'SCR Endpoint',
 };
 
 function App() {
@@ -177,8 +186,10 @@ function App() {
     const uiAppRunMatch = hash.match(/^\/ui-apps\/([^/]+)$/);
     const uiAppEditMatch = hash.match(/^\/ui-apps\/([^/]+)\/edit$/);
     const uiAppNewMatch = hash.match(/^\/ui-apps\/new\/([^/]+)$/);
+    const uiAppNewScrMatch = hash.match(/^\/ui-apps\/new-scr\/([^/]+)$/);
     const flowDetailMatch = hash.match(/^\/flows\/([^/]+)$/);
     const jobDetailMatch = hash.match(/^\/jobs\/([^/]+)$/);
+    const scrDetailMatch = hash.match(/^\/scr\/([^/]+)$/);
     const segTreeDetailMatch = hash.match(/^\/segmentation-trees\/([^/]+)$/);
     return {
       moduleId: moduleMatch ? decodeURIComponent(moduleMatch[1]) : null,
@@ -186,6 +197,7 @@ function App() {
       uiAppId: uiAppRunMatch ? decodeURIComponent(uiAppRunMatch[1]) : null,
       uiAppEditId: uiAppEditMatch ? decodeURIComponent(uiAppEditMatch[1]) : null,
       uiAppNewModuleId: uiAppNewMatch ? decodeURIComponent(uiAppNewMatch[1]) : null,
+      uiAppNewScrId: uiAppNewScrMatch ? decodeURIComponent(uiAppNewScrMatch[1]) : null,
       isUIAppsListView: hash === '/ui-apps' || hash === '/ui-apps/',
       isCoverageView: hash === '/coverage' || hash === '/coverage/',
       isFlowsListView: hash === '/flows' || hash === '/flows/',
@@ -194,6 +206,8 @@ function App() {
       isJobMonitoringView: hash === '/jobs' || hash === '/jobs/',
       isSchemaBuilderView: hash === '/schema-builder' || hash === '/schema-builder/',
       isRulesImportView: hash === '/rules-import' || hash === '/rules-import/',
+      isScrListView: hash === '/scr' || hash === '/scr/',
+      scrEndpointId: scrDetailMatch ? decodeURIComponent(scrDetailMatch[1]) : null,
       flowDetailId: flowDetailMatch ? decodeURIComponent(flowDetailMatch[1]) : null,
       jobDetailId: jobDetailMatch ? decodeURIComponent(jobDetailMatch[1]) : null,
       segTreeId: segTreeDetailMatch ? decodeURIComponent(segTreeDetailMatch[1]) : null,
@@ -204,7 +218,7 @@ function App() {
     };
   };
 
-  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, isUIAppsListView, isCoverageView, isFlowsListView, isSegTreesListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, flowDetailId, jobDetailId, segTreeId, isStandalone, uiAppDef } = getRouteParams();
+  const { moduleId, stepId, uiAppId, uiAppEditId, uiAppNewModuleId, uiAppNewScrId, isUIAppsListView, isCoverageView, isFlowsListView, isSegTreesListView, isPublishingView, isJobMonitoringView, isSchemaBuilderView, isRulesImportView, isScrListView, scrEndpointId, flowDetailId, jobDetailId, segTreeId, isStandalone, uiAppDef } = getRouteParams();
 
   // Determine active view from current route
   const getActiveView = (): ViewType => {
@@ -212,6 +226,8 @@ function App() {
     if (isJobMonitoringView) return 'job-monitoring';
     if (isSchemaBuilderView) return 'schema-builder';
     if (isRulesImportView) return 'rules-import';
+    if (scrEndpointId) return 'scr-detail';
+    if (isScrListView) return 'scr';
     if (flowDetailId) return 'flow-detail';
     if (isFlowsListView) return 'flows';
     if (segTreeId) return 'segtree-detail';
@@ -219,7 +235,7 @@ function App() {
     if (isCoverageView) return 'coverage';
     if (isPublishingView) return 'publishing-overview';
     if (isUIAppsListView) return 'ui-apps';
-    if (uiAppNewModuleId) return 'ui-app-new';
+    if (uiAppNewModuleId || uiAppNewScrId) return 'ui-app-new';
     if (uiAppEditId) return 'ui-app-edit';
     if (uiAppId) return 'ui-app-run';
     if (stepId) return 'score';
@@ -338,7 +354,7 @@ function App() {
             setModuleLoading(false);
           });
       }
-    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isSegTreesListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !isRulesImportView && !flowDetailId && !jobDetailId && !segTreeId) {
+    } else if (!moduleId && !uiAppId && !uiAppEditId && !uiAppNewModuleId && !uiAppNewScrId && !isUIAppsListView && !isCoverageView && !isFlowsListView && !isSegTreesListView && !isPublishingView && !isJobMonitoringView && !isSchemaBuilderView && !isRulesImportView && !isScrListView && !scrEndpointId && !flowDetailId && !jobDetailId && !segTreeId) {
       setSelectedModule(null);
       setSelectedStep(null);
     }
@@ -430,6 +446,10 @@ function App() {
       setSelectedModule(null);
       setSelectedStep(null);
       navigate('/schema-builder');
+    } else if (view === 'scr') {
+      setSelectedModule(null);
+      setSelectedStep(null);
+      navigate('/scr');
     } else if (view === 'rules-import') {
       setSelectedModule(null);
       setSelectedStep(null);
@@ -646,6 +666,14 @@ function App() {
       return <RulesImportPage />;
     }
 
+    // SCR endpoint views
+    if (activeView === 'scr') {
+      return <ScrEndpointsPage />;
+    }
+    if (activeView === 'scr-detail' && scrEndpointId) {
+      return <ScrEndpointPage key={scrEndpointId} endpointId={scrEndpointId} />;
+    }
+
     // Job Monitoring views
     if (activeView === 'job-monitoring') {
       return <JobMonitoringPage onOpenJob={handleOpenJob} />;
@@ -733,6 +761,30 @@ function App() {
         <UIBuilder
           definition={null}
           moduleId={uiAppNewModuleId}
+          onBack={handleBackToUIApps}
+          onSaved={handleUIAppSaved}
+          onSavedInPlace={loadRecentUIApps}
+        />
+      );
+    }
+
+    // UI App New View, on an SCR endpoint
+    if (activeView === 'ui-app-new' && uiAppNewScrId) {
+      const endpoint = getScrEndpoint(uiAppNewScrId);
+      if (!endpoint) {
+        return (
+          <EmptyState
+            title="SCR endpoint not found"
+            hint="It may have been removed, or it was added in another browser."
+            action={<Button variant="secondary" onClick={() => navigate('/scr')}>Back to SCR Endpoints</Button>}
+          />
+        );
+      }
+      return (
+        <UIBuilder
+          definition={null}
+          scrUrl={endpoint.url}
+          scrLabel={endpoint.label}
           onBack={handleBackToUIApps}
           onSaved={handleUIAppSaved}
           onSavedInPlace={loadRecentUIApps}
