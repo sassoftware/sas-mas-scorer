@@ -4,12 +4,24 @@
 /**
  * Persistent storage for OAuth tokens and connection settings.
  * Supports multiple named connections with per-connection token storage.
- * Uses electron-store with basic encryption for token obfuscation.
+ *
+ * Secrets (access/refresh tokens, client secrets) are sealed with Electron's
+ * safeStorage before they are written: DPAPI on Windows, the Keychain on
+ * macOS, libsecret/KWallet on Linux. Where the OS offers no real encryption
+ * (Linux without a keyring: safeStorage's 'basic_text' backend) secrets are
+ * kept for this session only and never written to disk. The rest of the file
+ * (connection names, URLs, client ids) is only obfuscated by electron-store's
+ * fixed key, which is public in this repository: it is not protection.
+ *
+ * safeStorage protects against other OS users and offline disk access. On
+ * Windows and Linux it does not protect against other programs running as the
+ * same user.
  *
  * The decrypted contents are kept in memory (see "In-memory copy" below), so
  * reads never touch the disk; only writes do.
  */
 
+import { safeStorage } from 'electron';
 import Store from 'electron-store';
 import { randomUUID } from 'node:crypto';
 
@@ -44,9 +56,22 @@ interface StoreSchema {
   connection?: ConnectionSettings | null;
 }
 
+/** How the file holds a connection: the client secret sealed (2.14+) or, before 2.14, in plain. */
+interface DiskConnection extends SavedConnection {
+  clientSecretSealed?: string;
+}
+
+/** How the file holds a connection's tokens: sealed (2.14+) or, before 2.14, in plain. */
+type DiskTokens = StoredTokens | { sealed: string };
+
+interface DiskSchema extends Omit<StoreSchema, 'connections' | 'tokensByConnection'> {
+  connections: DiskConnection[];
+  tokensByConnection: Record<string, DiskTokens>;
+}
+
 // --- Store instance ---
 
-const store = new Store<StoreSchema>({
+const store = new Store<DiskSchema>({
   name: 'mas-scorer-config',
   encryptionKey: 'mas-scorer-v1',
   defaults: {
@@ -69,7 +94,7 @@ function migrateIfNeeded(): void {
       name = legacy.viyaUrl;
     }
 
-    const saved: SavedConnection = { ...legacy, id, name };
+    const saved: DiskConnection = { ...legacy, id, name };
     store.set('connections', [saved]);
     store.set('activeConnectionId', id);
 
@@ -80,8 +105,8 @@ function migrateIfNeeded(): void {
     }
 
     // Remove legacy keys
-    store.delete('connection' as keyof StoreSchema);
-    store.delete('tokens' as keyof StoreSchema);
+    store.delete('connection' as keyof DiskSchema);
+    store.delete('tokens' as keyof DiskSchema);
   }
 }
 
@@ -89,24 +114,146 @@ migrateIfNeeded();
 
 // --- In-memory copy ---
 //
-// conf reads and decrypts the whole file on every get (readFileSync plus a
-// 10 000-round PBKDF2, ~15 ms), and every API request asks for the active
-// connection and its tokens, which cost ~60 ms of blocked main process per
-// request. The decrypted contents are read once and kept here instead. Every
-// write goes to disk first, in one encrypted write of the whole store, and
-// only then replaces the copy, so the copy always matches the file: this
-// process is the store's only reader and writer. The file stays encrypted.
+// The file is read and unsealed once, by initTokenStore() after app 'ready'
+// (conf decrypts the whole file on every get, ~15 ms, and safeStorage is
+// asynchronous). Reads then come from memory. A write replaces the copy at
+// once and is sealed and written to disk in the background, in order, so the
+// file always ends up with the latest state; flushTokenStore() waits for that
+// before the app quits. This process is the store's only reader and writer.
 let memory: StoreSchema | null = null;
+let sealing = false;
+let writeQueue: Promise<void> = Promise.resolve();
+
+// --- Sealing secrets (safeStorage) ---
+
+/** True when safeStorage gives real OS-backed encryption (not Linux 'basic_text'). */
+async function detectSealing(): Promise<boolean> {
+  if (!(await safeStorage.isAsyncEncryptionAvailable())) return false;
+  if (process.platform === 'linux') {
+    const backend = safeStorage.getSelectedStorageBackend();
+    if (backend === 'basic_text' || backend === 'unknown') return false;
+  }
+  return true;
+}
+
+const seal = async (text: string): Promise<string> => (await safeStorage.encryptStringAsync(text)).toString('base64');
+
+/** The secret, and whether safeStorage asks for it to be sealed again (key rotated). */
+const unseal = async (sealed: string): Promise<{ text: string; reseal: boolean }> => {
+  const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(Buffer.from(sealed, 'base64'));
+  return { text: result, reseal: shouldReEncrypt };
+};
+
+const isSealedTokens = (t: DiskTokens): t is { sealed: string } => typeof (t as { sealed?: unknown }).sealed === 'string';
+
+/**
+ * Read the file into memory, unsealing secrets. A secret that cannot be
+ * unsealed (file copied from another user or machine, keyring reset) is
+ * dropped: the user signs in again. Reports whether the file must be written
+ * again: it still held secrets in plain (written before 2.14), or safeStorage
+ * asked for re-encryption.
+ */
+async function fromDisk(disk: DiskSchema): Promise<{ schema: StoreSchema; rewrite: boolean }> {
+  let rewrite = false;
+  const connections: SavedConnection[] = [];
+  for (const c of disk.connections ?? []) {
+    const { clientSecretSealed, ...rest } = c;
+    let clientSecret = rest.clientSecret ?? '';
+    if (clientSecret) rewrite = true;
+    if (clientSecretSealed && sealing) {
+      try {
+        const { text, reseal } = await unseal(clientSecretSealed);
+        clientSecret = text;
+        rewrite ||= reseal;
+      } catch {
+        clientSecret = '';
+      }
+    }
+    connections.push({ ...rest, clientSecret });
+  }
+  const tokensByConnection: Record<string, StoredTokens> = {};
+  for (const [id, t] of Object.entries(disk.tokensByConnection ?? {})) {
+    if (!t) continue;
+    if (isSealedTokens(t)) {
+      if (!sealing) continue;
+      try {
+        const { text, reseal } = await unseal(t.sealed);
+        tokensByConnection[id] = JSON.parse(text) as StoredTokens;
+        rewrite ||= reseal;
+      } catch {
+        // cannot be unsealed here: sign in again
+      }
+    } else {
+      rewrite = true;
+      tokensByConnection[id] = t;
+    }
+  }
+  return {
+    schema: { connections, activeConnectionId: disk.activeConnectionId ?? null, tokensByConnection },
+    rewrite,
+  };
+}
+
+/** What is written to the file: secrets sealed, or left out when they cannot be sealed. */
+async function toDisk(schema: StoreSchema): Promise<DiskSchema> {
+  const connections: DiskConnection[] = [];
+  for (const c of schema.connections) {
+    const out: DiskConnection = { ...c, clientSecret: '' };
+    if (c.clientSecret && sealing) out.clientSecretSealed = await seal(c.clientSecret);
+    connections.push(out);
+  }
+  const tokensByConnection: Record<string, DiskTokens> = {};
+  if (sealing) {
+    for (const [id, t] of Object.entries(schema.tokensByConnection ?? {})) {
+      tokensByConnection[id] = { sealed: await seal(JSON.stringify(t)) };
+    }
+  }
+  return { connections, activeConnectionId: schema.activeConnectionId, tokensByConnection };
+}
+
+function persist(schema: StoreSchema): void {
+  writeQueue = writeQueue
+    .then(async () => {
+      store.store = await toDisk(schema);
+    })
+    .catch((err) => {
+      console.error('Could not save the connection settings:', err);
+    });
+}
+
+/**
+ * Read and unseal the store. Call once after app 'ready', before anything
+ * reads connections or tokens. Secrets an earlier version wrote in plain are
+ * sealed now, or removed from the file when they cannot be sealed (they stay
+ * in memory for this session).
+ */
+export async function initTokenStore(): Promise<void> {
+  sealing = await detectSealing();
+  const { schema, rewrite } = await fromDisk(store.store);
+  memory = schema;
+  if (rewrite) persist(schema);
+  await writeQueue;
+}
+
+/** Resolves when every write so far is on disk. */
+export function flushTokenStore(): Promise<void> {
+  return writeQueue;
+}
+
+/** True when secrets are kept for this session only (no OS encryption available). */
+export function secretsAreSessionOnly(): boolean {
+  return !sealing;
+}
 
 function current(): StoreSchema {
-  if (!memory) memory = store.store;
+  if (!memory) throw new Error('Token store used before initTokenStore().');
   return memory;
 }
 
 function write(patch: Partial<StoreSchema>): void {
   const next: StoreSchema = { ...current(), ...patch };
-  store.store = next;
   memory = next;
+  persist(next);
 }
 
 // Callers get copies, so nothing outside this module can change the copy.

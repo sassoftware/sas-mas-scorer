@@ -30,6 +30,7 @@
  */
 
 import type { Step, StepParameter } from '../types';
+import { createBridgeFetch, isElectronBridgeAvailable } from './electronFetch';
 
 export type ScrRuntime = 'scr' | 'python' | 'python-legacy' | 'unknown';
 export type ScrMode = 'single' | 'batch';
@@ -180,9 +181,13 @@ export function reachableFromHere(url: string): { reachable: boolean; reason?: s
   };
 }
 
+// Desktop app: SCR calls go through the main process (no CORS there, and the
+// renderer itself has no network access). Never with the Viya token.
+const bridgeFetch = isElectronBridgeAvailable() ? createBridgeFetch('scr') : null;
+
 async function scrFetch(url: string, init: RequestInit = {}): Promise<Response> {
   try {
-    return await fetch(url, { ...init, credentials: 'omit', cache: 'no-store' });
+    return await (bridgeFetch ?? fetch)(url, { ...init, credentials: 'omit', cache: 'no-store' });
   } catch (err) {
     const { reachable, reason } = reachableFromHere(url);
     const detail = err instanceof Error ? err.message : String(err);

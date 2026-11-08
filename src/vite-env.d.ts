@@ -21,23 +21,33 @@ declare const __APP_VERSION__: string;
 interface ConnectionSettings {
   viyaUrl: string;
   clientId: string;
-  clientSecret: string;
   insecureSsl: boolean;
 }
 
+/** A saved connection as the renderer sees it: the client secret stays in the main process. */
 interface SavedConnection extends ConnectionSettings {
   id: string;
   name: string;
   /** Environment color (hex) applied to the app chrome while this connection is active */
   color?: string;
+  /** Whether a client secret is saved for this connection (the secret itself is never sent). */
+  hasClientSecret: boolean;
+}
+
+/** Connection fields sent to the main process when adding or editing one. */
+interface ConnectionInput extends ConnectionSettings {
+  name: string;
+  color?: string;
+  /** On edit: undefined keeps the saved secret, '' removes it, a value replaces it. */
+  clientSecret?: string;
 }
 
 interface ElectronAPI {
   // Connection management
   getAllConnections: () => Promise<SavedConnection[]>;
   getActiveConnection: () => Promise<SavedConnection | null>;
-  addConnection: (conn: Omit<SavedConnection, 'id'>) => Promise<SavedConnection>;
-  updateConnection: (conn: SavedConnection) => Promise<void>;
+  addConnection: (conn: ConnectionInput) => Promise<SavedConnection>;
+  updateConnection: (conn: ConnectionInput & { id: string }) => Promise<void>;
   deleteConnection: (id: string) => Promise<void>;
   setActiveConnection: (id: string) => Promise<void>;
 
@@ -48,9 +58,29 @@ interface ElectronAPI {
   startLogin: () => Promise<{ success: boolean }>;
   logout: () => Promise<void>;
   isAuthenticated: () => Promise<boolean>;
-  getAccessToken: () => Promise<string | null>;
   getViyaUrl: () => Promise<string | null>;
+  /** HTTP bridge (electron/httpBridge.ts): 'viya' requests get the access token in the main process. */
+  httpRequest: (req: ElectronBridgeRequest) => Promise<ElectronBridgeResponse>;
+  httpAbort: (id: string) => Promise<void>;
   isElectron: true;
+}
+
+interface ElectronBridgeRequest {
+  id: string;
+  kind: 'viya' | 'scr';
+  url: string;
+  method: string;
+  headers: [string, string][];
+  body?: Uint8Array;
+}
+
+interface ElectronBridgeResponse {
+  status?: number;
+  statusText?: string;
+  headers?: [string, string][];
+  body?: Uint8Array;
+  url?: string;
+  error?: { kind: 'abort' | 'network' | 'refused'; message: string };
 }
 
 interface Window {

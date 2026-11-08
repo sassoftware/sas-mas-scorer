@@ -175,6 +175,43 @@ function entryStaysLight(): Plugin {
   };
 }
 
+/**
+ * Content-Security-Policy for the desktop app's packaged page (Electron
+ * production build only; the web and jobdef builds are unchanged, and the
+ * Vite dev server needs inline scripts and a websocket).
+ *
+ * The renderer gets no network access of its own (connect-src 'none'): SAS
+ * Viya and SCR requests go through the main process (electron/httpBridge.ts).
+ * Inline styles stay allowed for the components that set them; scripts load
+ * only from the app's own files.
+ */
+const ELECTRON_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'none'",
+  "worker-src 'none'",
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
+function electronCsp(): Plugin {
+  return {
+    name: 'electron-csp',
+    apply: 'build',
+    transformIndexHtml(html) {
+      const meta = `<meta http-equiv="Content-Security-Policy" content="${ELECTRON_CSP}" />`;
+      if (!html.includes('<meta charset="UTF-8" />')) throw new Error('electron-csp: charset meta not found in index.html');
+      return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />
+    ${meta}`);
+    },
+  };
+}
+
 export default defineConfig(async () => {
   // Conditionally import vite-plugin-singlefile for jobdef builds
   const plugins: PluginOption[] = [react()];
@@ -188,6 +225,7 @@ export default defineConfig(async () => {
   } else {
     plugins.push(entryStaysLight());
   }
+  if (isElectronBuild) plugins.push(electronCsp());
 
   // Build alias configuration - use array syntax for more control
   const aliasConfig: Alias[] = [

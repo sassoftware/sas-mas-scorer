@@ -5,8 +5,9 @@
  * Electron main process — window management, IPC handlers, OAuth flow.
  */
 
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   generatePkce,
   buildAuthorizationUrl,
@@ -30,7 +31,10 @@ import {
   setActiveConnection,
   getActiveConnectionId,
   SavedConnection,
+  initTokenStore,
+  flushTokenStore,
 } from './tokenStore';
+import { registerHttpBridge } from './httpBridge';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -107,6 +111,51 @@ function refreshSession(): Promise<string | null> {
   return entry.promise;
 }
 
+/**
+ * A valid access token for the active connection: the stored one while it has
+ * more than a minute left, otherwise a refreshed one (deduplicated). Null when
+ * signed out or the session can no longer be renewed. Main process only: the
+ * token is attached by the HTTP bridge and never handed to the renderer.
+ */
+async function getValidAccessToken(): Promise<string | null> {
+  const tokens = getTokens();
+  if (!tokens) return null;
+  if (tokens.expiresAt - 60_000 > Date.now()) return tokens.accessToken;
+  return refreshSession();
+}
+
+// --- Renderer trust ---
+
+const DEV_URL = 'http://localhost:3000';
+const loadsFromDevServer = (): boolean => process.env.NODE_ENV === 'development' || !app.isPackaged;
+const appIndexPath = (): string => path.join(__dirname, '..', '..', 'dist', 'index.html');
+
+/** True when a URL is the app's own page (the packaged index.html, or the dev server in development). */
+function isAppUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (loadsFromDevServer()) return parsed.origin === DEV_URL;
+    if (parsed.protocol !== 'file:') return false;
+    const norm = (p: string) => (process.platform === 'win32' ? path.normalize(p).toLowerCase() : path.normalize(p));
+    return norm(fileURLToPath(parsed)) === norm(appIndexPath());
+  } catch {
+    return false;
+  }
+}
+
+/** IPC calls are honoured only from the main window's top frame showing the app's own page. */
+function isTrustedSender(event: IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame;
+  return (
+    !!mainWindow &&
+    !mainWindow.isDestroyed() &&
+    event.sender === mainWindow.webContents &&
+    !!frame &&
+    frame === mainWindow.webContents.mainFrame &&
+    isAppUrl(frame.url)
+  );
+}
+
 // --- SSL configuration ---
 
 function applySslConfig(): void {
@@ -147,9 +196,12 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Disable same-origin policy so renderer can call Viya APIs cross-origin.
-      // Safe for a desktop app that only loads our own code.
-      webSecurity: false,
+      sandbox: true,
+      // Same-origin policy on: the renderer cannot read local files or other
+      // sites. SAS Viya and SCR requests go through the main-process HTTP
+      // bridge (electron/httpBridge.ts), which also keeps the access token.
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
@@ -167,18 +219,27 @@ function createWindow(): void {
   win.once('closed', () => clearTimeout(showFallback));
 
   // In development, load from Vite dev server
-  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    mainWindow.loadURL('http://localhost:3000');
+  if (loadsFromDevServer()) {
+    mainWindow.loadURL(DEV_URL);
   } else {
     // In production, load from built dist files
-    mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
+    mainWindow.loadFile(appIndexPath());
   }
 
   // Open external links (target="_blank") in the user's default browser
-  // instead of opening a new Electron window.
+  // instead of opening a new Electron window. Only web links: file:, smb:,
+  // javascript: and custom protocol handlers are never passed to the OS.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // The window only ever shows the app itself; a link or script that would
+  // navigate it elsewhere is stopped (web links open in the browser instead).
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
   });
 
   mainWindow.on('closed', () => {
@@ -188,35 +249,94 @@ function createWindow(): void {
 
 // --- IPC Handlers ---
 
+/**
+ * What the renderer sees of a connection: everything except the client
+ * secret, which stays in the main process (only whether one is saved).
+ */
+interface PublicConnection extends Omit<SavedConnection, 'clientSecret'> {
+  hasClientSecret: boolean;
+}
+
+function toPublic(conn: SavedConnection | null): PublicConnection | null {
+  if (!conn) return null;
+  const { clientSecret, ...rest } = conn;
+  return { ...rest, hasClientSecret: !!clientSecret };
+}
+
+/** Connection fields from the renderer, checked; unknown keys are dropped. */
+interface ConnectionInput {
+  name: string;
+  viyaUrl: string;
+  clientId: string;
+  /** Undefined on update: keep the saved secret. '' clears it. */
+  clientSecret?: string;
+  insecureSsl: boolean;
+  color?: string;
+}
+
+function readConnectionInput(value: unknown): ConnectionInput {
+  const v = (value ?? {}) as Record<string, unknown>;
+  const str = (x: unknown, max: number): x is string => typeof x === 'string' && x.length <= max;
+  if (!str(v.name, 200) || !str(v.viyaUrl, 2048) || !str(v.clientId, 200) || typeof v.insecureSsl !== 'boolean') {
+    throw new Error('Invalid connection settings.');
+  }
+  if (v.clientSecret !== undefined && !str(v.clientSecret, 4096)) throw new Error('Invalid client secret.');
+  if (v.color !== undefined && !(typeof v.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(v.color))) throw new Error('Invalid color.');
+  const url = new URL(v.viyaUrl);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('The SAS Viya URL must start with https:// or http://.');
+  return {
+    name: v.name,
+    viyaUrl: v.viyaUrl,
+    clientId: v.clientId,
+    clientSecret: v.clientSecret as string | undefined,
+    insecureSsl: v.insecureSsl,
+    color: v.color as string | undefined,
+  };
+}
+
+/** ipcMain.handle, answering only the app's own page in the main window. */
+function handleTrusted<A extends unknown[], R>(
+  channel: string,
+  listener: (event: IpcMainInvokeEvent, ...args: A) => R
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isTrustedSender(event)) throw new Error(`IPC ${channel} refused: untrusted sender.`);
+    return listener(event, ...(args as A));
+  });
+}
+
 function registerIpcHandlers(): void {
   // --- Connection Management ---
 
-  ipcMain.handle('conn:getAll', () => {
-    return getAllConnections();
+  handleTrusted('conn:getAll', () => getAllConnections().map((c) => toPublic(c)));
+
+  handleTrusted('conn:getActive', () => toPublic(getConnection()));
+
+  handleTrusted('conn:add', (_event, value: unknown) => {
+    const input = readConnectionInput(value);
+    const saved = addConnection({ ...input, clientSecret: input.clientSecret ?? '' });
+    return toPublic(saved);
   });
 
-  ipcMain.handle('conn:getActive', () => {
-    return getConnection();
-  });
-
-  ipcMain.handle('conn:add', (_event, conn: Omit<SavedConnection, 'id'>) => {
-    const saved = addConnection(conn);
-    return saved;
-  });
-
-  ipcMain.handle('conn:update', (_event, conn: SavedConnection) => {
-    updateConnection(conn);
+  handleTrusted('conn:update', (_event, value: unknown) => {
+    const id = (value as { id?: unknown } | null)?.id;
+    if (typeof id !== 'string') throw new Error('Invalid connection id.');
+    const existing = getAllConnections().find((c) => c.id === id);
+    if (!existing) return;
+    const input = readConnectionInput(value);
+    updateConnection({ ...input, id, clientSecret: input.clientSecret ?? existing.clientSecret });
     // Re-apply SSL if this is the active connection
-    if (conn.id === getActiveConnectionId()) {
+    if (id === getActiveConnectionId()) {
       applySslConfig();
     }
   });
 
-  ipcMain.handle('conn:delete', (_event, id: string) => {
-    deleteConnection(id);
+  handleTrusted('conn:delete', (_event, id: unknown) => {
+    if (typeof id === 'string') deleteConnection(id);
   });
 
-  ipcMain.handle('conn:setActive', (_event, id: string) => {
+  handleTrusted('conn:setActive', (_event, id: unknown) => {
+    if (typeof id !== 'string') return;
     setActiveConnection(id);
     applySslConfig();
     // A refresh still out for the previous connection is keyed to it and
@@ -224,13 +344,13 @@ function registerIpcHandlers(): void {
   });
 
   // Backward-compat alias used by client.ts
-  ipcMain.handle('auth:getViyaUrl', () => {
+  handleTrusted('auth:getViyaUrl', () => {
     return getConnection()?.viyaUrl ?? null;
   });
 
   // --- Auth Status ---
 
-  ipcMain.handle('auth:isAuthenticated', async () => {
+  handleTrusted('auth:isAuthenticated', async () => {
     const tokens = getTokens();
     if (!tokens) return false;
     if (tokens.expiresAt > Date.now()) return true;
@@ -240,24 +360,25 @@ function registerIpcHandlers(): void {
     return (await refreshSession()) !== null;
   });
 
-  // --- Get Access Token (with auto-refresh) ---
+  // --- HTTP bridge (SAS Viya with the access token, SCR endpoints without) ---
 
-  ipcMain.handle('auth:getAccessToken', async () => {
-    const tokens = getTokens();
-    if (!tokens) return null;
-
-    // If token is still valid (with 60-second buffer), return it
-    if (tokens.expiresAt - 60_000 > Date.now()) {
-      return tokens.accessToken;
-    }
-
-    // Token expired or about to expire — refresh it (deduplicated)
-    return refreshSession();
+  registerHttpBridge({
+    isTrustedSender,
+    activeViyaOrigin: () => {
+      const url = getConnection()?.viyaUrl;
+      if (!url) return null;
+      try {
+        return new URL(url).origin;
+      } catch {
+        return null;
+      }
+    },
+    getValidAccessToken,
   });
 
   // --- Login ---
 
-  ipcMain.handle('auth:startLogin', async () => {
+  handleTrusted('auth:startLogin', async () => {
     const connection = getConnection();
     if (!connection) {
       throw new Error('No connection configured. Please set up a connection first.');
@@ -363,14 +484,17 @@ function registerIpcHandlers(): void {
 
   // --- Logout ---
 
-  ipcMain.handle('auth:logout', () => {
+  handleTrusted('auth:logout', () => {
     clearTokens();
   });
 }
 
 // --- App lifecycle ---
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Connections and tokens are read (and their secrets unsealed) before
+  // anything can ask for them.
+  await initTokenStore();
   registerIpcHandlers();
   applySslConfig();
   createWindow();
@@ -380,6 +504,15 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+// Settings and tokens are written in the background; quit once they are on disk.
+let quitAfterFlush = false;
+app.on('before-quit', (event) => {
+  if (quitAfterFlush) return;
+  event.preventDefault();
+  quitAfterFlush = true;
+  void flushTokenStore().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {
