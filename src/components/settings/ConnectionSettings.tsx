@@ -98,7 +98,10 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
   const [name, setName] = useState('');
   const [viyaUrl, setViyaUrl] = useState('');
   const [clientId, setClientId] = useState('vscode');
+  // The saved secret never reaches this page: on edit the field starts empty,
+  // and an empty field keeps the saved one unless "Remove" was chosen.
   const [clientSecret, setClientSecret] = useState('');
+  const [removeSecret, setRemoveSecret] = useState(false);
   const [insecureSsl, setInsecureSsl] = useState(false);
   const [color, setColor] = useState(''); // '' = default SAS branding
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +136,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
     setViyaUrl('');
     setClientId('vscode');
     setClientSecret('');
+    setRemoveSecret(false);
     setInsecureSsl(false);
     setColor('');
     setError(null);
@@ -149,7 +153,8 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
     setName(conn.name);
     setViyaUrl(conn.viyaUrl);
     setClientId(conn.clientId);
-    setClientSecret(conn.clientSecret);
+    setClientSecret('');
+    setRemoveSecret(false);
     setInsecureSsl(conn.insecureSsl);
     setColor(conn.color ?? '');
     setError(null);
@@ -192,7 +197,15 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
       name: name.trim(),
       viyaUrl: viyaUrl.trim().replace(/\/+$/, ''),
       clientId: clientId.trim() || 'vscode',
-      clientSecret,
+      // Edit: send a secret only when it changes
+      clientSecret:
+        view === 'edit' && editingConnection
+          ? clientSecret
+            ? clientSecret
+            : removeSecret
+              ? ''
+              : undefined
+          : clientSecret,
       insecureSsl,
       color: color || undefined,
     };
@@ -313,16 +326,40 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                 <div className="connection-settings__group">
                   <label className="connection-settings__label" htmlFor={clientSecretId}>
                     <span className="connection-settings__label-text">Client Secret</span>
-                    <span className="connection-settings__hint">Leave empty for default public client</span>
+                    <span className="connection-settings__hint">
+                      {view === 'edit' && editingConnection?.hasClientSecret
+                        ? 'A secret is saved. Leave empty to keep it, or type a new one'
+                        : 'Leave empty for default public client'}
+                    </span>
                   </label>
                   <input
                     id={clientSecretId}
                     type="password"
                     className="sas-input"
                     value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    placeholder="(empty)"
+                    onChange={(e) => {
+                      setClientSecret(e.target.value);
+                      if (e.target.value) setRemoveSecret(false);
+                    }}
+                    placeholder={
+                      view === 'edit' && editingConnection?.hasClientSecret
+                        ? removeSecret
+                          ? '(will be removed)'
+                          : '(saved)'
+                        : '(empty)'
+                    }
+                    autoComplete="new-password"
                   />
+                  {view === 'edit' && editingConnection?.hasClientSecret && !clientSecret && (
+                    <label className="connection-settings__checkbox">
+                      <input
+                        type="checkbox"
+                        checked={removeSecret}
+                        onChange={(e) => setRemoveSecret(e.target.checked)}
+                      />
+                      <span>Remove the saved secret (use the public client)</span>
+                    </label>
+                  )}
                 </div>
                 <div className="connection-settings__group connection-settings__group--full">
                   <div className="connection-settings__label">

@@ -6,8 +6,18 @@ import { ApiError } from '../types';
 import { getSasViyaUrl } from '../config';
 import { markSessionActive, requestSessionRenewal, SESSION_EXPIRED_MESSAGE } from '../auth/sessionExpiry';
 import { FailureDetails, recordFailure, ViyaApiError } from '../utils/apiErrors';
+import { createBridgeFetch } from './electronFetch';
 
 const isElectron = !!window.electronAPI;
+
+/**
+ * Desktop app: requests go through the main process, which adds the access
+ * token (electron/httpBridge.ts). axios uses its fetch adapter with the
+ * bridge's fetch; the browser builds keep the default XHR adapter and cookies.
+ */
+const electronTransport = isElectron
+  ? { adapter: 'fetch' as const, env: { fetch: createBridgeFetch('viya') } }
+  : {};
 
 const AUTH_REQUIRED_MESSAGE = 'Authentication required. Please log in.';
 
@@ -109,41 +119,18 @@ const clearCsrfToken = (): void => {
 
 /**
  * Shared request interceptor that adds:
- * - Bearer token (Electron mode) or cookies (browser mode)
+ * - Dynamic baseURL (Electron mode; the main process adds the bearer token,
+ *   and answers 401 when there is none, which runs the sign-in flow below)
  * - CSRF token for mutating requests
- * - Dynamic baseURL (Electron mode)
+ * Browser modes authenticate with cookies.
  */
 const addAuthInterceptor = (client: AxiosInstance, basePath: string): void => {
   client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
-      // Electron mode: dynamic baseURL + Bearer token. The two IPC reads are
-      // independent, so they run concurrently — one main-process round trip
-      // per request instead of two in series.
       if (isElectron && window.electronAPI) {
-        const [viyaUrl, token] = await Promise.all([
-          window.electronAPI.getViyaUrl(),
-          window.electronAPI.getAccessToken(),
-        ]);
+        const viyaUrl = await window.electronAPI.getViyaUrl();
         if (viyaUrl) {
           config.baseURL = basePath ? `${viyaUrl}${basePath}` : viyaUrl;
-        }
-
-        let bearer = token;
-        // No token although a connection is configured: the session ended
-        // (the refresh token was rejected and the main process cleared the
-        // tokens). Ask for a new sign-in before sending a request that can
-        // only fail; when no prompt applies, send it as before.
-        if (!bearer && viyaUrl) {
-          const renewal = await requestSessionRenewal();
-          if (renewal === 'renewed') {
-            bearer = await window.electronAPI.getAccessToken();
-          } else if (renewal === 'dismissed') {
-            throw failure(SESSION_EXPIRED_MESSAGE, requestDetails(config));
-          }
-        }
-
-        if (bearer) {
-          config.headers['Authorization'] = `Bearer ${bearer}`;
         }
       }
 
@@ -266,6 +253,7 @@ const createApiClient = (): AxiosInstance => {
     timeout: 30000,
     // Cookie auth for browser mode only
     withCredentials: !isElectron,
+    ...electronTransport,
   });
 
   addAuthInterceptor(client, '/microanalyticScore');
@@ -287,6 +275,7 @@ const createGenericApiClient = (): AxiosInstance => {
     },
     timeout: 30000,
     withCredentials: !isElectron,
+    ...electronTransport,
   });
 
   addAuthInterceptor(client, '');

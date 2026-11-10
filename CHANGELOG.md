@@ -2,6 +2,37 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [2.14.0] - Unreleased
+
+Desktop app security hardening. The desktop window no longer has direct network or local-file access, and the SAS Viya access token stays in the app's main process. The web app and the Job Execution / Visual Analytics build are unchanged.
+
+### Security
+
+- **Same-origin policy on in the desktop app** — the window used to run with web security off, so script in the page could read any local file whose path it knew and send it to any site. Web security is now on, and the packaged page has a Content-Security-Policy:
+  - no network access of its own (`connect-src 'none'`);
+  - scripts from the app's own files only;
+  - no plugins, frames, workers or form posts.
+- **Access token kept in the main process** — SAS Viya and SCR requests go through the main process, which adds the bearer token only to requests for the active connection's own server. The page can no longer read the token: `getAccessToken` is gone from the desktop bridge
+- **SCR requests** from the desktop app never carry the Viya token or cookies. They cannot reach link-local or cloud-metadata addresses (`169.254.x.x`) or container-engine API ports (2375/2376)
+- **Bridge calls are accepted only from the app's own page** in its main window
+- **Links** — only `http(s)` links open in the browser. Other schemes (`file:`, `smb:`, custom protocol handlers) are no longer handed to the operating system, and the window cannot be navigated away from the app
+- **Client secret kept in the main process** — the connection list the page receives says only whether a client secret is saved. When editing a connection, an empty Client Secret field keeps the saved one; **Remove the saved secret** clears it. Connection settings sent from the page are checked before they are saved
+- **Tokens and client secrets encrypted with the operating system's key store** (Electron `safeStorage`):
+  - Windows: DPAPI. macOS: Keychain. Linux: libsecret or KWallet.
+  - Before 2.14 they were only obfuscated with a key that is public in this repository. Existing sign-ins are moved over on first start, without signing in again.
+  - On Linux without a keyring, secrets are kept for the session only and not written to disk.
+  - This protects against other users of the computer and offline disk access. On Windows and Linux it does not protect against other programs running as you.
+- **Electron 45** (from 33, which no longer receives security fixes)
+- **Electron fuses** set on the packaged app:
+  - it cannot be started as plain Node (`ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, `--inspect`);
+  - it loads only its own `app.asar`, checked against the hash built into the executable;
+  - its cookie store is encrypted.
+
+### Notes
+
+- **Going back to 2.13 after running 2.14** signs you out, and a saved client secret has to be entered again: 2.13 cannot read the encrypted entries
+- Builds start from an empty `electron/dist`, so files from older builds no longer end up in the app
+
 ## [2.13.0] - 2026-11-04
 
 SAS Container Runtime endpoints: score models and decisions deployed as SCR containers with nothing but the endpoint URL, see what kind of container it is, and find the SAS Viya content it was published from. Everything shown comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records; nothing is read from inside the container.
