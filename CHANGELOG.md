@@ -2,7 +2,7 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
-## [2.14.0] - Unreleased
+## [2.14.0] - 2026-11-10
 
 Desktop app security hardening. The desktop window no longer has direct network or local-file access, and the SAS Viya access token stays in the app's main process. The web app and the Job Execution / Visual Analytics build are unchanged.
 
@@ -32,6 +32,7 @@ Desktop app security hardening. The desktop window no longer has direct network 
 
 - **Going back to 2.13 after running 2.14** signs you out, and a saved client secret has to be entered again: 2.13 cannot read the encrypted entries
 - Builds start from an empty `electron/dist`, so files from older builds no longer end up in the app
+- The release workflow builds with Node 24 (Electron 45 needs Node 22.12 or later)
 
 ## [2.13.0] - 2026-11-04
 
