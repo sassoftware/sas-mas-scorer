@@ -65,7 +65,7 @@ The desktop app supports **multiple named connections** (e.g. "Production", "Dev
    | **Connection Name** | A label for this connection (e.g. "Production") |
    | **SAS Viya Server URL** | The base URL of your Viya environment (e.g. `https://viya.example.com`) |
    | **Client ID** | An OAuth client registered on Viya. The default `vscode` works on Viya 2022.11+ |
-   | **Client Secret** | Leave empty for the default public client |
+   | **Client Secret** | Leave empty for the default public client. When you edit a connection this field starts empty and shows whether a secret is saved: leave it empty to keep the saved secret, type a new one to replace it, or tick **Remove the saved secret** to go back to the public client |
    | **Skip SSL verification** | Enable for dev/test environments with self-signed certificates |
    | **Environment Color** | Optional — tints the application header with this connection's color so you can tell environments apart at a glance. Pick a preset (Light Blue, Midnight Blue, Pink) or any custom color; **Default** keeps the standard SAS blue |
 
@@ -80,6 +80,10 @@ The desktop app supports **multiple named connections** (e.g. "Production", "Dev
 - Editing the **Environment Color** of the active connection recolors the header immediately — handy for making sure production and test environments never look alike.
 
 **Later launches:** if the stored session has expired, the app renews it at startup with the saved refresh token — the header shows **Connecting…** meanwhile, and no login window opens. If the server cannot be reached at startup (a network outage, VPN not up yet), the saved session is kept, so you do not have to log in again once the connection is back.
+
+**Where your sign-in is kept:** the access and refresh tokens and any client secret stay in the app's main process; the app's window never sees them. On disk they are encrypted with the operating system's key store: DPAPI on Windows, the Keychain on macOS, and libsecret or KWallet on Linux. On Linux without a keyring nothing secret is written to disk, so you sign in again each time you start the app. This encryption protects against other users of the computer and against someone reading the disk. On Windows and Linux it does not protect against other programs running under your own account.
+
+Going back to 2.13 after running 2.14 or later signs you out, and a saved client secret has to be entered again, because 2.13 cannot read the encrypted entries.
 
 ### Web Server (Browser)
 
