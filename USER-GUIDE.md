@@ -26,7 +26,8 @@ This guide walks you through every feature of the SAS MAS Scorer application. Wh
 18. [Schema → Code](#18-schema--code)
 19. [Business Rules Import](#19-business-rules-import)
 20. [SAS Container Runtime Endpoints](#20-sas-container-runtime-endpoints)
-21. [Keyboard and Interaction Tips](#21-keyboard-and-interaction-tips)
+21. [Running SCR Images Locally (Desktop)](#21-running-scr-images-locally-desktop)
+22. [Keyboard and Interaction Tips](#22-keyboard-and-interaction-tips)
 
 ---
 
@@ -41,6 +42,7 @@ The SAS MAS Scorer gives you a visual interface to:
 - Save scoring setups back to SAS Intelligent Decisioning as **Scenarios** (static input/expected output pairs) or **Tests** (CAS table-backed batch tests), and load, run and check them again from the app.
 - Compare results with expected values: a loaded scenario, a batch file's or CAS table's expected-output columns, or two runs from the run history.
 - Score models and decisions deployed to SAS Container Runtime containers, by their endpoint URL alone.
+- Run SAS Container Runtime images on your own computer with Podman or Docker (desktop app, preview), and score them the same way.
 - Build lightweight custom UIs on top of any module or SCR endpoint so that business users can score without seeing the underlying technical details.
 - Visualize SAS Intelligent Decisioning flows as interactive diagrams.
 - Analyze test coverage across all your Decisioning and Model Manager assets.
@@ -1397,7 +1399,7 @@ Edits that change rule set names or folder paths mark the checks as stale — re
 
 ## 20. SAS Container Runtime Endpoints
 
-Models and decisions published to a container destination run in **SAS Container Runtime** (SCR) outside MAS: in Docker, Kubernetes or a cloud container service. The **SCR Endpoints** page scores them with nothing but the endpoint's URL. Everything the page shows comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records. The app does not run container commands, read container logs or log in to a registry.
+Models and decisions published to a container destination run in **SAS Container Runtime** (SCR) outside MAS: in Docker, Kubernetes or a cloud container service. The **SCR Endpoints** page scores them with nothing but the endpoint's URL. Everything the page shows about an endpoint comes from what the endpoint itself answers over HTTP, or from SAS Viya's publish records. For these endpoints the app does not run container commands, read container logs or log in to a registry. The desktop app can also pull and run SCR images on your own computer: see [Running SCR Images Locally](#21-running-scr-images-locally-desktop).
 
 ### Adding an Endpoint
 
@@ -1429,7 +1431,7 @@ The endpoint page opens with a facts card:
 | **Signature** | Number of inputs and outputs. Python images require every input |
 | **Health** | **Live** / **Ready** from the container's health checks, where it serves them |
 | **Metrics** | For SAS Container Runtime: requests, executions, average execution time and memory, from `/prometheus`. Python images serve no metrics |
-| **Request log** | Python images keep a log of each request that can be read over HTTP; it is shown under each result. SAS Container Runtime writes its logs to the container's standard output only, so the app cannot show them |
+| **Request log** | Python images keep a log of each request that can be read over HTTP; it is shown under each result. SAS Container Runtime writes its logs to the container's standard output only, so the app cannot show them over HTTP. For a container the desktop app runs itself, **Logs** in the Local containers list shows them |
 | **Transport** | HTTP or HTTPS |
 
 The container's runtime version is not shown: no image serves it over HTTP. **Refresh** reads the signature, health and metrics again.
@@ -1480,7 +1482,151 @@ The **Score a file** card scores a CSV file with a header row:
 
 ---
 
-## 21. Keyboard and Interaction Tips
+## 21. Running SCR Images Locally (Desktop)
+
+The desktop app can pull a SAS Container Runtime image from a registry, run it on your own computer with **Podman** or **Docker**, and score it like any other [SCR endpoint](#20-sas-container-runtime-endpoints). Use it to try a published model or decision without a cluster, or to check an image before it is deployed. The feature is a **preview** and exists in the desktop app only; the web app and the Job Execution / Visual Analytics build do not have it.
+
+Everything is on the **SCR Endpoints** page, below the saved endpoints. The **Run images locally** card starts containers, and the **Local containers** card lists them.
+
+### What You Need
+
+| What | Details |
+|------|---------|
+| **A container engine** | **Podman** (recommended) or **Docker** on this computer. On **Windows and macOS**, Podman runs containers in a *machine* (a small Linux virtual machine): after installing Podman, run `podman machine init` once in a terminal. Docker Desktop works too; it needs a paid subscription for larger organisations. On **Linux**: Podman, or Docker Engine 28.0 or later |
+| **A sign-in to the registry** | Sign in with the engine itself, in a terminal: `podman login <registry host>` or `docker login <registry host>`. For Harbor, a pull-only robot account is the safest choice. Public repositories need no sign-in |
+| **An image reference** | `registry/project/repository:tag` or `…@sha256:…`, for example the image a container publish built from SAS Model Manager or SAS Intelligent Decisioning |
+
+MAS Scorer never asks for, stores or passes on registry passwords: the engine pulls with its own sign-in. Where the engine keeps it is up to the engine. Podman keeps sign-ins in an `auth.json` file, encoded but not encrypted, unless a credential helper is set up. Docker Desktop normally uses the operating system's credential store. Docker Engine on Linux without a credential helper keeps them encoded in `~/.docker/config.json`.
+
+### Choosing the Engine
+
+The **Container engine** list offers **Automatic (Podman first)**, **Podman** or **Docker**. Next to it the app shows what it found: the engine and its version, the processor type it runs on, the Podman machine, and the program's path, with a badge:
+
+| Badge | Meaning |
+|-------|---------|
+| **Ready** | Containers can be started |
+| **Machine stopped** | The Podman machine exists but is not running. **Start machine** starts it after you confirm |
+| **Not available** | The engine did not answer, for example because Docker Desktop is not running. Start it, then select **Check again** |
+| **Not used** | MAS Scorer does not use this engine: it runs on another computer (`DOCKER_HOST`, `CONTAINER_HOST` or a remote Docker context), it runs Windows containers, or it is Docker Engine older than 28.0 on Linux (older versions let other computers on the network reach ports published on 127.0.0.1) |
+
+When neither engine is found, install one and select **Check again**.
+
+### Pulling and Running an Image
+
+1. Paste the image reference into **Image**. Optionally give it a **Name** for the list.
+2. Set **CPUs** (0.5 to 16, default 2) and **Memory (MB)** (512 to 32768, default 2048), the container's limits.
+3. Set **Mode**: **Single record** or **Batch** (`SAS_SCR_REST_API_TYPE=BATCH`). Mode applies to SAS Container Runtime images.
+4. Optionally open **Environment variables and folders** (see below).
+5. Click **Pull and run** and confirm in the dialog. The dialog names the engine and repeats the settings.
+
+The card then shows each stage with the elapsed time, and **Cancel** stops it:
+
+- **Pulling**, with a download bar (see below).
+- **Reading the image**: its processor type and, for SAS Container Runtime, the model's score address.
+- **Starting the container**, on a free port between 18100 and 18999 on 127.0.0.1.
+
+The new container appears in **Local containers** as **Starting** and turns **Ready** when its endpoint answers. **Open** then saves it as an SCR endpoint named *<name> (local)* and opens its page, where **Score one record**, **Score a file** and **Build UI** work as for any endpoint. Images that do not name their score address, such as SAS Python Runtime images, log the model name at start-up: the app reads it from the log and checks that the container serves it. When it cannot find the name, the list shows the address to add by hand.
+
+### Download Progress
+
+While an image is pulled, a bar shows how much has arrived, the current download rate and the time left, for example *157 MB of 412 MB · 32 MB/s · about 10 s left*. Container engines do not report byte counts to other programs, so the app works the numbers out itself. The note under the bar says how:
+
+- **Size**: the image's compressed layers, from its manifest, less the layers the engine already has. Docker reads the manifest with its own sign-in. Podman cannot show it, so the app asks the registry for it without signing in. That works for public repositories only and sends no credentials. When the size is not known, the bar moves back and forth and shows the bytes received.
+- **Bytes and rate**: for Podman on Windows and macOS, the network counter of the Podman machine; on Linux, this computer's network counter. Other downloads there count too. Docker Desktop reports only finished layers, so its bar moves one layer at a time and shows no rate.
+
+After the last byte the engine still writes the image to disk for a few seconds; the bar then says *storing the image*. When the engine already has every layer, nothing is downloaded and the bar says so.
+
+### Images for Another Processor
+
+Most SCR images are built for x86-64 (amd64) computers. On an ARM computer, such as a Mac with Apple silicon, the app first asks for the image's ARM variant. When there is none, it pulls the x86-64 variant and runs it through the engine's emulator: a notice says so, and the list marks the container **Emulated: x86-64 on ARM**. The model and its code are the same; only the speed changes. Start-up takes about 2–3 times longer, and the first score can take up to a second; later scores are about as fast. Give such containers at least 2 CPUs.
+
+If the engine has no emulator, the container stops straight away and the app says *This computer can't run x86-64 images yet*, with what to install: the `qemu-user-static` package on Linux, or for Docker Desktop on a Mac the setting **Use Rosetta for x86_64/amd64 emulation on Apple Silicon**. MAS Scorer never installs an emulator itself.
+
+### Environment Variables and Folders
+
+**Environment variables:** **Add variable** adds a name and a value. **Quick add a documented variable…** lists the variables SAS documents for SAS Container Runtime and the SAS model runtimes, in groups:
+
+- SAS Container Runtime: logging; DS2 and database logging; metrics; requests and responses; threads; content security policy.
+- Python and R model runtimes: logging.
+
+Picking one adds it with a suggested value. Log levels and true/false values are chosen from a list with the default marked, and each row shows a short description, the default and any caveat, for example that the log then contains the scored data. The descriptions come from the *SAS Container Runtime: Programming and Administration Guide*; older images can ignore newer variables. In a container's **Settings**, the list shows only the variables for that kind of image.
+
+- Up to 50 variables. A name starts with a letter or `_` and can contain letters, digits, `_` and `.` (some SCR logger names have dots).
+- `SAS_SCR_REST_API_TYPE` is set by **Mode**, and `SAS_SCR_APP_PATH` (the score address) cannot be set here.
+- Values are passed to the engine and not kept by MAS Scorer. The app keeps only the names; **Settings** reads the values back from the container.
+
+**Folders:** **Add folder** makes a folder of this computer visible inside the container, for example a folder of images for a computer-vision model. **Choose…** picks the folder, the second field is the path inside the container (for example `/data`), and **Read-only** is on by default. Read-write lets the container change and delete files in the folder.
+
+- Up to 5 folders. Inside the container the files are under the container path, for example `/data/photo.jpg`: use that form in inputs that take a file path. Some models read files only below a folder of their own; mount the folder there.
+- Not allowed: system folders, your user folder as a whole, folders that hold keys or container-engine data (such as `.ssh`, `.gnupg`, `.docker` or `.kube`), the app's own data folder, and container paths such as `/etc`, `/usr`, `/tmp` or `/opt/scr`.
+- Podman on Windows and macOS sees local drives through its machine; network and removable drives are often not shared with it.
+
+### The Local Containers List
+
+Each row shows the container's name (with the folders and variable names it was started with), the image (processor type, an **Emulated** badge where it applies, and the digest), the state and the address.
+
+| State | Meaning |
+|-------|---------|
+| **Starting** | The container runs, and the app waits for its endpoint to answer: up to 3 minutes, or 10 under emulation |
+| **Ready** | The endpoint answers |
+| **Running** | The engine says the container runs, but the app has not seen its endpoint answer yet, for example right after the app started |
+| **Not answering** | The container runs, but its endpoint stopped answering |
+| **Stopped during start-up** | The container ended before it was ready; the message gives the exit code. Open **Logs** |
+| **Stopped** | Stopped with **Stop**, or by the engine |
+| **Removed outside the app** | The container was deleted with the engine's own commands |
+
+- **Open** (when ready) saves the container as an SCR endpoint and opens it.
+- **Logs** shows the container's last 300 lines. Logs can contain scored data; the app keeps them in memory only.
+- **Stop** and **Start** stop and start the container.
+- **Delete** removes the container from the engine after you confirm. The image stays in the engine.
+
+Containers keep running when you close the app, and the list shows them again the next time. The list is kept in the app's data folder (`containers.json`), without variable values. The app manages only the containers it started itself and never touches others.
+
+### Changing a Container's Settings
+
+**Settings** opens the container's name, limits, mode (SAS Container Runtime images only), variables and folders. A container keeps the settings it was created with, so **Apply** replaces it, after you confirm, with a new container from the same image on the same address. If the new container does not start, the old one is started again. A new name alone changes nothing else.
+
+### Resource Use
+
+**Resource use** in the header of the Local containers card opens a card that asks the engine every 5 seconds while it is open and the window is visible:
+
+| Column | Shows |
+|--------|-------|
+| **CPU** | CPUs in use (1 = one full CPU) against the container's limit, with a line for the last five minutes. Podman's first reading is the average since the container started |
+| **Memory** | Memory in use against the container's limit, with a meter and a line. **Near its limit** appears at 90% |
+| **Processes** | Processes in the container |
+| **Network in / out**, **Disk read / write** | Totals since the container started |
+
+Above the table the card shows the engine host's CPUs and memory, and **Over-committed** when the memory limits of the running containers add up to more than the host has. **Pause** stops the readings. The app remembers whether the card was open.
+
+### When Something Goes Wrong
+
+| Message | What to do |
+|---------|------------|
+| **Not signed in to *host*, or no access to this repository** | Run the sign-in command shown (it has a **Copy** button) in a terminal, then try again. With Podman, the app also says when a sign-in for the registry already exists, so signing in again will not help |
+| ***host* has no project "*name*"** | Check the project part of the reference. When the app can tell what was meant, **Use this reference** fills it in |
+| **Image or tag not found** | Check the reference. The tag may have moved, or the image may have been deleted from the registry |
+| **The container engine does not trust *host*'s certificate** | Add the registry's CA certificate for the engine (Docker: `/etc/docker/certs.d/<host>/ca.crt`; Podman: `/etc/containers/certs.d/<host>/ca.crt` inside its machine) |
+| **Cannot reach *host*** | Check the network connection or VPN |
+| **The image has no variant for this computer** | The image is not built for a processor this engine can run |
+| **This computer can't run x86-64 images yet** | Install an emulator for the engine (see [Images for Another Processor](#images-for-another-processor)) |
+| **The container stopped during start-up (exit code *n*)** | Open **Logs** for the full output |
+| **The container engine cannot see a folder to mount** | Use a folder on a local drive the engine shares |
+| **No free local port could be bound** | All ports from 18100 to 18999 on 127.0.0.1 are taken |
+
+**Engine output** under a message shows what the engine printed.
+
+### What the App Does and Does Not Do
+
+- It runs the `podman` or `docker` program directly, never through a shell, and only with commands it builds itself.
+- Containers are published on **127.0.0.1 only** and get no added privileges. SAS Container Runtime has no authentication, so other programs on this computer can call a local container.
+- Pulling and running an image, replacing a container with new settings, deleting a container and starting a Podman machine each need your confirmation in a dialog.
+- It never handles registry passwords. To tell whether Podman holds a sign-in for a registry, it runs `podman login --get-login`, which prints the user name only.
+- It manages only the containers it started, recognised by their labels, and never deletes images.
+
+---
+
+## 22. Keyboard and Interaction Tips
 
 The application meets **WCAG 2.1 AA**: every control can be reached and operated from the keyboard, has a visible focus ring, and has a name a screen reader can announce.
 
