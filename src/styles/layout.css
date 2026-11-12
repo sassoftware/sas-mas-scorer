@@ -212,11 +212,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding-right: var(--space-3);
-  /* Divider follows the header foreground so it stays visible on a light
-     environment colour; a per-connection --env-header-border wins if set. */
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  border-right-color: var(--env-header-border, color-mix(in srgb, currentColor 25%, transparent));
   margin-right: var(--space-1);
 }
 
