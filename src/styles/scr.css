@@ -220,7 +220,7 @@
   gap: var(--space-2);
 }
 
-/* Local containers (desktop, internal preview) */
+/* Local containers (desktop) */
 .lc-engine {
   display: flex;
   flex-wrap: wrap;

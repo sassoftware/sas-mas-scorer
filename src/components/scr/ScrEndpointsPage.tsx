@@ -22,9 +22,8 @@ export const scrEndpointRoute = (id: string): string => `/scr/${encodeURICompone
 
 const isElectron = !!window.electronAPI;
 
-// Local containers: desktop build only, and only when the app was started with
-// MAS_SCORER_LOCAL_CONTAINERS=1. The build-mode check lets the web and jobdef
-// builds drop the panel's code entirely.
+// Local containers: desktop build only. The build-mode check lets the web and
+// jobdef builds drop the panel's code entirely.
 const LocalContainersPanel =
   __BUILD_MODE__ === 'electron' ? lazy(() => import('../containers/LocalContainersPanel')) : null;
 const showLocalContainers = !!LocalContainersPanel && !!window.electronAPI?.containers;

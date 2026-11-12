@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Run SCR images locally with Podman or Docker (desktop app only, internal
- * preview behind MAS_SCORER_LOCAL_CONTAINERS=1). Everything that touches the
- * engine happens in the main process; this panel only shows state and asks.
+ * Run SCR images locally with Podman or Docker (desktop app only, preview).
+ * Everything that touches the engine happens in the main process; this panel
+ * only shows state and asks.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -420,7 +420,7 @@ export const LocalContainersPanel: React.FC<LocalContainersPanelProps> = ({ onOp
             </Button>
           }
         >
-          Run images locally <Badge variant="info" size="small">Internal preview</Badge>
+          Run images locally <Badge variant="info" size="small">Preview</Badge>
         </CardHeader>
         <CardBody>
           <div className="lc-engine">

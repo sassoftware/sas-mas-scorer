@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Local containers (desktop only, behind MAS_SCORER_LOCAL_CONTAINERS=1).
+ * Local containers (desktop app only).
  * Mirrors electron/containers/types.ts; keep the two in step.
  */
 

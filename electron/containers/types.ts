@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Types shared by the local-container modules (desktop only, behind
- * MAS_SCORER_LOCAL_CONTAINERS=1). The renderer has its own copy in
+ * Types shared by the local-container modules (desktop app only). The
+ * renderer has its own copy in
  * src/types/localContainers.ts; keep the two in step.
  */
 

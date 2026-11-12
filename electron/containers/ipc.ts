@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * IPC for local containers. Registered only when MAS_SCORER_LOCAL_CONTAINERS=1
- * (requirement 25: without the flag there is no container IPC at all).
+ * IPC for local containers.
  *
  * Every handler goes through the main window's trusted-sender check, input is
  * read against closed schemas, lifecycle calls take the app's own managed IDs

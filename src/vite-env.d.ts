@@ -62,7 +62,7 @@ interface ElectronAPI {
   /** HTTP bridge (electron/httpBridge.ts): 'viya' requests get the access token in the main process. */
   httpRequest: (req: ElectronBridgeRequest) => Promise<ElectronBridgeResponse>;
   httpAbort: (id: string) => Promise<void>;
-  /** Local containers; present only when the app was started with MAS_SCORER_LOCAL_CONTAINERS=1. */
+  /** Local containers (run SCR images with Podman or Docker). */
   containers?: import('./types/localContainers').LocalContainersAPI;
   isElectron: true;
 }
