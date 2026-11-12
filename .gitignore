@@ -43,3 +43,5 @@ yarn-error.log*
 # Claude
 .claude/
 docs/
+# Electron unit-test build
+electron/.test-dist/

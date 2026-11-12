@@ -35,8 +35,17 @@ import {
   flushTokenStore,
 } from './tokenStore';
 import { registerHttpBridge } from './httpBridge';
+import { registerContainerIpc } from './containers/ipc';
 
 let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Local containers (run SCR images with Podman/Docker) are internal while
+ * builds are unsigned: without this variable no container IPC or UI exists.
+ */
+const localContainersEnabled = process.env.MAS_SCORER_LOCAL_CONTAINERS === '1';
+/** Tells the preload script to expose the containers API. */
+const LOCAL_CONTAINERS_ARG = '--mas-local-containers';
 
 // --- Token refresh ---
 
@@ -202,6 +211,7 @@ function createWindow(): void {
       // bridge (electron/httpBridge.ts), which also keeps the access token.
       webSecurity: true,
       allowRunningInsecureContent: false,
+      additionalArguments: localContainersEnabled ? [LOCAL_CONTAINERS_ARG] : [],
     },
   });
 
@@ -375,6 +385,12 @@ function registerIpcHandlers(): void {
     },
     getValidAccessToken,
   });
+
+  // --- Local containers (internal, behind MAS_SCORER_LOCAL_CONTAINERS=1) ---
+
+  if (localContainersEnabled) {
+    registerContainerIpc({ handle: handleTrusted, getWindow: () => mainWindow });
+  }
 
   // --- Login ---
 

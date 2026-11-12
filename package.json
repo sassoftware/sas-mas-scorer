@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "preview:jobdef": "vite preview --outDir dist-jobdef",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test:electron": "node -e \"require('fs').rmSync('electron/.test-dist',{recursive:true,force:true})\" && tsc -p electron/tsconfig.test.json && node --test \"electron/.test-dist/test/*.test.js\"",
     "electron:dev": "concurrently \"cross-env BUILD_MODE=electron vite\" \"wait-on tcp:localhost:3000 && tsc -p electron/tsconfig.json && electron .\"",
+    "electron:dev:containers": "cross-env MAS_SCORER_LOCAL_CONTAINERS=1 npm run electron:dev",
     "electron:build": "node -e \"require('fs').rmSync('electron/dist',{recursive:true,force:true})\" && tsc -p electron/tsconfig.json && cross-env BUILD_MODE=electron vite build && electron-builder",
     "electron:start": "electron ."
   },

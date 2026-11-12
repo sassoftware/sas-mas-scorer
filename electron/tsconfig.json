@@ -12,6 +12,12 @@
     "declaration": false,
     "sourceMap": true
   },
-  "include": ["./**/*.ts"],
-  "exclude": ["dist"]
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "test",
+    ".test-dist"
+  ]
 }
