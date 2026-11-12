@@ -28,6 +28,7 @@ Run SCR images on your own computer: the desktop app pulls a SAS Container Runti
 - SAS Container Runtime has no authentication: other programs on this computer can call a local container
 - Docker Desktop needs a paid subscription for larger organisations
 - Electron unit tests: `npm run test:electron`
+- **Checks in CI** — a new workflow runs lint, the type-checks and the unit tests on Ubuntu and Windows for pushes to `main` and release branches and for pull requests. Release builds run it first and stop if it fails
 
 ## [2.14.0] - 2026-11-10
 
