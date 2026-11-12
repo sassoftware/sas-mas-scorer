@@ -103,7 +103,7 @@ const readModuleListSearch = (search: string): ModuleListParams =>
 // The <title> of index.html and index-jobdef.html. A constant, not read from
 // document.title, which by then may already carry a view label (after a
 // hot reload in development).
-const BASE_DOCUMENT_TITLE = 'MAS Module Scorer - SAS';
+const BASE_DOCUMENT_TITLE = 'SAS MAS Scorer';
 
 const VIEW_TITLES: Record<ViewType, string> = {
   modules: 'Modules',

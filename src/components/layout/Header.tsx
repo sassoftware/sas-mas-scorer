@@ -81,22 +81,8 @@ export const Header: React.FC<HeaderProps> = ({
             </svg>
           </button>
         )}
-        <div className="sas-header__logo">
-          <svg viewBox="0 0 40 40" className="sas-header__logo-icon">
-            {/* White tile with brand-blue mark stays visible on any environment color */}
-            <rect x="4" y="4" width="32" height="32" rx="4" fill="#FFFFFF" />
-            <path
-              d="M12 20c0-4.4 3.6-8 8-8s8 3.6 8 8M12 20c0 4.4 3.6 8 8 8s8-3.6 8-8"
-              stroke="#0766D1"
-              strokeWidth="2.5"
-              fill="none"
-            />
-            <circle cx="20" cy="20" r="3" fill="#0766D1" />
-          </svg>
-        </div>
         <div className="sas-header__title-group">
-          <h1 className="sas-header__title">SAS Micro Analytic Score</h1>
-          <span className="sas-header__subtitle">Module Scorer</span>
+          <h1 className="sas-header__title">SAS MAS Scorer</h1>
         </div>
       </div>
 

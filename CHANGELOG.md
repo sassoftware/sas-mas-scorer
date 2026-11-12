@@ -18,6 +18,11 @@ Run SCR images on your own computer: the desktop app pulls a SAS Container Runti
 - **Local containers list** — state, image, processor type and digest, and address, with **Logs** (last 300 lines), **Stop** / **Start** and **Delete**. Containers keep running when the app closes and are listed again on the next start
 - **Resource use** — per running container: CPU against its limit, memory against its limit (with a warning at 90%), processes, and network and disk totals, read every 5 seconds while the card is open, with the last five minutes as a line. The card also shows the engine host's CPUs and memory, with a warning when the containers' memory limits add up to more than the host has
 
+### Changed
+
+- **The app is called SAS MAS Scorer everywhere** — the header shows the name alone, without the decorative icon and the two lines "SAS Micro Analytic Score / Module Scorer". The window and tab title, the version line in the sidebar, copied error details and the start-up error messages use the same name
+- **Header** — the thin divider after Logout, which divided nothing, is gone
+
 ### Notes
 
 - SAS Container Runtime has no authentication: other programs on this computer can call a local container
