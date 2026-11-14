@@ -12,10 +12,10 @@ Run SCR images on your own computer: the desktop app pulls a SAS Container Runti
 - **Podman or Docker** — found in their usual install locations and on the PATH; Podman is preferred. A stopped Podman machine can be started from the app. Engines on another computer, Windows containers and Docker Engine before 28.0 on Linux are not used
 - **Registry sign-in stays with the engine** — the app never asks for, stores or passes on registry passwords. A refused pull shows the `podman login` / `docker login` command to run, and a corrected reference when the project name looks wrong
 - **Images for another processor** — on an ARM computer the app tries the image's ARM variant first, and otherwise runs the x86-64 variant through the engine's emulator, with a notice and an **Emulated** badge. When the engine has no emulator, the app says what to install
-- **Download progress** — a bar with the size, the current rate and the time left while an image is pulled. The size is the image's compressed layers less the ones the engine already has: Docker reads the manifest with its own sign-in, and for Podman the app reads it from the registry without signing in (public repositories only, no credentials sent). Bytes and rate come from the Podman machine's network counter, or this computer's on Linux. Docker Desktop shows finished layers only
+- **Download progress** — a bar with the size, the current rate and the time left while an image is pulled. The size is the image's compressed layers less the ones the engine already has: Docker reads the manifest with its own sign-in, and for Podman the app reads it from the registry without signing in (public repositories only, no credentials sent). Bytes and rate come from the Podman machine's network counter, or this computer's on Linux. Docker on Windows and macOS shows finished layers only
 - **Environment variables and folders** — up to 50 variables and 5 folders (read-only by default). A quick add lists the variables SAS documents for SAS Container Runtime and the Python and R model runtimes, with descriptions, defaults and caveats. System folders, your user folder as a whole, folders with keys or engine data, and the app's own data cannot be mounted. The app does not store variable values
 - **Settings** — change a container's name, limits, mode, variables and folders. The container is replaced by a new one on the same address; if the new one does not start, the old one is started again
-- **Local containers list** — state, image, processor type and digest, and address, with **Logs** (last 300 lines), **Stop** / **Start** and **Delete**. Containers keep running when the app closes and are listed again on the next start
+- **Local containers list** — state, image, processor type and digest, and address, with **Logs** (last 300 lines), **Stop** / **Start** and **Delete** (which also removes the container's saved SCR endpoint). Containers keep running when the app closes and are listed again on the next start
 - **Resource use** — per running container: CPU against its limit, memory against its limit (with a warning at 90%), processes, and network and disk totals, read every 5 seconds while the card is open, with the last five minutes as a line. The card also shows the engine host's CPUs and memory, with a warning when the containers' memory limits add up to more than the host has
 
 ### Changed
@@ -23,10 +23,15 @@ Run SCR images on your own computer: the desktop app pulls a SAS Container Runti
 - **The app is called SAS MAS Scorer everywhere** — the header shows the name alone, without the decorative icon and the two lines "SAS Micro Analytic Score / Module Scorer". The window and tab title, the version line in the sidebar, copied error details and the start-up error messages use the same name
 - **Header** — the thin divider after Logout, which divided nothing, is gone
 
+### Fixed
+
+- **A paste that is too long is refused, not cut off** — a text input with a maximum length (from the module or endpoint signature) used to keep only the first characters of a longer paste, so a value cut short, such as a base64 image, was scored as if it were whole. The paste is now refused, with the length and the maximum under the field
+- **Quitting the desktop app** — quitting waits at most a few seconds for settings to be saved and then exits, even when saving waits on the operating system. Engine commands still running end with the app; local containers keep running
+
 ### Notes
 
 - SAS Container Runtime has no authentication: other programs on this computer can call a local container
-- Docker Desktop needs a paid subscription for larger organisations
+- Docker Desktop needs a paid subscription for larger organisations; the app says so only when the engine is Docker Desktop (not for Docker through Colima, for example)
 - Electron unit tests: `npm run test:electron`
 - **Checks in CI** — a new workflow runs lint, the type-checks and the unit tests on Ubuntu and Windows for pushes to `main` and release branches and for pull requests. Release builds run it first and stop if it fails
 

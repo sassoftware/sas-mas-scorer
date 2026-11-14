@@ -19,6 +19,7 @@ import {
   versionArgs,
 } from './argv';
 import {
+  isDockerDesktop,
   isLocalEngineUri,
   majorVersion,
   parseDockerContextHost,
@@ -162,7 +163,7 @@ export async function probeEngine(candidate: EngineCandidate): Promise<EngineInf
       const why = tail(ver.stderr, 2);
       const message =
         kind === 'docker' && process.platform !== 'linux'
-          ? 'Docker Desktop is not running. Start it, then check again.'
+          ? 'The Docker engine is not running. Start Docker Desktop, or whatever runs your engine (for example Colima), then check again.'
           : `The ${kind} engine did not answer.${why ? ` ${why}` : ''}`;
       return { ...info, state: 'not-running', message };
     }
@@ -177,7 +178,7 @@ export async function probeEngine(candidate: EngineCandidate): Promise<EngineInf
         );
       }
     }
-    if (kind === 'docker' && process.platform !== 'linux') {
+    if (kind === 'docker' && isDockerDesktop(facts.platformName)) {
       info.warnings.push('Docker Desktop needs a paid subscription for larger organisations. Check your licence.');
     }
     if (!facts.arch) info.warnings.push('The engine did not report its CPU architecture, so emulation cannot be detected.');

@@ -38,6 +38,7 @@ import {
   parseImageInspect,
   parsePs,
   parseVersion,
+  isDockerDesktop,
   updatePullProgress,
 } from '../containers/parse';
 
@@ -497,6 +498,21 @@ test('version: Docker Server.Arch and Podman Server.OsArch', () => {
   const down = parseVersion(JSON.stringify({ Client: { Version: '29.9.3' }, Server: null }));
   assert.equal(down.serverReachable, false);
   assert.equal(parseVersion('').serverReachable, false);
+});
+
+test('version: only Docker Desktop gets the subscription notice', () => {
+  const desktop = parseVersion(
+    JSON.stringify({ Server: { Platform: { Name: 'Docker Desktop 4.52.0 (210994)' }, Version: '29.1.3', Os: 'linux', Arch: 'arm64' } })
+  );
+  assert.equal(desktop.platformName, 'Docker Desktop 4.52.0 (210994)');
+  assert.ok(isDockerDesktop(desktop.platformName));
+  // Colima and a plain Docker Engine report the engine's own platform name, or none.
+  const colima = parseVersion(
+    JSON.stringify({ Server: { Platform: { Name: 'Docker Engine - Community' }, Version: '29.2.1', Os: 'linux', Arch: 'arm64' } })
+  );
+  assert.equal(isDockerDesktop(colima.platformName), false);
+  assert.equal(isDockerDesktop(parseVersion(JSON.stringify({ Server: { Version: '29.2.1' } })).platformName), false);
+  assert.equal(isDockerDesktop(undefined), false);
 });
 
 test('ps: Docker JSON lines and the Podman array', () => {

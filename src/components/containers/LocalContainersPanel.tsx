@@ -36,7 +36,9 @@ import type {
 
 interface LocalContainersPanelProps {
   /** Adds the running container as an SCR endpoint and opens it. */
-  onOpenEndpoint: (scoreUrl: string, label: string) => Promise<void>;
+  onOpenEndpoint: (scoreUrl: string, label: string, managedId: string) => Promise<void>;
+  /** A container was deleted: its saved SCR endpoint goes too. */
+  onDeleted: (managedId: string, hostPort: number | undefined) => void;
 }
 
 type ProgressEvent = Extract<ContainersEvent, { type: 'progress' }>;
@@ -161,7 +163,7 @@ const ProblemAlert: React.FC<{ problem: Problem; onClose?: () => void; onUseRef?
   </Alert>
 );
 
-export const LocalContainersPanel: React.FC<LocalContainersPanelProps> = ({ onOpenEndpoint }) => {
+export const LocalContainersPanel: React.FC<LocalContainersPanelProps> = ({ onOpenEndpoint, onDeleted }) => {
   const api = window.electronAPI?.containers as LocalContainersAPI;
 
   const [status, setStatus] = useState<EngineStatus | null>(null);
@@ -383,7 +385,7 @@ export const LocalContainersPanel: React.FC<LocalContainersPanelProps> = ({ onOp
     if (!container.scoreUrl) return;
     await runRowAction(container.managedId, async () => {
       try {
-        await onOpenEndpoint(container.scoreUrl as string, container.displayName);
+        await onOpenEndpoint(container.scoreUrl as string, container.displayName, container.managedId);
         return { ok: true };
       } catch (err) {
         return {
@@ -710,6 +712,7 @@ export const LocalContainersPanel: React.FC<LocalContainersPanelProps> = ({ onOp
                               onClick={() =>
                                 void runRowAction(c.managedId, async () => {
                                   const result = await api.remove(c.managedId);
+                                  if (result.ok) onDeleted(c.managedId, c.hostPort);
                                   if (result.ok && logs?.managedId === c.managedId) setLogs(null);
                                   if (result.ok && edit?.managedId === c.managedId) setEdit(null);
                                   return result;

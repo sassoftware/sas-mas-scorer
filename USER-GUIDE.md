@@ -1492,7 +1492,7 @@ Everything is on the **SCR Endpoints** page, below the saved endpoints. The **Ru
 
 | What | Details |
 |------|---------|
-| **A container engine** | **Podman** (recommended) or **Docker** on this computer. On **Windows and macOS**, Podman runs containers in a *machine* (a small Linux virtual machine): after installing Podman, run `podman machine init` once in a terminal. Docker Desktop works too; it needs a paid subscription for larger organisations. On **Linux**: Podman, or Docker Engine 28.0 or later |
+| **A container engine** | **Podman** (recommended) or **Docker** on this computer. On **Windows and macOS**, Podman runs containers in a *machine* (a small Linux virtual machine): after installing Podman, run `podman machine init` once in a terminal. Docker Desktop works too; it needs a paid subscription for larger organisations. On macOS, Docker through Colima has also been used. On **Linux**: Podman, or Docker Engine 28.0 or later |
 | **A sign-in to the registry** | Sign in with the engine itself, in a terminal: `podman login <registry host>` or `docker login <registry host>`. For Harbor, a pull-only robot account is the safest choice. Public repositories need no sign-in |
 | **An image reference** | `registry/project/repository:tag` or `…@sha256:…`, for example the image a container publish built from SAS Model Manager or SAS Intelligent Decisioning |
 
@@ -1532,7 +1532,7 @@ The new container appears in **Local containers** as **Starting** and turns **Re
 While an image is pulled, a bar shows how much has arrived, the current download rate and the time left, for example *157 MB of 412 MB · 32 MB/s · about 10 s left*. Container engines do not report byte counts to other programs, so the app works the numbers out itself. The note under the bar says how:
 
 - **Size**: the image's compressed layers, from its manifest, less the layers the engine already has. Docker reads the manifest with its own sign-in. Podman cannot show it, so the app asks the registry for it without signing in. That works for public repositories only and sends no credentials. When the size is not known, the bar moves back and forth and shows the bytes received.
-- **Bytes and rate**: for Podman on Windows and macOS, the network counter of the Podman machine; on Linux, this computer's network counter. Other downloads there count too. Docker Desktop reports only finished layers, so its bar moves one layer at a time and shows no rate.
+- **Bytes and rate**: for Podman on Windows and macOS, the network counter of the Podman machine; on Linux, this computer's network counter. Other downloads there count too. Docker on Windows and macOS (Docker Desktop, Colima) reports only finished layers, so its bar moves one layer at a time and shows no rate.
 
 After the last byte the engine still writes the image to disk for a few seconds; the bar then says *storing the image*. When the engine already has every layer, nothing is downloaded and the bar says so.
 
@@ -1578,7 +1578,7 @@ Each row shows the container's name (with the folders and variable names it was 
 - **Open** (when ready) saves the container as an SCR endpoint and opens it.
 - **Logs** shows the container's last 300 lines. Logs can contain scored data; the app keeps them in memory only.
 - **Stop** and **Start** stop and start the container.
-- **Delete** removes the container from the engine after you confirm. The image stays in the engine.
+- **Delete** removes the container from the engine after you confirm. The image stays in the engine. If you opened the container as an SCR endpoint, that entry leaves the endpoint list too.
 
 Containers keep running when you close the app, and the list shows them again the next time. The list is kept in the app's data folder (`containers.json`), without variable values. The app manages only the containers it started itself and never touches others.
 

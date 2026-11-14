@@ -218,6 +218,10 @@
   color: var(--sas-gray-500);
 }
 
+.input-form__hint--error {
+  color: var(--sas-error-dark);
+}
+
 /* Output Display */
 .output-display {
   margin-top: var(--space-2);

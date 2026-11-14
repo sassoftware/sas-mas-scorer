@@ -35,7 +35,7 @@ const SOURCE_NOTE: Record<PullDownload['source'], string> = {
   'host-network':
     "Measured on this computer's network connection, so other downloads count too. The size comes from the registry, less the layers the engine already has.",
   layers:
-    'Docker Desktop reports finished layers only, so the bar moves one layer at a time and there is no live rate. The size comes from the registry.',
+    'Docker on Windows and macOS reports finished layers only, so the bar moves one layer at a time and there is no live rate. The size comes from the registry.',
 };
 
 export const PullProgress: React.FC<{ download: PullDownload }> = ({ download }) => {

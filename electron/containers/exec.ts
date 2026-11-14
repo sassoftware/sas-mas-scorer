@@ -10,7 +10,7 @@
  * on timeout or cancel.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -67,6 +67,19 @@ export function childEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/** Engine commands still running, so that quitting the app can end them. */
+const running = new Set<ChildProcess>();
+
+/** Ends every engine command still running (on quit). Returns how many there were. */
+export function stopAllCli(): number {
+  const count = running.size;
+  for (const child of running) {
+    if (child.exitCode === null && !child.killed) child.kill();
+  }
+  running.clear();
+  return count;
+}
+
 export function runCli(binPath: string, args: string[], options: ExecOptions = {}): Promise<ExecResult> {
   assertRunnable(binPath);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -86,6 +99,7 @@ export function runCli(binPath: string, args: string[], options: ExecOptions = {
       env: childEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    running.add(child);
 
     const sizes = { stdout: 0, stderr: 0 };
     const partial = { stdout: '', stderr: '' };
@@ -113,6 +127,7 @@ export function runCli(binPath: string, args: string[], options: ExecOptions = {
     const finish = (code: number) => {
       if (settled) return;
       settled = true;
+      running.delete(child);
       clearTimeout(timer);
       options.signal?.removeEventListener('abort', onAbort);
       if (options.onLine) {

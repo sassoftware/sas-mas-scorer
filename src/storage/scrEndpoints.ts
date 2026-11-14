@@ -18,6 +18,8 @@ export interface SavedScrEndpoint {
   addedAt: string;
   /** What the last inspection found, so the list shows it without a request. */
   lastSeen?: { runtime: ScrRuntime; mode: ScrMode; title: string; at: string };
+  /** Desktop: the local container this entry was opened from (removed with it). */
+  localContainerId?: string;
 }
 
 const KEY = 'mas-scorer:scr-endpoints:v1';
@@ -64,4 +66,23 @@ export function updateScrEndpoint(id: string, patch: Partial<Omit<SavedScrEndpoi
 
 export function removeScrEndpoint(id: string): void {
   write(listScrEndpoints().filter((e) => e.id !== id));
+}
+
+/**
+ * A deleted local container takes its saved endpoint with it: the entry opened
+ * from it, or (saved before entries recorded their container) a "(local)"
+ * entry on the container's own 127.0.0.1 port.
+ */
+export function removeLocalContainerEndpoints(managedId: string, hostPort: number | undefined): number {
+  const list = listScrEndpoints();
+  const origin = hostPort ? `http://127.0.0.1:${hostPort}/` : null;
+  const kept = list.filter(
+    (e) =>
+      !(
+        e.localContainerId === managedId ||
+        (!e.localContainerId && origin !== null && e.url.startsWith(origin) && (e.label ?? '').endsWith(' (local)'))
+      )
+  );
+  if (kept.length !== list.length) write(kept);
+  return list.length - kept.length;
 }

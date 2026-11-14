@@ -13,6 +13,7 @@ import { inspectEndpoint, normalizeScoreUrl, reachableFromHere, RUNTIME_LABELS }
 import {
   addScrEndpoint,
   listScrEndpoints,
+  removeLocalContainerEndpoints,
   removeScrEndpoint,
   updateScrEndpoint,
   type SavedScrEndpoint,
@@ -78,14 +79,19 @@ export const ScrEndpointsPage: React.FC = () => {
   };
 
   /** A local container that is ready: saved like any endpoint (signature read first), then opened. */
-  const openLocalEndpoint = async (scoreUrl: string, name: string) => {
+  const openLocalEndpoint = async (scoreUrl: string, name: string, managedId: string) => {
     const info = await inspectEndpoint(scoreUrl);
     const entry = addScrEndpoint(scoreUrl, `${name} (local)`);
     updateScrEndpoint(entry.id, {
       lastSeen: { runtime: info.runtime, mode: info.mode, title: info.title, at: new Date().toISOString() },
+      localContainerId: managedId,
     });
     setEndpoints(listScrEndpoints());
     navigate(scrEndpointRoute(entry.id));
+  };
+
+  const forgetLocalEndpoint = (managedId: string, hostPort: number | undefined) => {
+    if (removeLocalContainerEndpoints(managedId, hostPort) > 0) setEndpoints(listScrEndpoints());
   };
 
   return (
@@ -207,7 +213,7 @@ export const ScrEndpointsPage: React.FC = () => {
 
       {showLocalContainers && LocalContainersPanel && (
         <Suspense fallback={null}>
-          <LocalContainersPanel onOpenEndpoint={openLocalEndpoint} />
+          <LocalContainersPanel onOpenEndpoint={openLocalEndpoint} onDeleted={forgetLocalEndpoint} />
         </Suspense>
       )}
     </div>

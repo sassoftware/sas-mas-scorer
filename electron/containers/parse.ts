@@ -18,9 +18,14 @@ export interface VersionFacts {
   /** Image-style architecture (amd64, arm64) of the engine's host or VM. */
   arch?: string;
   os?: string;
+  /** Docker's Server.Platform.Name: "Docker Desktop 4.x.y (build)", "Docker Engine - Community", … */
+  platformName?: string;
   /** False when the client could not reach the engine. */
   serverReachable: boolean;
 }
+
+/** True only for Docker Desktop; Docker through Colima, Rancher Desktop or a plain Docker Engine is not. */
+export const isDockerDesktop = (platformName: string | undefined): boolean => /^docker desktop\b/i.test(platformName ?? '');
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 
@@ -49,6 +54,7 @@ export function parseVersion(stdout: string): VersionFacts {
     serverVersion: str(server?.Version),
     arch: str(server?.Arch) ?? archFromPair,
     os: str(server?.Os) ?? osFromPair,
+    platformName: str((server?.Platform as { Name?: unknown } | undefined)?.Name),
     serverReachable: !!server && !!str(server.Version),
   };
 }

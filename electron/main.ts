@@ -36,6 +36,7 @@ import {
 } from './tokenStore';
 import { registerHttpBridge } from './httpBridge';
 import { registerContainerIpc } from './containers/ipc';
+import { stopAllCli } from './containers/exec';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -511,13 +512,29 @@ app.whenReady().then(async () => {
   });
 });
 
-// Settings and tokens are written in the background; quit once they are on disk.
+// Settings and tokens are written in the background; quit once they are on
+// disk. Quitting never waits for ever: sealing a secret can wait on the
+// operating system (on macOS, a Keychain prompt nobody answers), and the Quit
+// menu and SIGTERM both come through here.
+const QUIT_FLUSH_LIMIT_MS = 5_000;
+/** If the app is still there this long after quitting began, it exits. */
+const QUIT_EXIT_LIMIT_MS = 10_000;
 let quitAfterFlush = false;
 app.on('before-quit', (event) => {
   if (quitAfterFlush) return;
   event.preventDefault();
   quitAfterFlush = true;
-  void flushTokenStore().finally(() => app.quit());
+  const limit = new Promise<void>((resolve) => setTimeout(resolve, QUIT_FLUSH_LIMIT_MS));
+  void Promise.race([flushTokenStore(), limit]).finally(() => {
+    setTimeout(() => app.exit(0), QUIT_EXIT_LIMIT_MS);
+    app.quit();
+  });
+});
+
+// Engine commands still running (a pull, a log read, the download counter)
+// end with the app. Containers themselves keep running.
+app.on('will-quit', () => {
+  stopAllCli();
 });
 
 app.on('window-all-closed', () => {

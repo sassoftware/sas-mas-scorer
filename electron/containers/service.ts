@@ -733,7 +733,7 @@ export class ContainerService {
     const approved = await this.deps.confirm({
       title: 'Delete container',
       message: `Delete the container "${found.record.displayName}"?`,
-      detail: `${found.record.name} is stopped and removed. The image stays on disk (${found.record.imageRef}).`,
+      detail: `${found.record.name} is stopped and removed; if you opened it as an SCR endpoint, that entry goes too. The image stays on disk (${found.record.imageRef}).`,
       confirmLabel: 'Delete',
     });
     if (!approved) return problem('cancelled', 'Not deleted.');
