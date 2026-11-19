@@ -26,8 +26,37 @@ export const InputForm: React.FC<InputFormProps> = ({
   datagridParams,
 }) => {
   const [editingGridParam, setEditingGridParam] = useState<string | null>(null);
+  /** Field name → why the last paste into it was refused. */
+  const [pasteRefused, setPasteRefused] = useState<Record<string, string>>({});
   const handleChange = (name: string, value: unknown) => {
     onChange({ ...values, [name]: value });
+  };
+
+  // The browser silently cuts a paste at maxLength, and a value cut short (a
+  // base64 image, say) would then be scored as if it were whole. A paste that
+  // does not fit is refused instead, with the reason under the field.
+  const refuseLongPaste = (e: React.ClipboardEvent<HTMLInputElement>, name: string, size: number | undefined) => {
+    if (!size) return;
+    // A single-line field drops line breaks from what is pasted.
+    const pasted = e.clipboardData.getData('text').replace(/[\r\n]/g, '');
+    const field = e.currentTarget;
+    const selected = (field.selectionEnd ?? 0) - (field.selectionStart ?? 0);
+    const total = field.value.length - selected + pasted.length;
+    if (total <= size) return;
+    e.preventDefault();
+    setPasteRefused((m) => ({
+      ...m,
+      [name]: `Not pasted: the field would hold ${total.toLocaleString()} characters, and this input takes at most ${size.toLocaleString()}.`,
+    }));
+  };
+  const clearPasteRefused = (name: string) => {
+    if (pasteRefused[name]) {
+      setPasteRefused((m) => {
+        const next = { ...m };
+        delete next[name];
+        return next;
+      });
+    }
   };
 
   const parseArrayValue = (
@@ -144,7 +173,11 @@ export const InputForm: React.FC<InputFormProps> = ({
             type="text"
             className="sas-input"
             value={value !== null && value !== undefined ? String(value) : ''}
-            onChange={(e) => handleChange(name, e.target.value || null)}
+            onChange={(e) => {
+              clearPasteRefused(name);
+              handleChange(name, e.target.value || null);
+            }}
+            onPaste={(e) => refuseLongPaste(e, name, size)}
             maxLength={size}
             disabled={disabled}
             placeholder={`Enter text${size ? ` (max ${size} chars)` : ''}`}
@@ -234,6 +267,11 @@ export const InputForm: React.FC<InputFormProps> = ({
                 param.type === 'string' && param.size && (
                   <span className="input-form__hint">Max length: {param.size}</span>
                 )
+              )}
+              {pasteRefused[param.name] && (
+                <span className="input-form__hint input-form__hint--error" role="alert">
+                  {pasteRefused[param.name]}
+                </span>
               )}
             </div>
           ))}

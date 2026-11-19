@@ -61,7 +61,7 @@ const bootLoader = (css: string, scripts: string[]): string => `<script>(functio
   };
   var start = function () {
     if (typeof DecompressionStream === "undefined") {
-      fail("MAS Module Scorer needs a current web browser (Chrome, Edge, Firefox or Safari). Update your browser, then reload this page.");
+      fail("SAS MAS Scorer needs a current web browser (Chrome, Edge, Firefox or Safari). Update your browser, then reload this page.");
       return;
     }
     var chain = css ? gunzip(css).then(function (text) {
@@ -73,7 +73,7 @@ const bootLoader = (css: string, scripts: string[]): string => `<script>(functio
       chain = chain.then(function () { return gunzip(b64); }).then(run);
     });
     chain.catch(function (err) {
-      fail("MAS Module Scorer could not start. Reload the page; if this keeps happening, contact your SAS administrator.");
+      fail("SAS MAS Scorer could not start. Reload the page; if this keeps happening, contact your SAS administrator.");
       if (window.console) console.error(err);
     });
   };

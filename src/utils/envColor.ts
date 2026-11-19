@@ -132,7 +132,6 @@ const ENV_PROPS = [
   '--env-header-fg',
   '--env-header-fg-muted',
   '--env-header-hover-bg',
-  '--env-header-border',
 ];
 
 /**
@@ -158,12 +157,5 @@ export const applyEnvironmentColor = (color: string | null | undefined): void =>
   root.style.setProperty(
     '--env-header-hover-bg',
     lightBackground ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.1)'
-  );
-  // The header's only rule (`.sas-header__auth`, layout.css) divides the auth
-  // block from the rest of the bar; its default `color-mix` edge disappears on
-  // some environment colors, so set an explicit one for each side.
-  root.style.setProperty(
-    '--env-header-border',
-    lightBackground ? 'rgba(0, 0, 0, 0.18)' : 'rgba(255, 255, 255, 0.2)'
   );
 };

@@ -81,7 +81,7 @@ export function formatFailureReport(alertText: string, failure?: RecordedFailure
   } else {
     lines.push(`Time: ${new Date().toISOString()}`);
   }
-  lines.push(`App: MAS Module Scorer ${__APP_VERSION__} (${__BUILD_MODE__} build)`);
+  lines.push(`App: SAS MAS Scorer ${__APP_VERSION__} (${__BUILD_MODE__} build)`);
   lines.push(`View: ${window.location.hash || '#/'}`);
   lines.push(`Browser: ${navigator.userAgent}`);
   return lines.join('\n');

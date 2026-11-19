@@ -1,0 +1,427 @@
+{
+  "source": "SAS Container Runtime: Programming and Administration Guide, 2026.09 (Appendix 2; chapters 4, 5, 7 and 8)",
+  "groups": [
+    { "id": "scr-log", "label": "SAS Container Runtime: logging", "appliesTo": "scr" },
+    { "id": "scr-ds2-log", "label": "SAS Container Runtime: DS2 and database logging", "appliesTo": "scr" },
+    { "id": "scr-metrics", "label": "SAS Container Runtime: metrics (/prometheus)", "appliesTo": "scr" },
+    { "id": "scr-json", "label": "SAS Container Runtime: requests and responses", "appliesTo": "scr" },
+    { "id": "scr-threads", "label": "SAS Container Runtime: threads", "appliesTo": "scr" },
+    { "id": "scr-csp", "label": "SAS Container Runtime: content security policy", "appliesTo": "scr" },
+    {
+      "id": "py-log",
+      "label": "Python model runtime: logging",
+      "appliesTo": "python",
+      "note": "Read by Python model images built on the 2026.07 runtime or later; older images ignore them. Levels must be in upper case."
+    },
+    {
+      "id": "r-log",
+      "label": "R model runtime: logging",
+      "appliesTo": "r",
+      "note": "Read by R model images built on the 2026.07 runtime or later."
+    }
+  ],
+  "entries": [
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_IO",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "TRACE",
+      "description": "At TRACE, logs the input and output values of every request.",
+      "note": "The log then contains the scored data."
+    },
+    {
+      "name": "SAS_SCR_LOG_STRUCTURED",
+      "group": "scr-log",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true writes the log as JSON lines instead of plain text."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.tk.MAS",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The runtime's core engine (shared with SAS Micro Analytic Service)."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.tk.MAS.Service",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "At DEBUG or TRACE, logs start-up and shutdown events."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_PROFILE",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Sampled timings: compilation at DEBUG; compilation and execution at TRACE."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_MEM_CODE",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "At DEBUG, logs the engine's memory use while it compiles the module code."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_MEM_NATIVE",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "At DEBUG, logs the engine's memory use while it runs the module code."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_CONFIG",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Configuration processing, including how the logging set-up is built."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_MODULE_LOGGER",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Module creation."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_SCR_ENV",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "TRACE",
+      "description": "At TRACE, logs the container's environment variables.",
+      "note": "Values are logged too, including any secrets passed as variables."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.tk.MAS.Python",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The interface that runs Python code called from DS2."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.tk.MAS.ParallelExec",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The DS2 MASParallelExec package (parallel sub-decisions)."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.tk.MAS.Thread",
+      "group": "scr-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "How worker threads are picked for requests."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.TableServices.DS2.Runtime.Put",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "TRACE",
+      "description": "Output of PUT statements in the DS2 code.",
+      "note": "The guide does not say which level turns this on; TRACE shows the most."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.TableServices.DS2.Runtime.Log",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "TRACE",
+      "description": "Messages the DS2 code writes to the SAS log.",
+      "note": "The guide does not say which level turns this on; TRACE shows the most."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.TableServices.DS2.Runtime.Calls",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "TRACE",
+      "description": "A trace of every method call while the DS2 code runs.",
+      "note": "The guide does not say which level turns this on; TRACE shows the most."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.TableServices.DS2.Runtime.Timing",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "DEBUG",
+      "description": "Time spent parsing, compiling and running the DS2 code (more detail at DEBUG and TRACE)."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.TableServices.DS2.Runtime.SQL",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "TRACE",
+      "description": "SQL statements that the DS2 code prepares or runs.",
+      "note": "The guide does not say which level turns this on; TRACE shows the most."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_App.SQLServices.API",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "DEBUG",
+      "description": "Database connection and statement activity; it must be DEBUG for that to be logged."
+    },
+    {
+      "name": "SAS_SCR_LOG_LEVEL_Audit.Table.Connection",
+      "group": "scr-ds2-log",
+      "kind": "level",
+      "suggested": "DEBUG",
+      "description": "Database connections."
+    },
+    {
+      "name": "SAS_SCR_METRICS",
+      "group": "scr-metrics",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true adds execution metrics (number and duration of calls) to /prometheus. By default it shows system metrics only."
+    },
+    {
+      "name": "SAS_SCR_PROMETHEUS_ENABLED",
+      "group": "scr-metrics",
+      "kind": "boolean",
+      "default": "true",
+      "suggested": "false",
+      "description": "false turns the metrics endpoint off.",
+      "note": "The SCR endpoint page in MAS Scorer reads its metrics from /prometheus."
+    },
+    {
+      "name": "SAS_SCR_PROMETHEUS_ENDPOINT",
+      "group": "scr-metrics",
+      "kind": "text",
+      "default": "/prometheus",
+      "description": "The path of the metrics endpoint.",
+      "note": "The SCR endpoint page in MAS Scorer only reads /prometheus."
+    },
+    {
+      "name": "SAS_SCR_PROMETHEUS_RATE",
+      "group": "scr-metrics",
+      "kind": "number",
+      "default": "10000",
+      "min": 1,
+      "description": "How often metric data is collected, in milliseconds."
+    },
+    {
+      "name": "SAS_SCR_INPUT_SCORE_VARIABLE",
+      "group": "scr-metrics",
+      "kind": "text",
+      "description": "An input variable whose values /prometheus tracks as a histogram. Needs SAS_SCR_METRICS=true."
+    },
+    {
+      "name": "SAS_SCR_OUTPUT_SCORE_VARIABLE",
+      "group": "scr-metrics",
+      "kind": "text",
+      "description": "An output variable (for example a probability) whose values /prometheus tracks as a histogram. Needs SAS_SCR_METRICS=true."
+    },
+    {
+      "name": "SAS_SCR_INPUT_SCORE_MAX",
+      "group": "scr-metrics",
+      "kind": "number",
+      "default": "1.0",
+      "description": "The top of the input-score histogram. Larger values all land in one overflow bin."
+    },
+    {
+      "name": "SAS_SCR_OUTPUT_SCORE_MAX",
+      "group": "scr-metrics",
+      "kind": "number",
+      "default": "1.0",
+      "description": "The top of the output-score histogram. Larger values all land in one overflow bin."
+    },
+    {
+      "name": "SAS_SCR_SCORE_BINS",
+      "group": "scr-metrics",
+      "kind": "number",
+      "default": "10",
+      "min": 1,
+      "description": "The number of bins in the score histograms."
+    },
+    {
+      "name": "SAS_SCR_JSON_REQUIRE_MISSING_INPUT",
+      "group": "scr-json",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true requires every input in each request (null allowed). With false, inputs left out are scored as null."
+    },
+    {
+      "name": "SAS_SCR_JSON_NULL_OUTPUT",
+      "group": "scr-json",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true returns every output, including those that are null. With false, null outputs are left out of the response."
+    },
+    {
+      "name": "SAS_SCR_JSON_STRIP_TRAILING_UNDERSCORE",
+      "group": "scr-json",
+      "kind": "boolean",
+      "default": "true",
+      "suggested": "false",
+      "description": "SAS Intelligent Decisioning gives input variables a trailing underscore. true drops it from the input names in the signature and in requests; false keeps it."
+    },
+    {
+      "name": "SAS_SCR_PASS_HEADERS",
+      "group": "scr-json",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true passes request headers that start with sas-custom- to the model as metadata."
+    },
+    {
+      "name": "SAS_SCR_REST_CONTENT_APPLICATION_JSON",
+      "group": "scr-json",
+      "kind": "boolean",
+      "default": "false",
+      "suggested": "true",
+      "description": "true answers with Content-Type application/json when the request accepts it, instead of the SAS media type.",
+      "note": "Documented for SAS Container Runtime 2026.09. Images built on older releases ignore it (SCR 1.804.22 does)."
+    },
+    {
+      "name": "SAS_SCR_CORE_NUM_THREADS",
+      "group": "scr-threads",
+      "kind": "number",
+      "default": "4",
+      "min": 1,
+      "description": "Threads that serve requests. More threads take more requests at once, but use more memory and can slow start-up."
+    },
+    {
+      "name": "SAS_SCR_CORE_NUM_ASYNC_THREADS",
+      "group": "scr-threads",
+      "kind": "number",
+      "default": "0",
+      "min": 0,
+      "description": "Threads for background work that the code queues with asyncCallModule."
+    },
+    {
+      "name": "SAS_SCR_CORE_MAX_PE_THREADS",
+      "group": "scr-threads",
+      "kind": "number",
+      "default": "0",
+      "min": 0,
+      "description": "Threads for the MASParallelExec package. Any number above 0 turns parallel execution of sub-decisions on."
+    },
+    {
+      "name": "SAS_SCR_CORE_PE_WAIT_TIME_MILLISECONDS",
+      "group": "scr-threads",
+      "kind": "number",
+      "default": "5000",
+      "min": 0,
+      "description": "How long the parallel-execution wait method waits, in milliseconds. 0 waits until all calls are done."
+    },
+    {
+      "name": "SAS_SCR_CSP_FRAME_ANCESTORS",
+      "group": "scr-csp",
+      "kind": "text",
+      "default": "'self'",
+      "description": "Which pages may embed the container's pages in a frame. Separate several sources with spaces, for example 'self' https://*.example.com."
+    },
+    {
+      "name": "SAS_SCR_CSP_FORM_ACTION",
+      "group": "scr-csp",
+      "kind": "text",
+      "default": "'self'",
+      "description": "Which addresses forms may submit to. Separate several sources with spaces."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_root",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "General application messages."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_api",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Requests and responses."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_score",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Scoring."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_retrieval",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Loading of data and model files."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_transactions",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The life of each scoring request, in that request's own log."
+    },
+    {
+      "name": "SAS_SCR_PYTHON_LOG_LEVEL_server",
+      "group": "py-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The web server.",
+      "note": "This log is written to a file inside the container, not to the container log."
+    },
+    {
+      "name": "SAS_SCR_R_LOG_LEVEL_root",
+      "group": "r-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "General application messages."
+    },
+    {
+      "name": "SAS_SCR_R_LOG_LEVEL_api",
+      "group": "r-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Requests and responses."
+    },
+    {
+      "name": "SAS_SCR_R_LOG_LEVEL_score",
+      "group": "r-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Scoring."
+    },
+    {
+      "name": "SAS_SCR_R_LOG_LEVEL_retrieval",
+      "group": "r-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "Loading of data and model files."
+    },
+    {
+      "name": "SAS_SCR_R_LOG_LEVEL_transactions",
+      "group": "r-log",
+      "kind": "level",
+      "default": "INFO",
+      "suggested": "DEBUG",
+      "description": "The life of each scoring request."
+    }
+  ]
+}

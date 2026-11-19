@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../layout/Layout';
 import { Card, CardBody, CardHeader } from '../common/Card';
@@ -13,6 +13,7 @@ import { inspectEndpoint, normalizeScoreUrl, reachableFromHere, RUNTIME_LABELS }
 import {
   addScrEndpoint,
   listScrEndpoints,
+  removeLocalContainerEndpoints,
   removeScrEndpoint,
   updateScrEndpoint,
   type SavedScrEndpoint,
@@ -21,6 +22,12 @@ import {
 export const scrEndpointRoute = (id: string): string => `/scr/${encodeURIComponent(id)}`;
 
 const isElectron = !!window.electronAPI;
+
+// Local containers: desktop build only. The build-mode check lets the web and
+// jobdef builds drop the panel's code entirely.
+const LocalContainersPanel =
+  __BUILD_MODE__ === 'electron' ? lazy(() => import('../containers/LocalContainersPanel')) : null;
+const showLocalContainers = !!LocalContainersPanel && !!window.electronAPI?.containers;
 
 const endpointName = (endpoint: SavedScrEndpoint): string =>
   endpoint.label || decodeURIComponent(endpoint.url.slice(endpoint.url.lastIndexOf('/') + 1));
@@ -69,6 +76,22 @@ export const ScrEndpointsPage: React.FC = () => {
   const handleRemove = (id: string) => {
     removeScrEndpoint(id);
     setEndpoints(listScrEndpoints());
+  };
+
+  /** A local container that is ready: saved like any endpoint (signature read first), then opened. */
+  const openLocalEndpoint = async (scoreUrl: string, name: string, managedId: string) => {
+    const info = await inspectEndpoint(scoreUrl);
+    const entry = addScrEndpoint(scoreUrl, `${name} (local)`);
+    updateScrEndpoint(entry.id, {
+      lastSeen: { runtime: info.runtime, mode: info.mode, title: info.title, at: new Date().toISOString() },
+      localContainerId: managedId,
+    });
+    setEndpoints(listScrEndpoints());
+    navigate(scrEndpointRoute(entry.id));
+  };
+
+  const forgetLocalEndpoint = (managedId: string, hostPort: number | undefined) => {
+    if (removeLocalContainerEndpoints(managedId, hostPort) > 0) setEndpoints(listScrEndpoints());
   };
 
   return (
@@ -187,6 +210,12 @@ export const ScrEndpointsPage: React.FC = () => {
           )}
         </CardBody>
       </Card>
+
+      {showLocalContainers && LocalContainersPanel && (
+        <Suspense fallback={null}>
+          <LocalContainersPanel onOpenEndpoint={openLocalEndpoint} onDeleted={forgetLocalEndpoint} />
+        </Suspense>
+      )}
     </div>
   );
 };

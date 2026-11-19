@@ -15,6 +15,7 @@ The following features are provided:
 - UI Apps builder — drag-and-drop form builder to create custom UIs on top of modules
 - Can be deployed on a webserver, imported via the provided Transfer Package, or run as a desktop app (Electron)
 - Desktop app supports multiple named Viya connections (e.g. dev, staging, production) with per-connection authentication
+- Desktop app can run SAS Container Runtime images locally with Podman or Docker and score them (preview)
 
 ## Deployment
 

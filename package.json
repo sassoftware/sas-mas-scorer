@@ -1,6 +1,6 @@
 {
   "name": "mas-scorer",
-  "version": "2.14.0",
+  "version": "3.0.0",
   "description": "SAS Micro Analytic Score Module Scorer Application",
   "type": "module",
   "main": "electron/dist/main.js",
@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "preview:jobdef": "vite preview --outDir dist-jobdef",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test:electron": "node -e \"require('fs').rmSync('electron/.test-dist',{recursive:true,force:true})\" && tsc -p electron/tsconfig.test.json && node --test \"electron/.test-dist/test/*.test.js\"",
     "electron:dev": "concurrently \"cross-env BUILD_MODE=electron vite\" \"wait-on tcp:localhost:3000 && tsc -p electron/tsconfig.json && electron .\"",
     "electron:build": "node -e \"require('fs').rmSync('electron/dist',{recursive:true,force:true})\" && tsc -p electron/tsconfig.json && cross-env BUILD_MODE=electron vite build && electron-builder",
     "electron:start": "electron ."

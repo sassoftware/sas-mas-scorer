@@ -313,7 +313,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
       </nav>
 
       <div className="sas-sidebar__footer">
-        <div className="sas-sidebar__version">MAS Scorer v{__APP_VERSION__}</div>
+        <div className="sas-sidebar__version">SAS MAS Scorer v{__APP_VERSION__}</div>
         {onToggleCollapsed && (
           <span className={`sas-sidebar__collapse-wrap${tipDismissed ? ' sas-sidebar__collapse-wrap--tip-dismissed' : ''}`}
             onMouseLeave={() => setTipDismissed(false)}

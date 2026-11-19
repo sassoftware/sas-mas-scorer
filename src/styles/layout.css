@@ -86,16 +86,6 @@
   height: var(--icon-lg);
 }
 
-.sas-header__logo {
-  width: 36px;
-  height: 36px;
-}
-
-.sas-header__logo-icon {
-  width: 100%;
-  height: 100%;
-}
-
 .sas-header__title-group {
   display: flex;
   flex-direction: column;
@@ -106,11 +96,6 @@
   font-weight: var(--font-weight-semibold);
   color: var(--env-header-fg, var(--sas-white));
   line-height: 1.2;
-}
-
-.sas-header__subtitle {
-  font-size: var(--font-size-xs);
-  color: var(--env-header-fg-muted, var(--sas-header-fg-muted));
 }
 
 .sas-header__nav {
@@ -212,11 +197,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding-right: var(--space-3);
-  /* Divider follows the header foreground so it stays visible on a light
-     environment colour; a per-connection --env-header-border wins if set. */
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  border-right-color: var(--env-header-border, color-mix(in srgb, currentColor 25%, transparent));
   margin-right: var(--space-1);
 }
 
@@ -748,10 +728,6 @@
 
   .sas-header__nav-toggle {
     display: flex;
-  }
-
-  .sas-header__subtitle {
-    display: none;
   }
 
   .sas-header__title-group {

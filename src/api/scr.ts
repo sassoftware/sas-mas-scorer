@@ -16,6 +16,8 @@
  *   Swagger 2.0) that Model Manager builds for Python models:
  *   GET  {score}/apiMeta/api   PCRInput/PCROutput with type decimal|string,
  *                              length, level and description per variable
+ *   GET  {base}/openapi.json   the same, on newer SAS Python Runtime images
+ *                              that serve no {score}/apiMeta/api
  *   POST {score}               same body; every input is required (422)
  *   GET  {base}/query/{id}/log the log of one request, also of a failed one
  *
@@ -297,14 +299,37 @@ export function parseSignature(scoreUrl: string, spec: unknown): ScrEndpointInfo
   };
 }
 
-/** GET {score}/apiMeta/api and read it. */
+/**
+ * Newer SAS Python Runtime images (seen on sas-score-python3-base 3.84.1)
+ * serve no {score}/apiMeta/api; their signature is {base}/openapi.json, with
+ * the same PCRInput/PCROutput schemas. Used only when that document lists the
+ * model's own route, so it cannot describe a different model.
+ */
+async function openApiAtRoot(scoreUrl: string): Promise<unknown | null> {
+  const { baseUrl, name } = splitScoreUrl(scoreUrl);
+  let response: Response;
+  try {
+    response = await scrFetch(`${baseUrl}/openapi.json`, { headers: { Accept: 'application/json' } });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const doc = asObject(await readJson(response));
+  const paths = Object.keys(asObject(doc?.paths) ?? {});
+  return doc && paths.includes(`/${name}`) ? doc : null;
+}
+
+/** GET {score}/apiMeta/api (or, for newer Python images, {base}/openapi.json) and read it. */
 export async function inspectEndpoint(input: string): Promise<ScrEndpointInfo> {
   const scoreUrl = normalizeScoreUrl(input);
   const response = await scrFetch(`${scoreUrl}/apiMeta/api`, { headers: { Accept: 'application/json' } });
   if (response.status === 404) {
+    const rootDoc = await openApiAtRoot(scoreUrl);
+    if (rootDoc) return parseSignature(scoreUrl, rootDoc);
     throw new Error(
-      `No signature at ${scoreUrl}/apiMeta/api (404). Check the last part of the URL: it must ` +
-        'be the model name exactly as the container serves it (case matters for Python models).'
+      `No signature at ${scoreUrl}/apiMeta/api or ${splitScoreUrl(scoreUrl).baseUrl}/openapi.json (404). ` +
+        'Check the last part of the URL: it must be the model name exactly as the container serves it ' +
+        '(case matters for Python models).'
     );
   }
   if (!response.ok) {
