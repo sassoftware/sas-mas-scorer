@@ -2,7 +2,7 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
-## [3.0.0] - Unreleased
+## [3.0.0] - 2026-11-19
 
 Run SCR images on your own computer: the desktop app pulls a SAS Container Runtime image with Podman or Docker, runs it, and scores it like any other SCR endpoint. A preview, in the desktop app only; the web app and the Job Execution / Visual Analytics build are unchanged.
 
