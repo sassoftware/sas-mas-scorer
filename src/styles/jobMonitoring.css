@@ -155,56 +155,12 @@
   justify-content: flex-end;
 }
 
-/* Completed jobs table toolbar */
-.job-monitoring__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--sas-gray-200);
-}
-
-/* Sizing hook for the shared <SearchInput>; the field itself is .sas-input. */
-.job-monitoring__search {
-  flex: 1;
-  max-width: 360px;
-  min-width: 220px;
-}
-
 .job-monitoring__chips {
   display: inline-flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
-
-.job-monitoring__chip {
-  padding: var(--space-1) var(--space-3);
-  background-color: var(--sas-white);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
-  cursor: pointer;
-}
-
-.job-monitoring__chip:hover {
-  background-color: var(--sas-gray-100);
-}
-
-.job-monitoring__chip--active {
-  background-color: var(--sas-blue-primary);
-  border-color: var(--sas-blue-primary);
-  color: var(--sas-white);
-}
-
-.job-monitoring__chip--active:hover {
-  background-color: var(--sas-blue-primary);
-}
-
-.job-monitoring__toolbar-spacer { flex: 1; }
 
 .job-monitoring__toolbar-count {
   font-size: var(--font-size-sm);
@@ -212,7 +168,7 @@
   white-space: nowrap;
 }
 
-/* Table cells. The name cell is an inline <span> because DataTable wraps the
+/* Table cells. The name cell is an inline <span> because ListTable wraps the
  * first column of a clickable row in <button class="sas-table__row-button">. */
 .job-monitoring__cell-name {
   display: flex;
@@ -229,6 +185,10 @@
 .job-monitoring__cell-name-sub {
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* When the row is interactive, underline the job name on row hover — and on
@@ -237,32 +197,6 @@
 .sas-table__row--clickable:focus-within .job-monitoring__cell-name--link .job-monitoring__cell-name-main {
   color: var(--sas-blue-primary);
   text-decoration: underline;
-}
-
-/* Right-edge chevron that brightens on row hover/focus. The static dimmed
- * state still hints that the row is interactive even before hover. */
-.job-monitoring__row-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--sas-gray-400);
-  transition: color var(--transition-fast), transform var(--transition-fast);
-}
-
-.sas-table__row:hover .job-monitoring__row-chevron,
-.sas-table__row--clickable:focus-within .job-monitoring__row-chevron {
-  color: var(--sas-blue-primary);
-  transform: translateX(2px);
-}
-
-.job-monitoring__toolbar-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--font-size-xs);
-  color: var(--sas-text-muted);
-  font-style: italic;
-  white-space: nowrap;
 }
 
 .job-monitoring__cell-mono {

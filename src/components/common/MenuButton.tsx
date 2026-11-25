@@ -10,8 +10,16 @@ export interface MenuItem {
   description?: React.ReactNode;
   onSelect: () => void;
   disabled?: boolean;
-  /** Set on every item to make the menu a single-choice list (menuitemradio). */
+  /**
+   * Makes the item a choice (menuitemradio) with a tick when true. Set on
+   * every item for a single-choice menu, or on the items of one `group`.
+   */
   checked?: boolean;
+  /**
+   * Consecutive items with the same group are drawn together under this
+   * heading (role="group"), with a rule between groups.
+   */
+  group?: string;
 }
 
 interface MenuButtonProps {
@@ -27,6 +35,13 @@ interface MenuButtonProps {
   disabled?: boolean;
   title?: string;
   className?: string;
+  /** Leave out the trailing chevron (a ⋮ trigger). */
+  hideChevron?: boolean;
+  /**
+   * Place the menu with fixed positioning so a scrolling or clipping parent
+   * (a table wrapper) can't cut it off. It closes when the page scrolls.
+   */
+  floating?: boolean;
 }
 
 const CHEVRON = (
@@ -41,6 +56,17 @@ const CHEVRON = (
  * and End move between items; Escape closes it and returns focus to the
  * trigger; Tab or a click outside closes it.
  */
+/** Runs of items that share a group, keeping each item's index for focus. */
+function segments(items: MenuItem[]): { group?: string; items: { item: MenuItem; n: number }[] }[] {
+  const out: { group?: string; items: { item: MenuItem; n: number }[] }[] = [];
+  items.forEach((item, n) => {
+    const last = out[out.length - 1];
+    if (last && last.group === item.group) last.items.push({ item, n });
+    else out.push({ group: item.group, items: [{ item, n }] });
+  });
+  return out;
+}
+
 export const MenuButton: React.FC<MenuButtonProps> = ({
   label,
   ariaLabel,
@@ -50,14 +76,18 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
   disabled = false,
   title,
   className = '',
+  hideChevron = false,
+  floating = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<React.CSSProperties | undefined>(undefined);
   const [focusIndex, setFocusIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const menuId = useId();
-  const radio = items.some((i) => i.checked !== undefined);
+  // A menu made only of choices opens on the chosen one.
+  const radio = items.length > 0 && items.every((i) => i.checked !== undefined);
 
   const enabled = items.map((i, n) => (i.disabled ? -1 : n)).filter((n) => n >= 0);
 
@@ -68,8 +98,21 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
         : which === 'last' ? enabled[enabled.length - 1]
           : enabled[0];
     setFocusIndex(target ?? 0);
+    if (floating && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      setPlace({
+        position: 'fixed',
+        ...(below < 240 && r.top > below
+          ? { bottom: window.innerHeight - r.top + 4, top: 'auto' }
+          : { top: r.bottom + 4 }),
+        ...(alignEnd
+          ? { right: Math.max(8, window.innerWidth - r.right), left: 'auto' }
+          : { left: Math.max(8, r.left) }),
+      });
+    }
     setOpen(true);
-  }, [items, enabled]);
+  }, [items, enabled, floating, alignEnd]);
 
   const close = useCallback((returnFocus: boolean) => {
     setOpen(false);
@@ -89,6 +132,21 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
+
+  // A fixed menu would stay put while its trigger scrolls away.
+  useEffect(() => {
+    if (!open || !floating) return;
+    const onMove = (e: Event) => {
+      if (e.target instanceof Node && rootRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    return () => {
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
+    };
+  }, [open, floating]);
 
   const move = (delta: number) => {
     if (enabled.length === 0) return;
@@ -141,7 +199,7 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
         onKeyDown={onTriggerKeyDown}
       >
         {label}
-        {CHEVRON}
+        {!hideChevron && CHEVRON}
       </button>
       {open && (
         <div
@@ -149,24 +207,38 @@ export const MenuButton: React.FC<MenuButtonProps> = ({
           role="menu"
           aria-label={ariaLabel}
           className={`sas-menu-button__menu${alignEnd ? ' sas-menu-button__menu--end' : ''}`}
+          style={floating ? place : undefined}
           onKeyDown={onMenuKeyDown}
         >
-          {items.map((item, n) => (
-            <button
-              key={item.id}
-              ref={(el) => { itemRefs.current[n] = el; }}
-              type="button"
-              role={radio ? 'menuitemradio' : 'menuitem'}
-              aria-checked={radio ? !!item.checked : undefined}
-              aria-disabled={item.disabled || undefined}
-              tabIndex={n === focusIndex ? 0 : -1}
-              className={`sas-menu-button__item${item.checked ? ' sas-menu-button__item--checked' : ''}`}
-              onClick={() => select(item)}
-            >
-              <span className="sas-menu-button__item-label">{item.label}</span>
-              {item.description && <span className="sas-menu-button__item-desc">{item.description}</span>}
-            </button>
-          ))}
+          {segments(items).map((seg, s) => {
+            const buttons = seg.items.map(({ item, n }) => (
+              <button
+                key={item.id}
+                ref={(el) => { itemRefs.current[n] = el; }}
+                type="button"
+                role={item.checked !== undefined ? 'menuitemradio' : 'menuitem'}
+                aria-checked={item.checked !== undefined ? item.checked : undefined}
+                aria-disabled={item.disabled || undefined}
+                tabIndex={n === focusIndex ? 0 : -1}
+                className={`sas-menu-button__item${item.checked ? ' sas-menu-button__item--checked' : ''}${item.checked !== undefined && !radio ? ' sas-menu-button__item--choice' : ''}`}
+                onClick={() => select(item)}
+              >
+                <span className="sas-menu-button__item-label">{item.label}</span>
+                {item.description && <span className="sas-menu-button__item-desc">{item.description}</span>}
+              </button>
+            ));
+            return (
+              <React.Fragment key={`${seg.group ?? ''}-${s}`}>
+                {s > 0 && <div role="separator" className="sas-menu-button__separator" />}
+                {seg.group ? (
+                  <div role="group" aria-label={seg.group}>
+                    <div className="sas-menu-button__heading" aria-hidden="true">{seg.group}</div>
+                    {buttons}
+                  </div>
+                ) : buttons}
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
     </div>

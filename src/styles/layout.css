@@ -945,3 +945,19 @@
     transition: none;
   }
 }
+
+/* Full-window work view (the UI app builder): no sidebar, no page padding.
+   Written 0,3,0 so it beats the collapsed-rail margin in the media query. */
+.sas-layout.sas-layout--focus .sas-layout__main {
+  margin-left: 0;
+}
+
+.sas-layout.sas-layout--focus .sas-layout__content {
+  max-width: none;
+  padding: 0;
+}
+
+/* Loading and error states in a focus view keep the usual page padding. */
+.sas-layout--focus .sas-layout__content > :not(.ui-builder--full) {
+  margin: var(--space-6);
+}

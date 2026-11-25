@@ -222,3 +222,40 @@ export const useSubmodules = (moduleId: string | null): UseSubmodulesReturn => {
 
   return { submodules, loading, error, refresh: fetchSubmodules };
 };
+
+export type ModuleTypeCounts = Record<ModuleType | 'All', number>;
+
+/**
+ * How many modules of each type match the search, for the list's filter
+ * chips. MAS cannot count by type, so this reads the whole collection (once
+ * per search, and again on refresh); null until it has.
+ */
+export const useModuleTypeCounts = (
+  filter: string,
+  enabled: boolean,
+  refreshKey: number
+): ModuleTypeCounts | null => {
+  const [counts, setCounts] = useState<ModuleTypeCounts | null>(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
+    if (!enabled) {
+      setCounts(null);
+      return;
+    }
+    getAllModules({ filter: filter || undefined })
+      .then((items) => {
+        if (requestId !== requestIdRef.current) return;
+        const next: ModuleTypeCounts = { All: items.length, Model: 0, Decision: 0, Data: 0, Unknown: 0 };
+        for (const m of items) next[getModuleType(m)] += 1;
+        setCounts(next);
+      })
+      .catch(() => {
+        // The chips just go without counts.
+        if (requestId === requestIdRef.current) setCounts(null);
+      });
+  }, [filter, enabled, refreshKey]);
+
+  return counts;
+};

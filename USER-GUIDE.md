@@ -137,6 +137,16 @@ When you select a module, two additional navigation items appear:
 - **Details** — Opens the module's details page: metadata, steps, submodules, and source links.
 - **Execute Score** — Returns to the scoring panel for the step you last scored in this module. If you have not scored a step of it yet, it opens the module with focus on its **Steps** list so you can pick one.
 
+### Working With Lists
+
+All Modules, View Flows, Segmentation Trees, the Job Monitoring history, Publishing Overview's deployed items, Test Coverage's assets and the saved SCR endpoints share one list layout:
+
+- **Quick filters** — the chips above the table (**All**, **Decision**, **Data**, **Model** on All Modules, for example), each with how many rows it would show. A chip with nothing to show is left out.
+- **Search** — the box on the right.
+- **Column menu** — the **⋮** in each column header: **Sort ascending** / **Sort descending**, and, where the column offers one, **Filter by …** with each value and its count (for example **Destination** on Publishing Overview, **Modified by** on View Flows and Segmentation Trees, **Type** on Test Coverage). A filtered column is marked with a funnel, and the filter shows as a tag beside the chips (*Destination: maslocal*); the tag's **×** clears it. **Hide column** hides a column and **Show hidden columns** brings them back; hidden columns are remembered on that computer.
+- Click a column's name to sort by it; click again to reverse.
+- **Click a row** to open it. Where a row offers more, a **⋮** at its end holds the other actions (open in SAS Intelligent Decisioning, view the flow diagram, remove, …).
+
 ### Lists Keep Their View
 
 The search, filters, sort order and page of the **All Modules**, **View Flows** and **Segmentation Trees** lists and of the Job Monitoring history, and the search, type and coverage filters of the **Test Coverage** table, are kept in the page link (as is the Job Monitoring statistics period, `?period=`). The browser's **Back** button, a reload and a copied link therefore bring back the same view, and going back to View Flows or Segmentation Trees does not reload the whole list. Choosing the page in the sidebar starts a fresh, unfiltered list. The open tab of a job's detail page is kept the same way (`?tab=…`).
@@ -165,9 +175,10 @@ The **All Modules** page displays every module published to the SAS Micro Analyt
 
 ### Searching and Filtering
 
+The title shows how many modules match (*161 modules*).
+
 - **Search** — Type in the search box to filter modules by name. The search is case-insensitive and updates as you type.
-- **Type filter** — Use the dropdown to filter by **All**, **Model**, or **Decision**.
-- The header shows a count like "Filtered to 12 / 48 modules" when a filter is active.
+- **Type** — the chips **All**, **Decision**, **Data** and **Model** filter by type, each with how many modules match the search. A type with no matching modules is left out. The counts appear a moment after the list, because they need the whole collection; **Refresh** counts again.
 
 ### The Module Table
 
@@ -175,13 +186,13 @@ Each row shows:
 
 | Column | Description |
 |--------|-------------|
-| **Module Name** | The name and ID of the module |
+| **Name** | The name, with the description (or the ID when there is none) below it. A tag such as **2 apps** shows how many of your saved UI apps use the module |
 | **Type** | A color-coded badge — blue for Model, green for Decision, orange for Data |
 | **Steps** | The number of executable steps |
-| **Created By** | The user who published the module |
-| **Last Modified** | When the module was last updated |
+| **Created by** | The user who published the module |
+| **Modified** | When the module was last updated |
 
-Click any column header to sort ascending or descending.
+Click a row to open the module. **Name** and **Modified** can be sorted (from the header or its **⋮** menu); see [Working With Lists](#working-with-lists).
 
 ### Pagination
 
@@ -189,7 +200,7 @@ Use the **Previous** / **Next** buttons at the bottom of the table to move betwe
 
 ### Opening a Module
 
-Click the **View** button on any row to open the Module Details page, or click the module name directly.
+Click a row to open the Module Details page.
 
 ---
 
@@ -610,49 +621,55 @@ All three take you to the UI Builder.
 
 ### The UI Builder
 
-The builder page is headed **Create UI App** (or **Edit: <app name>**) with the module's name below it. The breadcrumb **UI Apps** above the heading returns to the UI Apps list. The builder has three main areas.
+The builder shows the app the way its users will see it and lets you build it there ("canvas first"). It uses the whole window under the app's header: the navigation sidebar is put away while you build, and the breadcrumb **UI Apps** (above the canvas) returns to the list. It has four parts: the module's fields on the left, the **canvas** in the middle, a **widget bar** under the canvas, and the **inspector** on the right.
 
-**Toolbar (top):**
+**Action bar (above the canvas, after the breadcrumb):**
 
 | Control | Description |
 |---------|-------------|
-| **Name** / **Description** | The app's name and an optional description |
-| **Columns:** 1 / 2 / 3 | Set the number of form columns |
-| **Output:** | Where outputs are shown: **Below** (in a separate section), **Side by Side** (inputs on the left, outputs on the right) or **Inline** (outputs among the inputs) |
-| **Button:** | The text on the run button (default `Execute`) |
 | Save status | **Unsaved changes**, **All changes saved**, or **Not saved yet** for a new app |
 | **Undo** | Undo the last edit (**Ctrl+Z**); hover it to see which edit (e.g. *Undo: Remove field Age*) |
-| **Share** | Open the Share dialog to copy a self-contained link or portable code for this UI (see [Sharing & Standalone Mode](#sharing--standalone-mode)) |
-| **Replace / Re-sync Module** | Swap the underlying module, or re-read the current one, while preserving as much of the field configuration as possible (available when editing an existing app; see [Replace / Re-sync Module](#replace--re-sync-module)) |
-| **Preview & Test Run** / **Back to Editing** | Switch between editing and a live run of the form |
+| **Edit** / **Preview** | Switch between building the app and a live run of it |
+| **More** | **Share…** (a self-contained link or portable code, see [Sharing & Standalone Mode](#sharing--standalone-mode)) and, when editing a saved MAS app, **Replace or re-sync module…** (see [Replace / Re-sync Module](#replace--re-sync-module)) |
 | **Save & Run** | Save the app and open it in the runner |
 | **Save** | Save the app and keep editing |
 
 A UI App is deleted from the **UI Apps** list (see [Managing UI Apps](#managing-ui-apps)), not from the builder.
 
-**Canvas (center):**
+**Fields (left):** every input and result in the module's step signature (or the SCR endpoint's), marked **IN** or **OUT**. A field already on the page is selected on the canvas when you click it. A field that is not on the page yet is shown with a **+**: click it, or drag it onto the canvas, to add it.
 
-The canvas shows your form layout organized into **sections**. Each section has a title and contains one or more fields.
+**Canvas (middle):** the app's title, its sections and fields, the run button, and the results, each field drawn with its real widget.
 
-- Click **Add Section** (below the sections) to create a new section.
-- **+ Add field** at the foot of a section lists the step's parameters that have no field yet and adds the one you pick. It is disabled when every parameter in the step signature already has a field.
-- **+ Text Block** at the foot of a section inserts a static markdown text block (supports inline images).
-- Use the **up/down arrows** on a section or a field to reorder it.
-- Click the **X** on a section or a field to remove it; **Undo** restores it.
-- A field is labelled **(required)** when it is marked Required, **Hidden** when it is not visible, and **Not in signature** when its parameter is no longer in the module's step signature.
+- A **new app starts empty**. **Use template** (under *Quick start*) puts every input and result on the page in the usual pattern: an **Inputs** section, the run button, and a **Results** section. You can also add fields one at a time.
+- **Click** a field to select it and configure it in the inspector. Click the app's title for the app settings, or a section's title for that section.
+- **Drag** a field to move it: drop it on another field to place it before that one, or on a section's drop area to put it at the end of the section. The drop areas show while you drag.
+- **Delete** (or **Backspace**) removes the selected field; **Undo** brings it back.
+- A field marked with an orange outline is **not in the signature** any more; a faded one is **hidden**.
+- Outputs show **--** (or, for a table, *Rows appear here after a run*) until the app runs: the canvas does not invent values.
+
+**Widget bar (under the canvas):** 123 (number), Dropdown, Badge, Gauge, Read only, Table, Toggle and Text block.
+
+- Drag a widget **onto a field** to show that field with it, if its type allows it.
+- Drag a widget **onto empty canvas** (the *Drop a widget here* area or a section's drop area) to add the first field not yet on the page that the widget suits, shown with that widget. **Text block** adds a block of formatted text.
+- **Clicking** a widget does the same from the keyboard: it applies to the selected field when it fits, and otherwise adds a field. Hover a widget to see what it will do; a greyed widget has no field it could show.
+
+**Inspector (right):** what you selected.
+
+- **Nothing selected:** a hint, and a link to the **App settings**.
+- **App settings:** name, description, **Columns** (1, 2 or 3), **Results position** (below the inputs, side by side, or inline), **Button label** (default `Execute`), and **Add section**.
+- **A section:** its title, **Move up** / **Move down**, **Add section**, and **Remove section** (which removes its fields too; Undo restores them).
+- **A field:** **Step 1 · Choose a widget** lists the widgets the field's type can use, and **Step 2 · Fine-tune** holds its settings (below). **Placement** moves it to another section, up or down, or removes it.
 
 **Field Configuration:**
 
-Click any field to configure it. Each field has these properties:
+Select a field to configure it in the inspector. A field has these settings:
 
 | Property | Description |
 |----------|-------------|
 | **Direction** | Input (the user provides the value) or Output (shows results). Text blocks are static content |
 | **Mapped Parameter** | The step parameter the field is bound to; its type and declared size are shown below it |
-| **Section** | Move the field to another section |
 | **Label** | Display name shown to the user |
 | **Description / Help Text** | Help text shown below the field |
-| **Widget Type** | The type of UI control (see below) |
 | **Width** | 1/3, 1/2 or Full of the section width |
 | **Visible** | Whether the field is shown in the form. A hidden input with a default value is sent on every execution |
 | **Placeholder** | Hint text shown when the field is empty |
@@ -676,6 +693,7 @@ Click any field to configure it. Each field has these properties:
 | **Read Only** | Displaying a value the user cannot change | — |
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
+| **Table** | A decision DataGrid output as a table (the default for DataGrid outputs), or an array output as one column | — (up to 200 rows are shown, with a count of the rest) |
 | **Hidden** | Sending a fixed value without showing it | Default value (sent on every execution) |
 | **Markdown** | Displaying formatted text, instructions, or images | Markdown content with `![alt](url)` image support |
 
@@ -691,18 +709,14 @@ Output fields have additional options:
 
 - **Save** saves the app and keeps you in the builder (*Saved. You can keep editing.*); **Save & Run** saves it and opens it in the runner. The status next to the buttons reads **Unsaved changes** whenever the app differs from what was last saved.
 - **Undo** (or **Ctrl+Z**, **⌘Z** on a Mac) reverses edits one at a time, newest first — adding, removing, moving and remapping fields and sections among them. While you type in a field, Ctrl+Z undoes the typing in that field instead.
-- **Preview & Test Run** shows the form as it is now, unsaved changes included, and runs the **published module** in MAS when you execute it. A **Preview run** note says so; running a preview does not save the app. **Back to Editing** returns to the canvas.
+- **Preview** shows the app as it is now, unsaved changes included, and runs the **published module** in MAS when you execute it. A **Preview run** note says so; running a preview does not save the app. **Edit** returns to the canvas.
 - **Leaving with unsaved changes** — the breadcrumb, the sidebar (pages and recent items) and the browser's **Back** / **Forward** buttons ask **Leave without saving?** first: **Stay**, **Discard Changes**, or **Save and Leave**. In the browser and Job Execution versions, reloading or closing the tab shows the browser's own leave prompt. **The desktop app does not prompt when its window is closed**: unsaved changes are then lost, so save before closing it.
 
 ### When the Module Changes
 
-The builder compares the app's fields with the module's current step signature. When they differ, a banner above the toolbar lists:
+Inputs and results the app has no field for are simply listed on the left with a **+**, whether they are new in the module or were never added. A parameter the app has no field for is sent as missing (null).
 
-- **New inputs with no field** — sent as missing (null) until you add them.
-- **New outputs with no field.**
-- **Fields for parameters the signature no longer lists** — these are not sent.
-
-**Add to section…** adds a field for every new parameter to the section you pick (or a **New section**), and **Remove orphaned fields** removes the fields whose parameters are gone; **Undo** reverses either. The banner can be dismissed. To re-read the module (for example after it was republished), use **Replace / Re-sync Module** and pick the current module again.
+When the app has fields for parameters the module's step signature **no longer lists**, a banner above the builder names them: these fields are not sent. **Remove orphaned fields** removes them (**Undo** reverses it), and the banner can be dismissed. To re-read the module (for example after it was republished), use **More → Replace or re-sync module…** and pick the current module again.
 
 ### Running a UI App
 
@@ -765,7 +779,7 @@ The **UI Apps** list page shows all your apps as cards. Each card says whether t
 
 When editing an existing UI App, you can swap the underlying module without starting from scratch, or re-read the current module after it has changed:
 
-1. Click **Replace / Re-sync Module** in the builder toolbar.
+1. In the builder, open **More** and choose **Replace or re-sync module…**.
 2. Browse and search modules. Use the type filter to narrow results. The app's own module is marked **(current: re-sync)** — pick it to re-read its current step signature.
 3. Select the module and its step, then click **Next: Map Parameters**.
 4. A parameter mapping screen (**Map Parameters**, or **Re-sync Parameters** for the current module) shows each current field next to a parameter of the module's step. The app auto-matches parameters by name. You can manually remap any field, or choose **(unmapped — will be removed)**.
@@ -782,7 +796,7 @@ The **View Flows** page lets you explore SAS Intelligent Decisioning decision fl
 
 ### Flow List
 
-The list page shows all decision flows in your environment. Use the search box to filter by name or description. Click a decision to open its flow diagram.
+The list page shows all decision flows in your environment, with the name, description, MAS module, who modified it last and when. Use the search box to filter by name or description, the chips **All**, **Published**, **Not published** and **Module removed** to filter by MAS module (they count once the MAS check below is done), and **Filter by modified by** in the **Modified by** column's **⋮** menu to see one person's decisions. Every column sorts. Click a decision to open its flow diagram.
 
 The **MAS module** column says whether each decision is published to MAS, from the decisions' completed publish records checked against the modules MAS has (one lookup for the whole list, so the column may show **Checking…** for a few seconds):
 
@@ -886,7 +900,7 @@ The **Segmentation Trees** page is built for trees too large to read in SAS Inte
 
 ### Tree List
 
-Lists every segmentation tree in the environment; search by name or description and click a tree to open it.
+Lists every segmentation tree in the environment; search by name or description and click a tree to open it. The chips show **All**, **Created by me** (the signed-in user's trees) and **Changed in the last 30 days**; the **Modified by** column's **⋮** menu filters by who changed a tree last, and **Created by** can be shown from any column's menu. Every column sorts.
 
 ### Reading the Page
 
@@ -1060,25 +1074,25 @@ Read these words exactly as meant:
 - **"Changed since test"** means the test targets another revision than the asset's current one, or the asset was modified after the test was created. It does not mean the test would now fail.
 - **The scan of runs has a limit.** Runs are read newest first, up to the 3,000 newest score executions. When the limit is reached, the card says so (*Latest runs found for 40 of 52 tests, from the 3,000 newest score executions (the scan limit).*), and a warning above the results explains that tests showing **No run in scan** may have a run further back. If the score executions could not be read, a warning says so; coverage itself is not affected.
 
-**Show the N covered but failing or changed** in the card (or the **Coverage** filter below) narrows the table to the assets at risk; **Show all assets** goes back.
+**Show the N covered but failing or changed** in the card (or the **At risk** chip below) narrows the table to the assets at risk; **Show all assets** goes back.
 
-**Detail Table:**
+**All Assets:**
 
-The table lists every asset with columns for Name, Type, Coverage status, number of Tests, Test health (with a **Changed since tests** marker), Created By, Modified date, and links.
+The table lists every asset with its Name, Type, Coverage status, number of Tests, Test health (with a **Changed since tests** marker) and Modified date; **Created by** can be shown from any column's **⋮** menu.
 
+- **Chips** — **All**, **Covered**, **No tests** and **At risk** (covered, but failing or changed since tests), each with its count. When the tests could not be read, only **All** is offered.
 - **Search** — Filter by name or author; the table updates shortly after you stop typing.
-- **Type filter** — Show only a specific asset type.
-- **Coverage filter** — Show All, Covered only, Uncovered only, or **Covered, but failing or changed since tests**.
+- **Type** — **Filter by type** in the **Type** column's **⋮** menu shows one asset type; the filter shows as a tag beside the chips.
 - Click a column header (or Tab to it and press **Enter**) to sort.
 - The table is paginated; expanded rows stay expanded when you page away and back, and **Export CSV** always includes every filtered row.
 
 **Expanding a Row:**
 
-Click the chevron on any covered asset to expand it and see its individual test scenarios — the name, type, **Last run** (the recorded state, such as *Completed* or *Failed*, with its date, or *No run recorded* / *No run in the 3,000 newest runs*), **Changed since test** (e.g. *Targets revision 1a2b3c4d; the asset is now at 5e6f7a8b*, or *Asset modified …, after this test was created …*; *None shown in the metadata* otherwise), and description.
+Click a covered asset's row (it has a chevron) to expand it and see its individual test scenarios — the name, type, **Last run** (the recorded state, such as *Completed* or *Failed*, with its date, or *No run recorded* / *No run in the 3,000 newest runs*), **Changed since test** (e.g. *Targets revision 1a2b3c4d; the asset is now at 5e6f7a8b*, or *Asset modified …, after this test was created …*; *None shown in the metadata* otherwise), and description.
 
-**Deep Links:**
+**Links:**
 
-Each asset row has a link icon that opens the asset in SAS Intelligent Decisioning. Decision assets also have a flow icon that opens the in-app flow viewer, and — when the decision is published to a module MAS has — a **Score** icon that opens that module in this app (see [Scoring a Published Decision](#scoring-a-published-decision)). Segmentation trees have an icon that opens them in the [Segmentation Tree Explorer](#14-segmentation-tree-explorer).
+The **⋮** at the end of each row opens the asset in SAS Intelligent Decisioning (in a new window). For a decision it also offers **View flow diagram** and — when the decision is published to a module MAS has — **Score in MAS module …**, which opens that module in this app (see [Scoring a Published Decision](#scoring-a-published-decision)). A segmentation tree offers **Open in Segmentation Tree Explorer** (see [Segmentation Tree Explorer](#14-segmentation-tree-explorer)).
 
 ### Exporting
 
@@ -1104,9 +1118,11 @@ The page reads the destinations and the complete list of deployed items. A progr
 
 The table lists every completed publish, deduplicated to the latest version of each item per destination, with the name, kind (model or decision), destination, code type, who published it and when.
 
-- **Search** filters by name; **Kind**, **Destination** and **Code Type** narrow the list. Any filter returns you to page 1, and **Showing X of Y** always counts the whole filtered list.
+- **Search** filters by name or code type. The chips **All**, **Decision**, **Model** and **Other** filter by kind, with counts.
+- **Destination** and **Code type** are filtered from those columns' **⋮** menus (**Filter by destination**, **Filter by code type**); each choice shows how many rows it would leave, and a filter in use shows as a tag beside the chips. Any filter returns you to page 1.
+- Every column sorts; the newest publish comes first.
 - The table is paginated (25 rows per page) with **Previous** / **Page X of Y** / **Next**.
-- A deployed **model** links to its Module Details page in this app; a deployed **decision** links to the in-app flow viewer, so you can go from "it is deployed" to "what does it do" in one click.
+- **Click a row** to open it: an item in a MAS destination opens its Module Details page in this app, and a decision elsewhere opens the in-app flow viewer. The row's **⋮** also offers **View flow diagram** and opening the item in SAS Intelligent Decisioning or SAS Model Manager (in a new window).
 - **Refresh** in the page header re-reads everything; the data is otherwise cached for the session and cleared when you switch connections. While it reloads, the figures and the table — with its search, filters and page — stay on screen, and the text beside the button reads **Refreshing…**, then **Data as of 14:05** (the time the data was loaded).
 
 ---
@@ -1137,10 +1153,11 @@ This panel auto-refreshes every 5 seconds.
 
 **History Table** lists every finished job, with:
 
+- State chips: **All**, **Completed**, **Failed**, **Canceled**, **Timed Out**. They carry no counts: the history is read a page at a time from the server, and the KPI cards above cover only the chosen period.
 - A debounced search box that filters on the server by job name.
-- State filter chips: **All**, **Completed**, **Failed**, **Canceled**, **Timed Out**.
-- 50 jobs per page, with **Previous** / **Next** buttons. The table walks as deep as the Job Execution API allows; the envelope `count` field is intentionally ignored because it can underreport on a busy tenant.
-- Hover affordance on each row (the job name turns blue and underlined, a right-edge chevron slides in). Click anywhere on a row to open its details.
+- 50 jobs per page, with **Previous** / **Next** buttons and *Showing 1–50+* beside the chips. The table walks as deep as the Job Execution API allows; the envelope `count` field is intentionally ignored because it can underreport on a busy tenant.
+- The server returns the newest jobs first, so the columns don't sort, but any of them can be hidden from its **⋮** menu.
+- Hovering a row underlines the job name. Click anywhere on a row to open its details.
 
 When you're on page 1 with no filter or search, the history table also auto-refreshes every 30 seconds. As soon as you apply a filter or page deeper, that auto-refresh pauses so the rug isn't pulled out from under you.
 
@@ -1408,7 +1425,7 @@ Models and decisions published to a container destination run in **SAS Container
 3. Optionally give it a **Name** for the list.
 4. Click **Connect**. The app reads the endpoint's signature from `{score URL}/apiMeta/api` and saves the endpoint only if it answers.
 
-Saved endpoints are kept **in this browser or desktop install only**: they are not stored in SAS Viya and do not follow you to another machine. **Remove** deletes an endpoint from the list; the container is not touched.
+Saved endpoints are kept **in this browser or desktop install only**: they are not stored in SAS Viya and do not follow you to another machine. Click a saved endpoint to open it. The chips filter by runtime and the **Mode** column's **⋮** menu by mode; a search box appears once the list is longer than eight. **Remove from the list**, in the row's **⋮**, deletes an endpoint from the list; the container is not touched.
 
 **Which endpoints can be reached:** SCR sends no CORS headers, so a browser only lets a page call an endpoint on its own host.
 

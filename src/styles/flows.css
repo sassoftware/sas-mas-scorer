@@ -6,83 +6,7 @@
    and dialogs come from the shared components (components.css); this file
    only styles what is specific to the flows feature. */
 
-/* ─── Flow List ─── */
-
-/* The page gutter comes from .sas-layout__content; feature roots add none. */
-.flow-list__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
-}
-
-.flow-list__title {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--sas-gray-900);
-  margin: 0;
-}
-
-.flow-list__count {
-  font-size: var(--font-size-sm);
-  color: var(--sas-text-muted);
-}
-
-/* <SearchInput> wrapper; the field itself is a .sas-input */
-.flow-list__search {
-  margin-bottom: var(--space-4);
-}
-
-.flow-list__alert {
-  margin-bottom: var(--space-4);
-}
-
-/* A scroll container still clips to its own radius, so the corners survive.
-   The table inside is the shared .sas-table (header treatment, sort header,
-   row hover and the --clickable focus tint all come from components.css). */
-.flow-list__table-wrap {
-  border: 1px solid var(--sas-gray-200);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  overflow-x: auto;
-}
-
-.flow-list__col--modified {
-  width: 144px;
-}
-
-.flow-list__col--modified-by {
-  width: 112px;
-}
-
-.sas-table__td.flow-list__col--desc,
-.sas-table__td.flow-list__col--modified-by {
-  color: var(--sas-text-muted);
-}
-
-.sas-table__td.flow-list__col--modified {
-  color: var(--sas-text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.flow-list__row-link {
-  display: block;
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-800);
-  text-decoration: none;
-}
-
-.flow-list__row-link:hover {
-  color: var(--sas-blue-primary);
-  text-decoration: none;
-}
-
-.flow-list__empty {
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  color: var(--sas-text-muted);
-  font-size: var(--font-size-base);
-}
+/* The flow list is the shared list table (listTable.css). */
 
 /* ─── Flow Detail ─── */
 
@@ -565,7 +489,6 @@
 
 /* The shared row rule draws a line under EVERY row; at the end of a table
    that doubles the list wrapper's border or floats under the last section. */
-.flow-list__table-wrap .sas-table__row:last-child,
 .flow-header__vars .sas-table__row:last-child,
 .flow-side-panel .sas-table__row:last-child {
   border-bottom: none;

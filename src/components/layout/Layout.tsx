@@ -23,6 +23,11 @@ interface LayoutProps {
   activeConnectionName?: string | null;
   recentUIApps?: UIDefinitionSummary[];
   onSelectUIApp?: (id: string) => void;
+  /**
+   * Full-window work view (the UI app builder): no navigation sidebar and no
+   * page padding, so the view can use the whole window under the header.
+   */
+  focus?: boolean;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -36,6 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({
   activeConnectionName,
   recentUIApps,
   onSelectUIApp,
+  focus = false,
 }) => {
   // Below the layout breakpoint (layout.css) the sidebar is an off-canvas
   // drawer behind the header's toggle; above it these have no visible effect.
@@ -121,17 +127,17 @@ export const Layout: React.FC<LayoutProps> = ({
   );
 
   return (
-    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}`}>
+    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}${focus ? ' sas-layout--focus' : ''}`}>
       <Header
         onOpenSettings={onOpenSettings}
         activeConnectionName={activeConnectionName}
         navOpen={navOpen}
-        onToggleNav={toggleNav}
+        onToggleNav={focus ? undefined : toggleNav}
         navId={sidebarId}
         navToggleRef={navToggleRef}
       />
       <div className="sas-layout__container">
-        <Sidebar
+        {!focus && <Sidebar
           ref={sidebarRef}
           id={sidebarId}
           open={navOpen}
@@ -144,8 +150,8 @@ export const Layout: React.FC<LayoutProps> = ({
           onSelectModule={handleSelectModule}
           recentUIApps={recentUIApps}
           onSelectUIApp={handleSelectUIApp}
-        />
-        {navOpen && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
+        />}
+        {navOpen && !focus && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
         <main className="sas-layout__main">
           <div className="sas-layout__content">{children}</div>
         </main>
@@ -156,6 +162,8 @@ export const Layout: React.FC<LayoutProps> = ({
 
 interface PageHeaderProps {
   title: string;
+  /** A muted count beside the title ("214 decisions"). */
+  count?: string;
   subtitle?: string;
   breadcrumbs?: { label: string; onClick?: () => void }[];
   actions?: React.ReactNode;
@@ -163,6 +171,7 @@ interface PageHeaderProps {
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
   title,
+  count,
   subtitle,
   breadcrumbs,
   actions,
@@ -195,7 +204,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       )}
       <div className="sas-page-header__main">
         <div className="sas-page-header__title-group">
-          <h1 className="sas-page-header__title">{title}</h1>
+          <h1 className="sas-page-header__title">
+            {title}
+            {count && <span className="sas-page-header__count">{count}</span>}
+          </h1>
           {subtitle && <p className="sas-page-header__subtitle">{subtitle}</p>}
         </div>
         {actions && <div className="sas-page-header__actions">{actions}</div>}

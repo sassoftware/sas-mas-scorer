@@ -70,7 +70,9 @@ export type WidgetType =
   | 'gauge'
   | 'badge'
   | 'hidden'
-  | 'markdown';
+  | 'markdown'
+  /** An output shown as a table: a decision DataGrid, or an array as one column (3.1). */
+  | 'table';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older

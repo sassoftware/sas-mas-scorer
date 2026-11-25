@@ -131,7 +131,7 @@ export const JobMonitoringPage: React.FC<JobMonitoringPageProps> = ({ onOpenJob 
               key={value}
               type="button"
               aria-pressed={statsWindow === value}
-              className={`job-monitoring__chip${statsWindow === value ? ' job-monitoring__chip--active' : ''}`}
+              className={`list-chip${statsWindow === value ? ' list-chip--on' : ''}`}
               onClick={() => setStatsWindow(value)}
             >
               {STATS_WINDOW_LABELS[value].chip}

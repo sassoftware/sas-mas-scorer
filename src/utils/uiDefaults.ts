@@ -18,10 +18,15 @@ function generateId(): string {
 /**
  * Map a step parameter type to its default widget.
  */
+/** A decision DataGrid parameter (MAS's type "datagrid", not in StepParameterType). */
+export const isDatagridType = (type: string): boolean => type.toLowerCase() === 'datagrid';
+
 export function getDefaultWidget(type: StepParameterType, direction: 'input' | 'output'): WidgetType {
   if (direction === 'output') {
     if (type === 'decimal') return 'gauge';
     if (type === 'string') return 'badge';
+    // MAS reports a decision DataGrid as type "datagrid", outside the declared union.
+    if (isDatagridType(type)) return 'table';
     return 'readonly';
   }
 
@@ -54,6 +59,12 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
     }
     if (type === 'string') {
       return ['readonly', 'badge', 'hidden'];
+    }
+    if (isDatagridType(type)) {
+      return ['table', 'readonly', 'hidden'];
+    }
+    if (type.endsWith('Array')) {
+      return ['readonly', 'table', 'hidden'];
     }
     return ['readonly', 'hidden'];
   }

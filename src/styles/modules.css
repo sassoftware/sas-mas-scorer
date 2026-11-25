@@ -8,63 +8,6 @@
   gap: var(--space-4);
 }
 
-.module-list__toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--sas-gray-200);
-}
-
-.module-list__type-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
-}
-
-.module-list__type-filter-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-700);
-  white-space: nowrap;
-}
-
-.module-list__type-filter-select {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  background-color: var(--sas-white);
-  color: var(--sas-gray-900);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-}
-
-.module-list__type-filter-select:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: var(--focus-ring);
-}
-
-/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
-.module-list__search {
-  flex: 1;
-  min-width: 220px;
-  max-width: 400px;
-}
-
-.module-list__search-info {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  white-space: nowrap;
-}
-
-/* Sortable column headers are the shared .sas-table__sort-header and paging
-   is the shared <Pagination>; both live in components.css. */
-
 /* Login Prompt */
 .module-list__login-prompt {
   display: flex;
@@ -107,33 +50,23 @@
   line-height: 1.5;
 }
 
-/* First column of the module table. It sits inside DataTable's
-   .sas-table__row-button, so it is a <span> rather than a block <div>. */
-.module-list__name-cell {
-  display: flex;
-  flex-direction: column;
-}
-
-.module-list__name-cell-name {
-  font-weight: var(--font-weight-semibold);
-  color: var(--sas-gray-900);
-}
-
-.module-list__name-cell-id {
-  font-size: var(--font-size-xs);
-  color: var(--sas-text-muted);
-  font-family: var(--font-family-mono);
-}
-
-.module-list__date {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
-
-.module-list__actions {
-  display: flex;
+.module-list__name-cell-line {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* "2 apps": saved UI apps built on the module. */
+.module-list__apps {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--sas-blue-dark);
+  background: var(--sas-blue-light);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
 }
 
 /* Module Details */

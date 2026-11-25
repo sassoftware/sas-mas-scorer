@@ -38,6 +38,12 @@ interface Props {
   onChange: (field: UIField) => void;
   onMoveToSection: (targetSectionId: string) => void;
   onClose: () => void;
+  /**
+   * 'inspector': the canvas-first builder's right panel, which shows the
+   * widget choice and the placement itself, so this leaves out its own
+   * header, the Widget Type select and the Placement section.
+   */
+  variant?: 'panel' | 'inspector';
 }
 
 export const FieldConfigPanel: React.FC<Props> = ({
@@ -50,7 +56,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
   onChange,
   onMoveToSection,
   onClose,
+  variant = 'panel',
 }) => {
+  const inInspector = variant === 'inspector';
   const uid = useId();
   const fid = (name: string) => `${uid}-${name}`;
 
@@ -195,13 +203,15 @@ export const FieldConfigPanel: React.FC<Props> = ({
   const showValueMappings = field.direction === 'output' && (field.widget === 'badge' || field.widget === 'readonly');
 
   return (
-    <div className="ui-builder__config-panel">
-      <div className="ui-builder__config-header">
-        <h4>Configure: {field.label}</h4>
-        <IconButton size="medium" onClick={onClose} title="Close" aria-label="Close configuration panel">
-          <CloseIcon />
-        </IconButton>
-      </div>
+    <div className={inInspector ? 'ui-builder__config-panel ui-builder__config-panel--inspector' : 'ui-builder__config-panel'}>
+      {!inInspector && (
+        <div className="ui-builder__config-header">
+          <h4>Configure: {field.label}</h4>
+          <IconButton size="medium" onClick={onClose} title="Close" aria-label="Close configuration panel">
+            <CloseIcon />
+          </IconButton>
+        </div>
+      )}
 
       <div className="ui-builder__config-body">
         {field.direction === 'static' ? (
@@ -274,7 +284,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
         )}
 
         {/* === Placement Section === */}
-        {sections.length > 1 && (
+        {!inInspector && sections.length > 1 && (
           <>
             <div className="ui-builder__config-section-title">Placement</div>
 
@@ -321,7 +331,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
           />
         </div>
 
-        {field.direction !== 'static' && (
+        {!inInspector && field.direction !== 'static' && (
           <div className="ui-builder__config-field">
             <label htmlFor={fid('widget')}>Widget Type</label>
             <select

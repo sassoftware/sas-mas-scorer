@@ -2,6 +2,32 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
+## [3.1.0] - Unreleased
+
+The start of the redesign. The UI app builder becomes canvas first, building the app on the page as its users will see it and using the whole window, and every list in the app shares one layout: quick-filter chips, search, and a ⋮ menu in each column header to sort, filter and hide columns.
+
+### Changed
+
+- **UI app builder, canvas first** — the module's inputs and results on the left (marked IN or OUT, with a **+** for those not on the page yet), the app drawn with its real widgets in the middle, a widget bar under it, and an inspector on the right. Select a field on the canvas to configure it: **Step 1 · Choose a widget** shows the widgets its type can use, **Step 2 · Fine-tune** holds the settings. Click the app title for the app settings (name, description, columns, results position, button label) and a section title for that section
+- **Drag and drop** — drag a field from the list onto the page, drag fields to reorder them or move them between sections, drag a widget onto a field to change it, or onto empty canvas to add a field with it. Every drag has a click or keyboard equivalent; **Delete** removes the selected field and **Undo** brings it back
+- **New apps start empty**, with **Use template** to put every input and result on the page at once (what a new app used to start with)
+- **The builder uses the whole window** — the navigation sidebar is put away while you build, and the breadcrumb and action bar sit above the canvas instead of in a page header, so the field list, canvas and inspector get the height and width
+- **Action bar** — save status, **Undo**, **Edit** / **Preview**, **More** (Share, Replace or re-sync module), **Save & Run** and **Save**
+- **Signature banner** — only fields whose parameter left the signature are flagged; parameters without a field are listed on the left instead
+- Saved apps open unchanged: the app format is the same
+- **One list layout** for All Modules, View Flows, Segmentation Trees, the Job Monitoring history, Publishing Overview's deployed items, Test Coverage's assets and the saved SCR endpoints: the count beside the title, quick-filter chips with counts, search, and the table in a card. Each column header sorts and has a **⋮** menu: sort ascending or descending, **Filter by …** for columns that offer it, **Hide column** and **Show hidden columns** (remembered on that computer). A filter in use shows as a tag beside the chips. The whole row opens the item; other actions moved from Actions or Links columns into a **⋮** at the row's end
+- **All Modules** — type chips (**All**, **Decision**, **Data**, **Model**) with counts, instead of the Type dropdown, which did not offer Data. The name column shows the description (or the ID) and a tag with the number of saved UI apps on the module. The **Actions** column (**View**) is gone
+- **View Flows** — chips by MAS module (**Published**, **Not published**, **Module removed**), a **Modified by** filter in that column's menu, and every column sorts (name only before)
+- **Segmentation Trees** — chips **Created by me** (the signed-in user, read from SAS Viya) and **Changed in the last 30 days**, a **Modified by** filter, and every column sorts
+- **Publishing Overview** — the Kind, Destination and Code Type dropdowns became kind chips (**Decision**, **Model**, **Other**) and **Destination** / **Code type** filters in those columns' menus; every column sorts, newest first. A row opens the module's page (MAS destinations) or the flow
+- **Test Coverage** — the Coverage dropdown became chips (**Covered**, **No tests**, **At risk**) with counts, the Type dropdown a filter in the Type column's menu; a covered asset's whole row expands it, and the link icons moved into the row's ⋮
+- **Job Monitoring** — the history's state chips and search share the list layout; the chevron column is gone (the row opens the job)
+- **SCR Endpoints** — the saved endpoints list gets runtime chips, a Mode filter, and **Remove** in the row's ⋮
+
+### Added
+
+- **Table widget** for outputs — a decision DataGrid as a table (the default for new DataGrid outputs, which used to show as unreadable text), or an array as one column
+
 ## [3.0.0] - 2026-11-19
 
 Run SCR images on your own computer: the desktop app pulls a SAS Container Runtime image with Podman or Docker, runs it, and scores it like any other SCR endpoint. A preview, in the desktop app only. The web app and the Job Execution / Visual Analytics build get the new name, the header change and the paste fix below.

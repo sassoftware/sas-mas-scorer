@@ -13,7 +13,7 @@ import { Button } from './components/common/Button';
 import { EmptyState } from './components/common/EmptyState';
 import { CopyFailureDetails } from './components/common/Alert';
 import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
-import { useModules, useSteps, useSubmodules } from './hooks';
+import { useModules, useModuleTypeCounts, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
 import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
@@ -174,6 +174,10 @@ function App() {
 
   // UI Apps state
   const [recentUIApps, setRecentUIApps] = useState<UIDefinitionSummary[]>([]);
+  // Saved MAS UI apps per module (lowercased id), for the module list's app tags.
+  const [appCountByModule, setAppCountByModule] = useState<Record<string, number>>({});
+  // Bumped by the module list's Refresh, so its type counts are read again.
+  const [moduleCountsKey, setModuleCountsKey] = useState(0);
   const [activeUIDefinition, setActiveUIDefinition] = useState<UIDefinition | null>(null);
   const [uiLoading, setUILoading] = useState(false);
 
@@ -278,6 +282,15 @@ function App() {
     typeFilter: toModuleTypeFilter(moduleListParams.type),
     page: parsePageParam(moduleListParams.page) - 1,
   });
+  const moduleTypeCounts = useModuleTypeCounts(
+    escapedModuleSearch ? `contains(name,'${escapedModuleSearch}')` : '',
+    isAuthenticated && moduleListShownRef.current,
+    moduleCountsKey
+  );
+  const refreshModuleList = useCallback(() => {
+    setModuleCountsKey((k) => k + 1);
+    return refreshModules();
+  }, [refreshModules]);
 
   // Write a change to the module list's query. Replaces the history entry, so
   // Back leaves the list instead of stepping through its filters.
@@ -301,6 +314,13 @@ function App() {
     try {
       const list = await listUIDefinitions();
       setRecentUIApps(list.slice(0, 5));
+      const counts: Record<string, number> = {};
+      for (const app of list) {
+        if (app.scrUrl) continue;
+        const key = app.moduleId.toLowerCase();
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      setAppCountByModule(counts);
     } catch {
       // Silent — not critical
     }
@@ -800,7 +820,9 @@ function App() {
           loading={loadingModules}
           error={modulesError}
           onSelectModule={handleSelectModule}
-          onRefresh={refreshModules}
+          onRefresh={refreshModuleList}
+          typeCounts={moduleTypeCounts}
+          appCounts={appCountByModule}
           totalCount={totalCount}
           filteredCount={filteredCount}
           currentPage={currentPage}
@@ -952,6 +974,7 @@ function App() {
         activeConnectionName={activeConnectionName}
         recentUIApps={recentUIApps}
         onSelectUIApp={(id) => runWithLeaveGuard(() => handleRunUIApp(id))}
+        focus={getActiveView() === 'ui-app-new' || getActiveView() === 'ui-app-edit'}
       >
         {renderContent()}
       </Layout>

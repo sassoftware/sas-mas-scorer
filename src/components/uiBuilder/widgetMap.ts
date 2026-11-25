@@ -16,4 +16,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   badge: 'Badge',
   hidden: 'Hidden',
   markdown: 'Markdown Text',
+  table: 'Table',
 };

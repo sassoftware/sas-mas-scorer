@@ -271,86 +271,21 @@
   color: var(--sas-text-muted);
 }
 
-/* ─── Detail Table ─── */
+/* ─── All assets: the shared list table (listTable.css) ─── */
 
-/* The filter block is passed as CardHeader actions; .sas-card__header now
-   wraps on its own, so this feature adds nothing there. */
-.coverage-detail__filters {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
+.coverage-assets {
+  margin-top: var(--space-6);
 }
 
-/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
-.coverage-detail__search {
-  min-width: 200px;
-}
-
-.coverage-detail__filter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.coverage-detail__filter-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-700);
-  white-space: nowrap;
-}
-
-.coverage-detail__select {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  background: var(--sas-white);
+.coverage-assets__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
-  cursor: pointer;
 }
 
-.coverage-detail__select:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: var(--focus-ring);
-}
-
-.coverage-detail__empty {
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  color: var(--sas-text-muted);
-}
-
-/* Paging is the shared <Pagination> and sortable headers are the shared
-   .sas-table__sort-header; both live in components.css, including their
-   own spacing. */
-
-/* ─── Deep Links ─── */
-
-/* The links themselves are .sas-deep-link (components.css). */
-.coverage-detail__links {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* ─── Expandable Rows ─── */
-
-/* Keyboard focus on the row's toggle or links highlights the row, the way
-   DataTable's clickable rows do. Scoped under the table modifier so it
-   outranks the --striped even-row tint. */
-.sas-table--hoverable .coverage-row:focus-within {
-  background-color: var(--sas-blue-light);
-}
-
-.coverage-row--expandable {
-  cursor: pointer;
-}
-
-/* Hover uses the shared .sas-table--hoverable tint; the chevron reinforces
-   that the row is clickable. */
-.coverage-row--expandable:hover .coverage-row__chevron {
+.coverage-row:hover .coverage-row__chevron,
+.coverage-row:focus-within .coverage-row__chevron {
   color: var(--sas-blue-primary);
 }
 
@@ -359,7 +294,7 @@
 }
 
 .coverage-row__name {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
 }
@@ -373,20 +308,15 @@
   color: var(--sas-gray-500);
 }
 
+.coverage-row__chevron--none {
+  width: 14px;
+}
+
 .coverage-row__chevron--open {
   transform: rotate(90deg);
 }
 
 /* ─── Expanded Scenario Details ─── */
-
-.coverage-expand-row td {
-  padding: 0 !important;
-}
-
-.coverage-expand-cell {
-  background: var(--sas-gray-50);
-  border-top: none;
-}
 
 .coverage-scenarios {
   padding: var(--space-3) var(--space-4) var(--space-4) 40px;

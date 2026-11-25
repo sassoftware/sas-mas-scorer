@@ -15,6 +15,7 @@ import { ReadonlyWidget } from './widgets/ReadonlyWidget';
 import { GaugeWidget } from './widgets/GaugeWidget';
 import { BadgeWidget } from './widgets/BadgeWidget';
 import { MarkdownWidget } from './widgets/MarkdownWidget';
+import { TableWidget } from './widgets/TableWidget';
 import { InputWidgetProps } from './widgets/types';
 
 interface Props {
@@ -60,6 +61,8 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return <BadgeWidget field={field} value={value} />;
     case 'markdown':
       return <MarkdownWidget content={String(field.defaultValue ?? '')} />;
+    case 'table':
+      return <TableWidget field={field} value={value} labelId={rest.labelId} />;
     case 'hidden':
       return null;
     default:
