@@ -853,14 +853,16 @@
 /* Stat Card — the KPI tile used by Publishing, Job Monitoring and Batch
    Results. Compose it with the card: `class="sas-card sas-stat-card"` (or
    <Card padding="none" className="sas-stat-card">). A feature adds only its
-   own accent modifier, e.g. `.publishing__stat-card--models { border-left-color: … }`,
-   and its own grid minimum. */
+   own accent modifier, e.g. `.publishing__stat-card--models { --sas-stat-accent: … }`,
+   and its own grid minimum. The accent is a short bar beside the value
+   (Figma 11/13); the label says what the figure is, so the colour only
+   reinforces it. */
 .sas-stat-card {
+  --sas-stat-accent: var(--sas-gray-500);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5);
-  border-left: 4px solid var(--sas-gray-400);
 }
 
 /* Restate the padding at 0,2,0 so it also wins against
@@ -871,11 +873,30 @@
 }
 
 .sas-stat-value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--font-size-3xl);
   line-height: 1.1; /* display numeral; deliberately tighter than --line-height-tight */
   font-weight: var(--font-weight-bold);
   color: var(--sas-gray-900);
   font-variant-numeric: tabular-nums;
+}
+
+.sas-stat-value::before {
+  content: '';
+  flex: 0 0 4px;
+  align-self: stretch;
+  min-height: 1.1em;
+  border-radius: 2px;
+  background: var(--sas-stat-accent);
+}
+
+/* Forced colours drop backgrounds: keep the bar as a border. */
+@media (forced-colors: active) {
+  .sas-stat-value::before {
+    border-left: 4px solid CanvasText;
+  }
 }
 
 .sas-stat-label {

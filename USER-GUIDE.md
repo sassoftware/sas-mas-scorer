@@ -113,7 +113,7 @@ An error message caused by a failed SAS Viya request has a **Copy details** butt
 
 ## 3. Navigating the Application
 
-The left sidebar is the primary navigation. It contains the main pages and a contextual section that appears when you have a module selected.
+The left sidebar is the primary navigation. It contains the main pages and, once you have opened one, the last module and the last UI app you worked with.
 
 ### Main Pages
 
@@ -130,12 +130,12 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 | **Job Monitoring** | Track running and historical Job Execution jobs, view live logs and code, and rerun finished jobs |
 | **Schema → Code** | Generate a Python `execute()` function from a JSON/XML sample and save it to SAS Intelligent Decisioning |
 
-### Current Module Section
+### Last Module and Last UI App
 
-The **Current Module** box shows the module you are working with: its name and, when saved UI apps use it, how many (*3 apps*). With no module open it says **No module selected**. It offers two links:
+Under the pages, the sidebar keeps the module and the UI app you last worked with, so you can return to them from any page. Each appears only after you have opened one in this session: a fresh start shows the pages alone.
 
-- **Details** — Opens the module's details page: metadata, steps, UI apps, submodules, and source links.
-- **Execute Score** — Returns to the scoring panel for the step you last scored in this module. If you have not scored a step of it yet, it opens the module with focus on its **Steps** list so you can pick one.
+- **Current Module** / **Last Module** — the module open now (**Current Module**), or the last one you opened (**Last Module**), with the number of saved UI apps that use it (*3 apps*). **Details** opens the module's details page: metadata, steps, UI apps, submodules, and source links. **Execute Score** returns to the scoring panel for the step you last scored in this module; if you have not scored a step of it yet, it opens the module with focus on its **Steps** list so you can pick one.
+- **Current UI App** / **Last UI App** — the saved UI app you are running or editing, or the last one you ran or edited, with **Run** and **Edit**. An app opened from a shared link that is not saved in your library is not kept.
 
 ### Working With Lists
 
@@ -155,13 +155,9 @@ The search, filters, sort order and page of the **All Modules**, **View Flows** 
 
 Decision flows, sub-decisions, rule sets, REST API and treatment definitions, segmentation trees and module details are kept for the session once loaded, so going back to one opens it at once while the app checks for changes in the background. If a newer version was saved in SAS Intelligent Decisioning in the meantime, it replaces the one on screen. Logging out, switching connection or importing rules clears the affected copies.
 
-### Recent Items
-
-The sidebar also shows your most recently accessed **UI Apps** and **Modules** (up to 5 each) for quick navigation.
-
 ### Collapsing the Sidebar
 
-The sidebar starts as a narrow rail of icons, giving the page the extra width; hover an icon to see its name. The double-arrow button at the bottom (next to the version number when the sidebar is open) expands it to show the labels and folds it back; hovering or focusing the button shows **Expand** or **Collapse**. Once you have chosen, the choice is remembered on that computer, so the sidebar opens the way you left it. The recent-items lists are hidden while the sidebar is collapsed.
+The sidebar starts as a narrow rail of icons, giving the page the extra width; hover an icon to see its name. The double-arrow button at the bottom (next to the version number when the sidebar is open) expands it to show the labels and folds it back; hovering or focusing the button shows **Expand** or **Collapse**. Once you have chosen, the choice is remembered on that computer, so the sidebar opens the way you left it. While it is collapsed, the last module's and last UI app's links show as icons.
 
 ### Narrow Windows and Embeds
 
@@ -778,7 +774,7 @@ Output fields have additional options:
 - **Save** saves the app and keeps you in the builder (*Saved. You can keep editing.*); **Save & Run** saves it and opens it in the runner. The status next to the buttons reads **Unsaved changes** whenever the app differs from what was last saved.
 - **Undo** (or **Ctrl+Z**, **⌘Z** on a Mac) reverses edits one at a time, newest first — adding, removing, moving and remapping fields and sections among them. While you type in a field, Ctrl+Z undoes the typing in that field instead.
 - **Preview** shows the app as it is now, unsaved changes included, and runs the **published module** in MAS when you execute it. A **Preview run** note says so; running a preview does not save the app. **Edit** returns to the canvas.
-- **Leaving with unsaved changes** — the breadcrumb, the sidebar (pages and recent items) and the browser's **Back** / **Forward** buttons ask **Leave without saving?** first: **Stay**, **Discard Changes**, or **Save and Leave**. In the browser and Job Execution versions, reloading or closing the tab shows the browser's own leave prompt. **The desktop app does not prompt when its window is closed**: unsaved changes are then lost, so save before closing it.
+- **Leaving with unsaved changes** — the breadcrumb, the sidebar (pages, last module and last UI app) and the browser's **Back** / **Forward** buttons ask **Leave without saving?** first: **Stay**, **Discard Changes**, or **Save and Leave**. In the browser and Job Execution versions, reloading or closing the tab shows the browser's own leave prompt. **The desktop app does not prompt when its window is closed**: unsaved changes are then lost, so save before closing it.
 
 ### When the Module Changes
 

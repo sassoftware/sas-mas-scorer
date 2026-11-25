@@ -585,53 +585,33 @@ export const CoverageAnalysis: React.FC = () => {
             </Alert>
           )}
 
-          {/* Summary Dashboard */}
-          <div className="coverage-dashboard">
-            {/* Overall coverage gauge */}
-            <Card className="coverage-gauge-card">
-              <CardBody>
-                <div className="coverage-gauge">
-                  <svg viewBox="0 0 120 120" className="coverage-gauge__ring">
-                    <circle cx="60" cy="60" r="52" className="coverage-gauge__track" />
-                    <circle
-                      cx="60" cy="60" r="52"
-                      className="coverage-gauge__fill"
-                      style={{
-                        strokeDasharray: `${2 * Math.PI * 52}`,
-                        strokeDashoffset: `${2 * Math.PI * 52 * (1 - (noTests ? 0 : result.stats.overall.coveragePercentage) / 100)}`,
-                      }}
-                    />
-                  </svg>
-                  <div className="coverage-gauge__value">
-                    {noTests ? 'n/a' : `${result.stats.overall.coveragePercentage}%`}
-                  </div>
-                  <div className="coverage-gauge__label">
-                    {noTests ? 'Overall Coverage (tests not collected)' : 'Overall Coverage'}
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-
-            {/* Stats cards — the shared .sas-stat-card tile */}
-            <div className="coverage-stats-grid">
-              <div className="sas-card sas-stat-card">
-                <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
-                <div className="sas-stat-label">Total Assets</div>
+          {/* Summary: five stat tiles in one row (Figma 11/13) */}
+          <div className="coverage-stats-grid">
+            <div className="sas-card sas-stat-card coverage-stat--overall">
+              <div className="sas-stat-value">
+                {noTests ? 'n/a' : `${result.stats.overall.coveragePercentage}%`}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--success">
-                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithTests}</div>
-                <div className="sas-stat-label">With Tests</div>
+              <div className="sas-stat-label">
+                {noTests ? 'Overall coverage (tests not collected)' : 'Overall coverage'}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--error">
-                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithoutTests}</div>
-                <div className="sas-stat-label">Without Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card">
+              <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
+              <div className="sas-stat-label">Total Assets</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--success">
+              <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithTests}</div>
+              <div className="sas-stat-label">With Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--error">
+              <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithoutTests}</div>
+              <div className="sas-stat-label">Without Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--date">
+              <div className="sas-stat-value">
+                {new Date(result.collectionDate).toLocaleDateString()}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--date">
-                <div className="sas-stat-value">
-                  {new Date(result.collectionDate).toLocaleDateString()}
-                </div>
-                <div className="sas-stat-label">Collected</div>
-              </div>
+              <div className="sas-stat-label">Collected</div>
             </div>
           </div>
 
@@ -667,10 +647,9 @@ export const CoverageAnalysis: React.FC = () => {
                       hint={health.runScan === 'failed' ? 'the executions could not be read' : 'a run may exist further back'} />
                   )}
                   <li className="coverage-health__count coverage-health__count--changed">
-                    {CHANGED_ICON}
                     <span className="coverage-health__value">{health.changedSinceTests}</span>
                     <span className="coverage-health__label">
-                      Changed since tests
+                      <span className="coverage-health__name">{CHANGED_ICON}Changed since tests</span>
                       <span className="coverage-health__hint">every test predates the asset's current state</span>
                     </span>
                   </li>
@@ -921,10 +900,9 @@ const HealthCount: React.FC<{ health: AssetTestHealth; count: number; runScan: R
   health, count, runScan, hint,
 }) => (
   <li className={`coverage-health__count coverage-health__count--${health}`}>
-    {HEALTH_ICON[health]}
     <span className="coverage-health__value">{count}</span>
     <span className="coverage-health__label">
-      {testHealthLabel(health, runScan)}
+      <span className="coverage-health__name">{HEALTH_ICON[health]}{testHealthLabel(health, runScan)}</span>
       <span className="coverage-health__hint">{hint}</span>
     </span>
   </li>

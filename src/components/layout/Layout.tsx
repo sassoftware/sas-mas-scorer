@@ -16,15 +16,16 @@ interface LayoutProps {
   children: React.ReactNode;
   activeView: ViewType;
   onNavigate: (view: ViewType) => void;
-  selectedModule?: Module | null;
-  /** Saved UI apps on the selected module (the "2 apps" tag). */
-  selectedModuleApps?: number;
-  recentModules?: Module[];
-  onSelectModule?: (module: Module) => void;
+  /** The module open now, or the last one opened; unset until one is opened. */
+  lastModule?: Module | null;
+  /** Saved UI apps on that module (the "2 apps" tag). */
+  lastModuleApps?: number;
   onOpenSettings?: () => void;
   activeConnectionName?: string | null;
-  recentUIApps?: UIDefinitionSummary[];
-  onSelectUIApp?: (id: string) => void;
+  /** The saved UI app last run or edited; unset until one is. */
+  lastUIApp?: UIDefinitionSummary | null;
+  onRunUIApp?: (id: string) => void;
+  onEditUIApp?: (id: string) => void;
   /**
    * Full-window work view (the UI app builder): no navigation sidebar and no
    * page padding, so the view can use the whole window under the header.
@@ -36,14 +37,13 @@ export const Layout: React.FC<LayoutProps> = ({
   children,
   activeView,
   onNavigate,
-  selectedModule,
-  selectedModuleApps = 0,
-  recentModules,
-  onSelectModule,
+  lastModule,
+  lastModuleApps = 0,
   onOpenSettings,
   activeConnectionName,
-  recentUIApps,
-  onSelectUIApp,
+  lastUIApp,
+  onRunUIApp,
+  onEditUIApp,
   focus = false,
 }) => {
   // Below the layout breakpoint (layout.css) the sidebar is an off-canvas
@@ -114,19 +114,19 @@ export const Layout: React.FC<LayoutProps> = ({
     },
     [closeNav, onNavigate]
   );
-  const handleSelectModule = useCallback(
-    (module: Module) => {
-      closeNav();
-      onSelectModule?.(module);
-    },
-    [closeNav, onSelectModule]
-  );
-  const handleSelectUIApp = useCallback(
+  const handleRunUIApp = useCallback(
     (id: string) => {
       closeNav();
-      onSelectUIApp?.(id);
+      onRunUIApp?.(id);
     },
-    [closeNav, onSelectUIApp]
+    [closeNav, onRunUIApp]
+  );
+  const handleEditUIApp = useCallback(
+    (id: string) => {
+      closeNav();
+      onEditUIApp?.(id);
+    },
+    [closeNav, onEditUIApp]
   );
 
   return (
@@ -148,12 +148,11 @@ export const Layout: React.FC<LayoutProps> = ({
           onToggleCollapsed={toggleCollapsed}
           activeView={activeView}
           onNavigate={handleNavigate}
-          selectedModule={selectedModule}
-          selectedModuleApps={selectedModuleApps}
-          recentModules={recentModules}
-          onSelectModule={handleSelectModule}
-          recentUIApps={recentUIApps}
-          onSelectUIApp={handleSelectUIApp}
+          lastModule={lastModule}
+          lastModuleApps={lastModuleApps}
+          lastUIApp={lastUIApp}
+          onRunUIApp={handleRunUIApp}
+          onEditUIApp={handleEditUIApp}
         />}
         {navOpen && !focus && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
         <main className="sas-layout__main">

@@ -50,11 +50,11 @@
   gap: var(--space-4);
 }
 
-.job-monitoring__stat-card--total      { border-left-color: var(--sas-blue-primary); }
-.job-monitoring__stat-card--running    { border-left-color: var(--sas-info); }
-.job-monitoring__stat-card--completed  { border-left-color: var(--sas-success); }
-.job-monitoring__stat-card--failed     { border-left-color: var(--sas-error); }
-.job-monitoring__stat-card--runtime    { border-left-color: var(--sas-blue-primary); }
+.job-monitoring__stat-card--total      { --sas-stat-accent: var(--sas-blue-primary); }
+.job-monitoring__stat-card--running    { --sas-stat-accent: var(--sas-info); }
+.job-monitoring__stat-card--completed  { --sas-stat-accent: var(--sas-success); }
+.job-monitoring__stat-card--failed     { --sas-stat-accent: var(--sas-error); }
+.job-monitoring__stat-card--runtime    { --sas-stat-accent: var(--sas-blue-primary); }
 
 .job-monitoring__stat-sub {
   font-size: var(--font-size-xs);

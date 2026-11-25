@@ -10,13 +10,14 @@ export type ViewType = 'modules' | 'module-details' | 'score' | 'ui-apps' | 'ui-
 interface SidebarProps {
   activeView: ViewType;
   onNavigate: (view: ViewType) => void;
-  selectedModule?: Module | null;
-  /** Saved UI apps on the selected module. */
-  selectedModuleApps?: number;
-  recentModules?: Module[];
-  onSelectModule?: (module: Module) => void;
-  recentUIApps?: UIDefinitionSummary[];
-  onSelectUIApp?: (id: string) => void;
+  /** The module open now, or the last one opened; the section shows only once there is one. */
+  lastModule?: Module | null;
+  /** Saved UI apps on that module. */
+  lastModuleApps?: number;
+  /** The saved UI app last run or edited; the section shows only once there is one. */
+  lastUIApp?: UIDefinitionSummary | null;
+  onRunUIApp?: (id: string) => void;
+  onEditUIApp?: (id: string) => void;
   /** id referenced by the header's nav toggle (aria-controls). */
   id?: string;
   /** Off-canvas state on narrow viewports; ignored above the layout breakpoint. */
@@ -30,12 +31,11 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
   {
     activeView,
     onNavigate,
-    selectedModule,
-    selectedModuleApps = 0,
-    recentModules = [],
-    onSelectModule,
-    recentUIApps = [],
-    onSelectUIApp,
+    lastModule,
+    lastModuleApps = 0,
+    lastUIApp,
+    onRunUIApp,
+    onEditUIApp,
     id,
     open = false,
     collapsed = false,
@@ -44,6 +44,9 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
   ref
 ) {
   const isUIView = activeView.startsWith('ui-app');
+  // The kept module or app is "current" while its own page is open.
+  const onModulePage = activeView === 'module-details' || activeView === 'score';
+  const onUIAppPage = activeView === 'ui-app-run' || activeView === 'ui-app-edit';
   // The collapse button's hover/focus label, until Escape hides it.
   const [tipDismissed, setTipDismissed] = useState(false);
 
@@ -74,7 +77,8 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
     >
       <nav className="sas-sidebar__nav" aria-label="Main">
         <div className="sas-sidebar__section">
-          <h3 className="sas-sidebar__section-title">Navigation</h3>
+          {/* The menu needs no visible caption (Figma 11/13); screen readers keep it. */}
+          <h3 className="sas-sidebar__section-title sr-only">Navigation</h3>
           <ul className="sas-sidebar__menu">
             <li>
               <button
@@ -235,38 +239,29 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
           </ul>
         </div>
 
-        {!selectedModule && !collapsed && (
+        {lastModule && (
           <div className="sas-sidebar__section">
-            <h3 className="sas-sidebar__section-title">Current Module</h3>
-            <div className="sas-sidebar__current-module sas-sidebar__current-module--empty">
-              <div className="sas-sidebar__module-name">No module selected</div>
-              <div className="sas-sidebar__module-hint">Open a module to see its quick links here.</div>
-            </div>
-          </div>
-        )}
-
-        {selectedModule && (
-          <div className="sas-sidebar__section">
-            <h3 className="sas-sidebar__section-title">Current Module</h3>
+            <h3 className="sas-sidebar__section-title">{onModulePage ? 'Current Module' : 'Last Module'}</h3>
             <div className="sas-sidebar__current-module">
               <div className="sas-sidebar__module-head">
-                <div className="sas-sidebar__module-name" title={selectedModule.id}>{selectedModule.name}</div>
-                {selectedModuleApps > 0 && (
-                  <span className="sas-sidebar__module-apps" title={`${selectedModuleApps} saved UI app${selectedModuleApps === 1 ? '' : 's'} use this module`}>
-                    {selectedModuleApps} {selectedModuleApps === 1 ? 'app' : 'apps'}
+                <div className="sas-sidebar__module-name" title={lastModule.id}>{lastModule.name}</div>
+                {lastModuleApps > 0 && (
+                  <span className="sas-sidebar__module-apps" title={`${lastModuleApps} saved UI app${lastModuleApps === 1 ? '' : 's'} use this module`}>
+                    {lastModuleApps} {lastModuleApps === 1 ? 'app' : 'apps'}
                   </span>
                 )}
               </div>
-              <ul className="sas-sidebar__menu">
+              <ul className="sas-sidebar__menu sas-sidebar__kept-links">
                 <li>
                   <button
                     type="button"
-                    className={`sas-sidebar__menu-item ${
+                    className={`sas-sidebar__menu-item sas-sidebar__kept-link ${
                       activeView === 'module-details' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
                     onClick={() => onNavigate('module-details')}
-                  title={collapsed ? 'Details' : undefined}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    aria-label={collapsed ? `Details of ${lastModule.name}` : undefined}
+                    title={collapsed ? 'Details' : undefined}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                       <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Details</span>
@@ -275,12 +270,13 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
                 <li>
                   <button
                     type="button"
-                    className={`sas-sidebar__menu-item ${
+                    className={`sas-sidebar__menu-item sas-sidebar__kept-link ${
                       activeView === 'score' ? 'sas-sidebar__menu-item--active' : ''
                     }`}
                     onClick={() => onNavigate('score')}
-                  title={collapsed ? 'Execute Score' : undefined}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    aria-label={collapsed ? `Execute Score in ${lastModule.name}` : undefined}
+                    title={collapsed ? 'Execute Score' : undefined}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                       <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                       <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -292,41 +288,48 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
           </div>
         )}
 
-        {recentUIApps.length > 0 && (
+        {lastUIApp && (
           <div className="sas-sidebar__section">
-            <h3 className="sas-sidebar__section-title">Recent UI Apps</h3>
-            <ul className="sas-sidebar__recent-list">
-              {recentUIApps.slice(0, 5).map((app) => (
-                <li key={app.id}>
+            <h3 className="sas-sidebar__section-title">{onUIAppPage ? 'Current UI App' : 'Last UI App'}</h3>
+            <div className="sas-sidebar__current-module">
+              <div className="sas-sidebar__module-head">
+                <div className="sas-sidebar__module-name" title={lastUIApp.name}>{lastUIApp.name}</div>
+              </div>
+              <ul className="sas-sidebar__menu sas-sidebar__kept-links">
+                <li>
                   <button
                     type="button"
-                    className="sas-sidebar__recent-item"
-                    onClick={() => onSelectUIApp?.(app.id)}
-                  >
-                    <span className="sas-sidebar__recent-name">{app.name}</span>
+                    className={`sas-sidebar__menu-item sas-sidebar__kept-link ${
+                      activeView === 'ui-app-run' ? 'sas-sidebar__menu-item--active' : ''
+                    }`}
+                    onClick={() => onRunUIApp?.(lastUIApp.id)}
+                    aria-label={collapsed ? `Run ${lastUIApp.name}` : undefined}
+                    title={collapsed ? 'Run' : undefined}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Run</span>
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {recentModules.length > 0 && (
-          <div className="sas-sidebar__section">
-            <h3 className="sas-sidebar__section-title">Recent Modules</h3>
-            <ul className="sas-sidebar__recent-list">
-              {recentModules.slice(0, 5).map((module) => (
-                <li key={module.id}>
+                <li>
                   <button
                     type="button"
-                    className="sas-sidebar__recent-item"
-                    onClick={() => onSelectModule?.(module)}
-                  >
-                    <span className="sas-sidebar__recent-name">{module.name}</span>
+                    className={`sas-sidebar__menu-item sas-sidebar__kept-link ${
+                      activeView === 'ui-app-edit' ? 'sas-sidebar__menu-item--active' : ''
+                    }`}
+                    onClick={() => onEditUIApp?.(lastUIApp.id)}
+                    aria-label={collapsed ? `Edit ${lastUIApp.name}` : undefined}
+                    title={collapsed ? 'Edit' : undefined}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+                    </svg>
+                    <span>Edit</span>
                   </button>
                 </li>
-              ))}
-            </ul>
+              </ul>
+            </div>
           </div>
         )}
       </nav>

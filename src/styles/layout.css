@@ -272,7 +272,7 @@
 }
 
 .sas-sidebar__section {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
 }
 
 .sas-sidebar__section-title {
@@ -325,6 +325,43 @@
   margin-bottom: var(--space-2);
 }
 
+/* The kept module and UI app (Figma 11/13): their actions are one row of
+   text links under the name, so both boxes fit without the sidebar
+   scrolling. The icons are only for the collapsed rail. */
+.sas-sidebar__kept-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.sas-sidebar__menu-item.sas-sidebar__kept-link {
+  width: auto;
+  min-height: 24px;
+  padding: 2px 0;
+  gap: var(--space-1);
+  color: var(--sas-blue-primary);
+  font-size: var(--font-size-base);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.sas-sidebar__menu-item.sas-sidebar__kept-link:hover {
+  background: none;
+  color: var(--sas-blue-dark);
+}
+
+.sas-sidebar__menu-item.sas-sidebar__kept-link.sas-sidebar__menu-item--active {
+  background: none;
+  color: var(--sas-gray-900);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.sas-sidebar__kept-link svg {
+  display: none;
+}
+
 .sas-sidebar__module-name {
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
@@ -336,30 +373,6 @@
   color: var(--sas-text-muted);
   font-family: var(--font-family-mono);
   margin-bottom: var(--space-2);
-}
-
-.sas-sidebar__recent-list {
-  list-style: none;
-}
-
-.sas-sidebar__recent-item {
-  display: block;
-  width: 100%;
-  min-height: var(--target-min);
-  padding: var(--space-2);
-  text-align: left;
-  color: var(--sas-gray-600);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-}
-
-.sas-sidebar__recent-item:hover {
-  background-color: var(--sas-gray-100);
-  color: var(--sas-gray-900);
-}
-
-.sas-sidebar__recent-name {
-  font-size: var(--font-size-sm);
 }
 
 /* One row: the version, then the collapse control at the trailing edge. */
@@ -881,8 +894,7 @@
   .sas-sidebar--resizing .sas-sidebar__section-title,
   .sas-sidebar--resizing .sas-sidebar__module-name,
   .sas-sidebar--resizing .sas-sidebar__module-id,
-  .sas-sidebar--resizing .sas-sidebar__menu-item,
-  .sas-sidebar--resizing .sas-sidebar__recent-item {
+  .sas-sidebar--resizing .sas-sidebar__menu-item {
     white-space: nowrap;
     overflow: hidden;
   }
@@ -903,14 +915,32 @@
     white-space: nowrap;
   }
 
-  /* Recent lists have no icons, so there is nothing to show in the rail. */
-  .sas-sidebar--collapsed .sas-sidebar__section:has(.sas-sidebar__recent-list) {
-    display: none;
-  }
 
   .sas-sidebar--collapsed .sas-sidebar__menu-item {
     justify-content: center;
     padding: var(--space-2);
+  }
+
+  /* In the rail the kept links are icon buttons like the rest of the menu. */
+  .sas-sidebar--collapsed .sas-sidebar__kept-links {
+    display: block;
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__menu-item.sas-sidebar__kept-link {
+    width: 100%;
+    min-height: 0;
+    padding: var(--space-2);
+    color: var(--sas-gray-700);
+    text-decoration: none;
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__menu-item.sas-sidebar__kept-link.sas-sidebar__menu-item--active {
+    background-color: var(--sas-blue-light);
+    color: var(--sas-blue-primary);
+  }
+
+  .sas-sidebar--collapsed .sas-sidebar__kept-link svg {
+    display: block;
   }
 
   .sas-sidebar--collapsed .sas-sidebar__current-module {
@@ -991,11 +1021,6 @@
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;
-}
-
-.sas-sidebar__module-hint {
-  font-size: var(--font-size-sm);
-  color: var(--sas-text-muted);
 }
 
 .sas-sidebar--collapsed .sas-sidebar__module-apps {

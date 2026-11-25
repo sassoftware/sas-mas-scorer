@@ -45,15 +45,15 @@
 /* The tiles are the shared `.sas-card .sas-stat-card` (components.css); this
    file keeps only the grid minimum above and the three accent modifiers. */
 .publishing__stat-card--destinations {
-  border-left-color: var(--sas-blue-primary);
+  --sas-stat-accent: var(--sas-blue-primary);
 }
 
 .publishing__stat-card--models {
-  border-left-color: var(--sas-info);
+  --sas-stat-accent: var(--sas-info);
 }
 
 .publishing__stat-card--decisions {
-  border-left-color: var(--sas-success);
+  --sas-stat-accent: var(--sas-success);
 }
 
 /* Sections */
