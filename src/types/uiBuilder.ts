@@ -201,6 +201,8 @@ export interface UISettings {
   downloads?: ('csv' | 'json')[];
   /** Offer "Score a file": every row of a CSV file, with progress and a results download (3.1). */
   batchFromFile?: boolean;
+  /** Show the last runs in this browser tab, to restore inputs or compare two runs (3.1). */
+  runHistory?: boolean;
 }
 
 /** "When <result> <op> <value>, show <message>": only compares what MAS returned. */

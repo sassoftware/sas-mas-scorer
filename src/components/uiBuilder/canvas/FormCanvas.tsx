@@ -346,6 +346,13 @@ export const FormCanvas: React.FC<Props> = ({
         {!inputAnchor && submitPosition === 'afterInputs' && submitButton('afterInputs')}
         {submitButton('bottom')}
 
+        {definition.settings.runHistory && (
+          <div className="cb-model-info" aria-hidden="true">
+            <strong>Run history</strong>
+            <span>The last 20 runs, to restore inputs or compare two runs. Shown under the form.</span>
+          </div>
+        )}
+
         {definition.settings.batchFromFile && (
           <div className="cb-model-info" aria-hidden="true">
             <strong>Score a file</strong>

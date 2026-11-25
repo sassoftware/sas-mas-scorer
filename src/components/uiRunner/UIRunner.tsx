@@ -15,12 +15,15 @@ import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { RunMessages } from './RunMessages';
 import { LastRun, ResultDownloads } from './ResultDownloads';
 import { BatchFromFile } from './BatchFromFile';
+import { RunHistory } from '../scoring/RunHistory';
+import { RunRecord, useRunHistory } from '../scoring/scoringSession';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
 import { inspectEndpoint, scoreForApp, scrStep, type ScrEndpointInfo } from '../../api/scr';
 import {
   buildRunValues,
+  findParameter,
   computeSignatureDrift,
   getInitialInputValues,
   hasSignatureDrift,
@@ -80,6 +83,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   // Inputs filled from the app link (?name=value), named in a note.
   const location = useLocation();
   const [prefilled, setPrefilled] = useState<string[] | null>(null);
+  // Run history (when the app turns it on): kept in this browser tab, per app.
+  const { runs: history, record: recordRun, clear: clearHistory } = useRunHistory(`uiapp:${definition.id}`);
   // What the last run sent, for the result downloads.
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   // Tabs or steps: which shown section is on screen, and the step whose
@@ -230,19 +235,60 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         setScrRun({ executing: true, error: null, ms: null });
         setOutputValues({});
         try {
+          const started = performance.now();
           const result = await scoreForApp(scrInfo, data);
           setOutputValues(result.outputs);
+          recordRun({
+            at: Date.now(),
+            inputs: data,
+            outputs: Object.entries(result.outputs).map(([name, value]) => ({ name, value })),
+            latencyMs: performance.now() - started,
+          });
           setScrRun({ executing: false, error: null, ms: result.elapsedMs });
         } catch (err) {
           setScrRun({ executing: false, error: err instanceof Error ? err.message : String(err), ms: null });
+          recordRun({ at: Date.now(), inputs: data, outputs: null, latencyMs: 0, error: err instanceof Error ? err.message : String(err) });
         }
         return;
       }
-      await masExecute(step, values);
+      const started = performance.now();
+      try {
+        const result = await masExecute(step, values);
+        recordRun({
+          at: Date.now(),
+          inputs: values,
+          outputs: (result.outputs ?? []).map(o => ({ name: o.name, value: o.value })),
+          executionState: result.executionState,
+          latencyMs: performance.now() - started,
+        });
+      } catch (err) {
+        recordRun({
+          at: Date.now(),
+          inputs: values,
+          outputs: null,
+          latencyMs: performance.now() - started,
+          error: err instanceof Error ? err.message : 'Execution failed',
+        });
+        throw err;
+      }
     } catch {
       // Error handled by hook
     }
-  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo]);
+  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo, recordRun]);
+
+  // Put a past run's inputs back in the form (sent values are keyed by the step's input names).
+  const restoreRun = useCallback((run: RunRecord) => {
+    const params = step?.inputs ?? [];
+    const next: Record<string, unknown> = {};
+    for (const section of definition.layout.sections) {
+      for (const f of section.fields) {
+        if (f.direction !== 'input') continue;
+        const p = findParameter(params, f.parameterId);
+        if (p && p.name in run.inputs) next[f.parameterId] = run.inputs[p.name];
+      }
+    }
+    setInputValues(prev => ({ ...prev, ...next }));
+  }, [step, definition.layout.sections]);
 
   const handleReset = useCallback(() => {
     setInputValues(getInitialInputValues(definition));
@@ -279,6 +325,16 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const modelInfo = !scrUrl && definition.settings.showModelInfo && module && modelIdOf(module)
     ? <ModelInfoPanel module={module} />
     : null;
+  const historyPanel = definition.settings.runHistory && step ? (
+    <RunHistory
+      runs={history}
+      inputParameters={step.inputs ?? []}
+      outputParameters={step.outputs ?? []}
+      onRestore={restoreRun}
+      onClear={clearHistory}
+      disabled={executing}
+    />
+  ) : null;
   const batch = definition.settings.batchFromFile
     ? <BatchFromFile definition={definition} step={step} scrInfo={scrUrl ? scrInfo : null} />
     : null;
@@ -496,6 +552,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           </Alert>
         )}
 
+        {historyPanel}
         {batch}
         {modelInfo}
       </div>
@@ -594,7 +651,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         </Alert>
       )}
 
-      {batch}
+      {historyPanel}
+        {batch}
       {modelInfo}
     </div>
   );

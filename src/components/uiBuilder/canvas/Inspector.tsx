@@ -190,6 +190,20 @@ export const Inspector: React.FC<Props> = (props) => {
               Adds a section where app users upload a CSV file and score every row, with progress, Cancel and a results download.
             </span>
           </div>
+          <div className="ui-builder__config-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!s.runHistory}
+                onChange={(e) => props.onSettingsChange({ ...s, runHistory: e.target.checked || undefined })}
+                aria-describedby={fid('history-hint')}
+              />
+              {' '}Run history
+            </label>
+            <span className="ui-builder__config-type-hint" id={fid('history-hint')}>
+              The last 20 runs under the form: put a run's inputs back, or compare two runs. Kept only in the app user's browser tab.
+            </span>
+          </div>
           <fieldset className="cb-inspector__checks">
             <legend className="cb-inspector__label">Downloads after a run</legend>
             {(['csv', 'json'] as const).map(kind => (
