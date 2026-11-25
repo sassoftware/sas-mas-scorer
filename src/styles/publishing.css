@@ -14,13 +14,6 @@
   padding: var(--space-8);
 }
 
-.publishing__empty {
-  color: var(--sas-gray-600);
-  margin: 0;
-  padding: var(--space-4);
-  text-align: center;
-}
-
 /* Header: data age / "Refreshing…" beside the Refresh button. */
 .publishing__header-actions {
   display: inline-flex;
@@ -71,90 +64,143 @@
 }
 
 /* Destinations */
-.publishing__destinations {
+/* Destinations (3.1, Figma 11/13): a list beside the chosen destination's
+   details, in one card. */
+.sas-card.publishing__destinations {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: minmax(260px, 2fr) 3fr;
+  padding: 0;
+  overflow: hidden;
 }
 
-.publishing__destination-card {
-  display: flex;
-  flex-direction: column;
+@media (max-width: 900px) {
+  .sas-card.publishing__destinations {
+    grid-template-columns: 1fr;
+  }
 }
 
-.publishing__destination-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+.publishing__destination-list {
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+  border-right: 1px solid var(--sas-gray-200);
 }
 
-.publishing__destination-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  flex: 1;
+@media (max-width: 900px) {
+  .publishing__destination-list {
+    border-right: none;
+    border-bottom: 1px solid var(--sas-gray-200);
+    max-height: 260px;
+  }
 }
 
-.publishing__destination-title {
-  display: flex;
+.publishing__destination-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.publishing__destination-item:hover {
+  background: var(--sas-gray-50);
+}
+
+.publishing__destination-item--selected,
+.publishing__destination-item--selected:hover {
+  background: var(--sas-blue-light);
+  border-left-color: var(--sas-blue-primary);
+}
+
+.publishing__destination-item:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: -2px;
 }
 
 .publishing__destination-name {
   font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
-  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.publishing__destination-counts {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.publishing__destination-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.publishing__destination-detail-title {
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--sas-gray-200);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
 }
 
 .publishing__destination-desc {
   margin: 0;
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
+  color: var(--sas-gray-700);
 }
 
-/* The toggle itself is an <IconButton>; only the chevron rotation is ours. */
-.publishing__chevron {
-  transition: transform var(--transition-fast);
+.publishing__destination-actions {
+  display: flex;
 }
 
-.publishing__chevron--open {
-  transform: rotate(180deg);
+.publishing__none {
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-gray-100);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
+  text-align: center;
 }
 
-.publishing__destination-details {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--sas-gray-200);
-}
-
+/* A destination's settings: small labels over values (Figma 11/13), in two
+   columns where there is room. */
 .publishing__detail-list {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: var(--space-4);
-  row-gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-6);
   margin: 0;
 }
 
 .publishing__detail-row {
-  display: contents;
+  min-width: 0;
 }
 
 .publishing__detail-label {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 .publishing__detail-value {
+  margin: 2px 0 0;
   font-size: var(--font-size-sm);
   color: var(--sas-gray-900);
-  margin: 0;
-  word-break: break-word;
-  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
 }
 
 /* The items table is the shared list table (listTable.css). */

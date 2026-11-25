@@ -25,6 +25,12 @@ interface PublishedItemsTableProps {
   items: PublishedItem[];
   onNavigateToModule: (moduleId: string) => void;
   onNavigateToFlow: (flowId: string) => void;
+  /**
+   * The Destination column filter, when the page sets it too (a
+   * destination's "Show its deployed items"). Unset, the table keeps its own.
+   */
+  destinationFilter?: string | null;
+  onDestinationFilterChange?: (value: string | null) => void;
 }
 
 const kindVariant = (kind: PublishedKind): BadgeVariant => {
@@ -101,11 +107,19 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
   items,
   onNavigateToModule,
   onNavigateToFlow,
+  destinationFilter: controlledDestination,
+  onDestinationFilterChange,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
-  const [destinationFilter, setDestinationFilter] = useState<string | null>(null);
+  const [ownDestination, setOwnDestination] = useState<string | null>(null);
+  const controlled = controlledDestination !== undefined;
+  const destinationFilter = controlled ? controlledDestination : ownDestination;
+  const setDestinationFilter = useCallback((value: string | null) => {
+    if (!controlled) setOwnDestination(value);
+    onDestinationFilterChange?.(value);
+  }, [controlled, onDestinationFilterChange]);
   const [codeTypeFilter, setCodeTypeFilter] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<ListSort | null>({ key: 'published', dir: 'desc' });
@@ -179,7 +193,7 @@ export const PublishedItemsTable: React.FC<PublishedItemsTableProps> = ({
       };
     }
     return c;
-  }), [searched, passes, destinationFilter, codeTypeFilter]);
+  }), [searched, passes, destinationFilter, setDestinationFilter, codeTypeFilter]);
 
   const filtered = useMemo(() => searched.filter(r => passes(r)), [searched, passes]);
 

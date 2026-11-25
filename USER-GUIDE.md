@@ -1179,7 +1179,7 @@ The page reads the destinations and the complete list of deployed items. A progr
 ### Summary and Destinations
 
 - **Stat cards** — the number of publishing destinations, deployed models and deployed decisions.
-- **Destinations** — one row per destination with its type and how many models and decisions it holds. Click the chevron (or Tab to it and press **Enter**) to expand a destination and see what is deployed there.
+- **Destinations** — a list on the left, one row per destination with its type and how many models and decisions it holds, and the chosen destination's details on the right: its description, type, what is deployed to it, and its settings (for example the repository URL, branch and folder of a Git destination, or the server, library and table of a CAS one). The first destination is shown until you pick another; **Up** / **Down** (and **Home** / **End**) move through the list. **Show its N deployed items** filters the table below to that destination and moves there; the filter shows as a *Destination: …* tag whose **×** clears it.
 
 ### Deployed Models & Decisions
 
