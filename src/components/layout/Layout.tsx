@@ -17,6 +17,8 @@ interface LayoutProps {
   activeView: ViewType;
   onNavigate: (view: ViewType) => void;
   selectedModule?: Module | null;
+  /** Saved UI apps on the selected module (the "2 apps" tag). */
+  selectedModuleApps?: number;
   recentModules?: Module[];
   onSelectModule?: (module: Module) => void;
   onOpenSettings?: () => void;
@@ -35,6 +37,7 @@ export const Layout: React.FC<LayoutProps> = ({
   activeView,
   onNavigate,
   selectedModule,
+  selectedModuleApps = 0,
   recentModules,
   onSelectModule,
   onOpenSettings,
@@ -146,6 +149,7 @@ export const Layout: React.FC<LayoutProps> = ({
           activeView={activeView}
           onNavigate={handleNavigate}
           selectedModule={selectedModule}
+          selectedModuleApps={selectedModuleApps}
           recentModules={recentModules}
           onSelectModule={handleSelectModule}
           recentUIApps={recentUIApps}
@@ -195,7 +199,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                   <span className="sas-breadcrumbs__current">{crumb.label}</span>
                 )}
                 {index < breadcrumbs.length - 1 && (
-                  <span className="sas-breadcrumbs__separator">/</span>
+                  <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
                 )}
               </li>
             ))}

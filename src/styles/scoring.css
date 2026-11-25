@@ -523,16 +523,42 @@
   margin: 0;
 }
 
-/* Mode Toggle */
-.score-panel__mode-toggle {
+/* Mode tabs (3.1): underline tabs, as in the design. */
+.score-panel__tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin-bottom: var(--space-4);
-  padding: var(--space-2);
-  background-color: var(--sas-gray-100);
-  border-radius: var(--radius-md);
-  width: fit-content;
+  border-bottom: 1px solid var(--sas-gray-300);
+}
+
+.score-panel__tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.score-panel__tab:hover {
+  color: var(--sas-gray-900);
+  background: var(--sas-gray-100);
+}
+
+.score-panel__tab--on,
+.score-panel__tab--on:hover {
+  color: var(--sas-blue-dark);
+  border-bottom-color: var(--sas-blue-primary);
+  font-weight: var(--font-weight-semibold);
+  background: none;
+}
+
+.score-panel__tab:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
 }
 
 /* Batch progress: the bar itself is the shared <ProgressBar> (.sas-progress),

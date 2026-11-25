@@ -406,7 +406,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         <ol className="sas-breadcrumbs">
           <li className="sas-breadcrumbs__item">
             <button type="button" className="sas-breadcrumbs__link" onClick={handleBack}>UI Apps</button>
-            <span className="sas-breadcrumbs__separator">/</span>
+            <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
           </li>
           <li className="sas-breadcrumbs__item">
             {/* The page's heading: the app's name, as the title bar of the app. */}

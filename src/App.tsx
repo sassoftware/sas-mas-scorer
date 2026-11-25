@@ -879,6 +879,8 @@ function App() {
           onDelete={handleDeleteModule}
           onBuildUI={handleBuildUI}
           onViewFlow={handleViewFlow}
+          onOpenUIApp={handleRunUIApp}
+          onViewAllUIApps={() => handleNavigate('ui-apps')}
           focusStepsRequest={
             (location.state as { focusSteps?: boolean } | null)?.focusSteps ? location.key : undefined
           }
@@ -971,6 +973,7 @@ function App() {
         // Sidebar exits ask first while the UI Builder has unsaved changes.
         onNavigate={(view) => runWithLeaveGuard(() => handleNavigate(view))}
         selectedModule={selectedModule}
+        selectedModuleApps={selectedModule ? appCountByModule[selectedModule.id.toLowerCase()] ?? 0 : 0}
         recentModules={recentModules}
         onSelectModule={(module) => runWithLeaveGuard(() => handleSelectModule(module))}
         onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}

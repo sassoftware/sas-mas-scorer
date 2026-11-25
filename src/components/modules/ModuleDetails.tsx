@@ -11,6 +11,8 @@ import { Alert } from '../common/Alert';
 import { DataTable, Column } from '../common/DataTable';
 import { PageHeader } from '../layout/Layout';
 import { getSasViyaUrl } from '../../config';
+import { listUIDefinitions } from '../../storage/uiStorage';
+import { UIDefinitionSummary } from '../../types/uiBuilder';
 import { getEntries, Entry, getDecisionSourceInfo, DecisionSourceInfo, getPublishedModelInfo, PublishedModelInfo } from '../../api';
 
 interface ModuleDetailsProps {
@@ -24,6 +26,10 @@ interface ModuleDetailsProps {
   onDelete: (moduleId: string) => Promise<void>;
   onBuildUI?: (moduleId: string) => void;
   onViewFlow?: (flowId: string) => void;
+  /** Open a saved UI app built on this module. */
+  onOpenUIApp?: (id: string) => void;
+  /** Go to the UI Apps page. */
+  onViewAllUIApps?: () => void;
   /**
    * Changes each time the page is asked to bring the Steps card into view
    * (the sidebar's Execute Score before any step was picked); focus moves to
@@ -43,6 +49,8 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
   onDelete,
   onBuildUI,
   onViewFlow,
+  onOpenUIApp,
+  onViewAllUIApps,
   focusStepsRequest,
 }) => {
   const stepsHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -50,6 +58,15 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
     if (focusStepsRequest) stepsHeadingRef.current?.focus();
   }, [focusStepsRequest]);
 
+  // Saved UI apps (in this browser) that score this module.
+  const [apps, setApps] = useState<UIDefinitionSummary[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    listUIDefinitions()
+      .then(list => { if (live) setApps(list.filter(a => !a.scrUrl && a.moduleId.toLowerCase() === module.id.toLowerCase())); })
+      .catch(() => { if (live) setApps([]); });
+    return () => { live = false; };
+  }, [module.id]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -236,7 +253,7 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
       align: 'center',
       render: (step) => (
         <Button
-          variant="primary"
+          variant="secondary"
           size="small"
           onClick={(e) => {
             e.stopPropagation();
@@ -274,9 +291,8 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
     <div className="module-details">
       <PageHeader
         title={module.name}
-        subtitle={`Module ID: ${module.id}`}
         breadcrumbs={[
-          { label: 'Modules', onClick: onBack },
+          { label: 'All Modules', onClick: onBack },
           { label: module.name },
         ]}
         actions={
@@ -291,9 +307,6 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
                 Build UI
               </Button>
             )}
-            <Button variant="tertiary" onClick={onBack}>
-              Back to List
-            </Button>
           </>
         }
       />
@@ -306,6 +319,10 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           </CardHeader>
           <CardBody>
             <dl className="module-details__info-list module-details__info-list--wide">
+              <div className="module-details__info-item">
+                <dt>Module ID</dt>
+                <dd className="module-details__mono">{module.id}</dd>
+              </div>
               <div className="module-details__info-item">
                 <dt>Status</dt>
                 <dd>
@@ -477,11 +494,49 @@ export const ModuleDetails: React.FC<ModuleDetailsProps> = ({
           </Card>
         )}
 
+        {/* UI apps built on this module */}
+        <Card className="module-details__apps-card">
+          <CardHeader
+            actions={onViewAllUIApps && (
+              <button type="button" className="module-details__link" onClick={onViewAllUIApps}>View all UI apps</button>
+            )}
+          >
+            <h3>
+              UI Apps built from this module{' '}
+              <span className="module-details__count">{apps === null ? '…' : apps.length}</span>
+            </h3>
+          </CardHeader>
+          <CardBody>
+            {apps === null ? (
+              <Loading message="Reading your UI apps..." />
+            ) : apps.length === 0 ? (
+              <p className="module-details__empty-message">
+                No saved UI apps use this module yet.{onBuildUI && (moduleType === 'Model' || moduleType === 'Decision') ? ' Build UI makes one.' : ''}
+              </p>
+            ) : (
+              <ul className="module-details__apps">
+                {apps.map(app => (
+                  <li key={app.id} className="module-details__app">
+                    <div className="module-details__app-text">
+                      <span className="module-details__app-name">{app.name}</span>
+                      <span className="module-details__app-meta">
+                        {[app.description, `Step ${app.stepId}`, `Updated ${new Date(app.updatedAt).toLocaleDateString()}`].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
+                    {onOpenUIApp && (
+                      <button type="button" className="module-details__link" onClick={() => onOpenUIApp(app.id)} aria-label={`Open ${app.name}`}>
+                        Open
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+
         {/* Delete Module Section */}
         <Card className="module-details__danger-card">
-          <CardHeader>
-            <h3>Danger Zone</h3>
-          </CardHeader>
           <CardBody>
             {deleteError && (
               <Alert variant="error" title="Delete Failed" dismissible onClose={() => setDeleteError(null)}>

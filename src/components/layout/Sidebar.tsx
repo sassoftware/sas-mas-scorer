@@ -11,6 +11,8 @@ interface SidebarProps {
   activeView: ViewType;
   onNavigate: (view: ViewType) => void;
   selectedModule?: Module | null;
+  /** Saved UI apps on the selected module. */
+  selectedModuleApps?: number;
   recentModules?: Module[];
   onSelectModule?: (module: Module) => void;
   recentUIApps?: UIDefinitionSummary[];
@@ -29,6 +31,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
     activeView,
     onNavigate,
     selectedModule,
+    selectedModuleApps = 0,
     recentModules = [],
     onSelectModule,
     recentUIApps = [],
@@ -232,12 +235,28 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(function Side
           </ul>
         </div>
 
+        {!selectedModule && !collapsed && (
+          <div className="sas-sidebar__section">
+            <h3 className="sas-sidebar__section-title">Current Module</h3>
+            <div className="sas-sidebar__current-module sas-sidebar__current-module--empty">
+              <div className="sas-sidebar__module-name">No module selected</div>
+              <div className="sas-sidebar__module-hint">Open a module to see its quick links here.</div>
+            </div>
+          </div>
+        )}
+
         {selectedModule && (
           <div className="sas-sidebar__section">
             <h3 className="sas-sidebar__section-title">Current Module</h3>
             <div className="sas-sidebar__current-module">
-              <div className="sas-sidebar__module-name">{selectedModule.name}</div>
-              <div className="sas-sidebar__module-id">{selectedModule.id}</div>
+              <div className="sas-sidebar__module-head">
+                <div className="sas-sidebar__module-name" title={selectedModule.id}>{selectedModule.name}</div>
+                {selectedModuleApps > 0 && (
+                  <span className="sas-sidebar__module-apps" title={`${selectedModuleApps} saved UI app${selectedModuleApps === 1 ? '' : 's'} use this module`}>
+                    {selectedModuleApps} {selectedModuleApps === 1 ? 'app' : 'apps'}
+                  </span>
+                )}
+              </div>
               <ul className="sas-sidebar__menu">
                 <li>
                   <button

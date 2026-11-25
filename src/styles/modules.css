@@ -176,15 +176,10 @@
 
 /* Module Details - Danger Zone */
 .module-details__danger-card {
-  border: 1px solid var(--sas-error-light);
-  background-color: rgba(244, 67, 54, 0.02);
+  border: 1px solid var(--sas-gray-200);
 }
 
-.module-details__danger-card .sas-card__header {
-  background-color: var(--sas-error-light);
-}
-
-.module-details__danger-card .sas-card__header h3 {
+.module-details__danger-card .module-details__danger-title {
   color: var(--sas-error-dark);
 }
 
@@ -247,4 +242,76 @@
   width: var(--icon-sm);
   height: var(--icon-sm);
   flex-shrink: 0;
+}
+
+/* 3.1: Module ID in the information card, and the UI apps built on the module. */
+.module-details__mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.module-details__count {
+  display: inline-block;
+  min-width: 22px;
+  padding: 0 6px;
+  margin-left: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--sas-blue-light);
+  color: var(--sas-blue-dark);
+  font-size: var(--font-size-xs);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.module-details__link {
+  border: 0;
+  background: none;
+  padding: 2px var(--space-1);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--sas-blue-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.module-details__link:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.module-details__apps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.module-details__app {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--sas-gray-200);
+}
+
+.module-details__app:last-child {
+  border-bottom: 0;
+}
+
+.module-details__app-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.module-details__app-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+}
+
+.module-details__app-meta {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
 }

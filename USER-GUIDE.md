@@ -132,9 +132,9 @@ The left sidebar is the primary navigation. It contains the main pages and a con
 
 ### Current Module Section
 
-When you select a module, two additional navigation items appear:
+The **Current Module** box shows the module you are working with: its name and, when saved UI apps use it, how many (*3 apps*). With no module open it says **No module selected**. It offers two links:
 
-- **Details** — Opens the module's details page: metadata, steps, submodules, and source links.
+- **Details** — Opens the module's details page: metadata, steps, UI apps, submodules, and source links.
 - **Execute Score** — Returns to the scoring panel for the step you last scored in this module. If you have not scored a step of it yet, it opens the module with focus on its **Steps** list so you can pick one.
 
 ### Working With Lists
@@ -210,8 +210,11 @@ The Module Details page gives you a complete picture of a module before you star
 
 ### Module Information
 
+The page opens with the breadcrumb **All Modules › module**; **Build UI** (and **View Flow** for decisions) sit at the top right.
+
 A summary card shows:
 
+- **Module ID** — The ID MAS knows the module by (what the REST API uses).
 - **Status** — The module scope (public or private).
 - **Type** — Model, Decision, or Data.
 - **Version** — For Decisions, this is the major.minor revision from the decision flow. For Models, this is the model version ID.
@@ -224,6 +227,10 @@ A summary card shows:
 A table listing every step in the module. For most published decisions, there is a single step called `execute`. For models, there may be a `score` step and others.
 
 Each row shows the step ID, the number of inputs and outputs, and an **Execute** button that takes you to the scoring panel.
+
+### UI Apps Built From This Module
+
+The saved UI apps (in this browser) that score this module, with their description, step and last change, and **Open** to run one. **View all UI apps** opens the UI Apps page.
 
 ### Submodules
 
@@ -239,7 +246,7 @@ If the module contains submodules (common for complex decision flows), they are 
 
 ## 6. Scoring — Single Execution
 
-The scoring panel is where you execute a module step. At the top of the page you will see a mode toggle with three options:
+The scoring panel is where you execute a module step (breadcrumb **All Modules › module › step**; **View Source**, **View API Call** and **Select Step** at the top right). Three tabs choose how to score; the arrow keys move between them:
 
 - **Single Execution** — Score one row at a time by filling in a form.
 - **Parallel (File Upload)** — Score many rows from an uploaded file (CSV, TSV, JSON/JSONL, Excel, or Parquet).
@@ -827,16 +834,16 @@ The shared URL follows the pattern: `#/ui-apps/{appId}?def={encodedDefinition}&s
 
 ### Managing UI Apps
 
-The **UI Apps** list page shows all your apps as cards. Each card says whether the app scores a **MAS** module or an **SCR** endpoint, and names it.
+The **UI Apps** list page shows all your apps as cards, with their number beside the title. The chips filter by where an app scores (**All**, **MAS module**, **SCR endpoint**, each with its count) and the search box on the right finds apps by name, module or description. Each card says whether the app scores a **MAS** module or an **SCR** endpoint, names it, and shows its step and last change.
 
-| Action | Description |
-|--------|-------------|
-| **Run** | Open the app in the runner |
-| **Edit** | Open the app in the builder |
-| **Duplicate** | Create a copy of the app (appended with "(Copy)") |
-| **Export** | Download the app definition as a JSON file |
-| **Import** | Upload a previously exported JSON file to create a new app |
-| **Delete** | Remove the app (requires confirmation) |
+| Action | Where | Description |
+|--------|-------|-------------|
+| **Run** | Card | Open the app in the runner |
+| **Edit** | Card | Open the app in the builder |
+| **Duplicate** | Card **⋮** | Create a copy of the app (appended with "(Copy)") |
+| **Export** | Card **⋮** | Download the app definition as a JSON file |
+| **Delete** | Card **⋮** | Remove the app, after a confirmation that names it |
+| **Import** | Page | Upload a previously exported JSON file to create a new app |
 
 ### Replace / Re-sync Module
 

@@ -968,3 +968,36 @@
     linear-gradient(135deg, transparent 46%, var(--sas-error-dark) 46% 54%, transparent 54%),
     var(--sas-white);
 }
+
+/* Current module box (3.1): name, the saved-app count, quick links; or a hint when no module is open. */
+.sas-sidebar__module-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.sas-sidebar__module-head .sas-sidebar__module-name {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.sas-sidebar__module-apps {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--sas-blue-light);
+  color: var(--sas-blue-dark);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.sas-sidebar__module-hint {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.sas-sidebar--collapsed .sas-sidebar__module-apps {
+  display: none;
+}
