@@ -39,6 +39,8 @@ interface Props {
   step: Step | null;
   /** Date and datetime parameters (by lowercase name), from the module's decision. */
   dateKinds?: Record<string, 'date' | 'datetime' | 'checkbox'>;
+  /** The module was published from SAS Model Manager. */
+  isModelModule?: boolean;
   /** "MAS module: x" / "SCR endpoint: url", under the app name. */
   source: string;
   onChange: CanvasChange;
@@ -63,6 +65,7 @@ export const CanvasEditor: React.FC<Props> = ({
   definition,
   step,
   dateKinds = {},
+  isModelModule = false,
   source,
   onChange,
   selectionResetKey,
@@ -222,6 +225,7 @@ export const CanvasEditor: React.FC<Props> = ({
         definition={definition}
         step={step}
         dateKinds={dateKinds}
+        isModelModule={isModelModule}
         selection={selection}
         onSelect={setSelection}
         onFieldChange={(id, field) => {

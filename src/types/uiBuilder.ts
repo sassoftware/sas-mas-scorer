@@ -169,6 +169,8 @@ export interface UISettings {
   submitPosition?: SubmitPosition;
   /** The run button's colour (3.1), as #rrggbb; unset is the standard blue. */
   accentColor?: string;
+  /** Show the SAS Model Manager model behind a model module (3.1). */
+  showModelInfo?: boolean;
 }
 
 export type SubmitPosition = 'top' | 'afterInputs' | 'bottom';

@@ -338,6 +338,13 @@ export const FormCanvas: React.FC<Props> = ({
         {!inputAnchor && submitPosition === 'afterInputs' && submitButton('afterInputs')}
         {submitButton('bottom')}
 
+        {definition.settings.showModelInfo && !definition.scrUrl && (
+          <div className="cb-model-info" aria-hidden="true">
+            <strong>Model information</strong>
+            <span>Read from SAS Model Manager when the app opens: model, project, version, role, algorithm and target.</span>
+          </div>
+        )}
+
         {dragging && !movingSubmit && (
           <div
             className={`cb-page__drop${over === 'page' ? ' cb-page__drop--over' : ''}`}

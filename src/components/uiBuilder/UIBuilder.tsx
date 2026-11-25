@@ -28,6 +28,7 @@ import {
 import { getScoreableStep } from '../../utils/moduleHelper';
 import { inspectEndpoint, scrStep } from '../../api/scr';
 import { DateKinds, getDecisionDateKinds } from '../../api/decisionDateTypes';
+import { modelIdOf } from '../uiRunner/ModelInfoPanel';
 
 interface UIBuilderProps {
   /** Existing definition to edit, or null for new */
@@ -122,7 +123,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const dirtyRef = useRef(isDirty);
   dirtyRef.current = isDirty;
 
-  const { steps } = useSteps(effectiveModuleId);
+  const { steps, loading: stepsLoading, error: stepsError, loadedModuleId } = useSteps(effectiveModuleId);
 
   // SCR: read the endpoint's signature; it stands in for the module's step.
   useEffect(() => {
@@ -184,6 +185,15 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   // (with a generated layout) when creating. `steps` belong to the module the
   // builder opened with; after Replace Module they describe the old module,
   // so they are ignored then (the dialog has set the new step).
+  // A module MAS lists no steps for (or whose steps can't be read) has nothing to build from.
+  useEffect(() => {
+    if (scrUrl || !module || stepsLoading || steps.length > 0 || defRef.current) return;
+    if (!loadedModuleId || loadedModuleId !== effectiveModuleId) return;
+    setLoadError(stepsError
+      ? `Could not read the steps of the module "${module.name}": ${stepsError}`
+      : `MAS lists no steps for the module "${module.name}", so there is nothing to build a form from. Check the module in MAS or publish it again.`);
+  }, [scrUrl, module, steps, stepsLoading, stepsError, loadedModuleId, effectiveModuleId]);
+
   useEffect(() => {
     if (!module || steps.length === 0) return;
     if (steps.every(s => s.moduleId && s.moduleId !== module.id)) return;
@@ -462,6 +472,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
           definition={def}
           step={step}
           dateKinds={dateKinds}
+          isModelModule={!scrUrl && !!modelIdOf(module)}
           source={source}
           onChange={applyChange}
           selectionResetKey={selectionResetKey}

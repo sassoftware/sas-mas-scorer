@@ -18,6 +18,8 @@ interface Props {
   definition: UIDefinition;
   step: Step | null;
   dateKinds: Record<string, 'date' | 'datetime' | 'checkbox'>;
+  /** The module was published from SAS Model Manager (offers the model information panel). */
+  isModelModule?: boolean;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onFieldChange: (parameterId: string, field: UIField) => void;
@@ -113,6 +115,22 @@ export const Inspector: React.FC<Props> = (props) => {
             </select>
             <p className="ui-builder__config-type-hint">You can also drag the button on the canvas.</p>
           </div>
+          {props.isModelModule && (
+            <div className="ui-builder__config-field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!s.showModelInfo}
+                  onChange={(e) => props.onSettingsChange({ ...s, showModelInfo: e.target.checked || undefined })}
+                  aria-describedby={fid('modelinfo-hint')}
+                />
+                {' '}Show model information
+              </label>
+              <span className="ui-builder__config-type-hint" id={fid('modelinfo-hint')}>
+                The model's name, project, version, role and algorithm from SAS Model Manager, read when the app opens. App users need read access to the model's project.
+              </span>
+            </div>
+          )}
           <ColorChoice
             label="Run button colour"
             kind="button"

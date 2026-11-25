@@ -937,3 +937,20 @@
     min-height: 520px;
   }
 }
+
+/* Where the model information panel will be, on the canvas (no values: it is read when the app opens). */
+.cb-model-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--sas-gray-400);
+  border-radius: var(--radius-lg);
+  color: var(--sas-gray-700);
+  font-size: var(--font-size-sm);
+}
+
+.cb-model-info strong {
+  color: var(--sas-gray-900);
+  font-size: var(--font-size-base);
+}

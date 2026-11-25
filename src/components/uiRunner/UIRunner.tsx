@@ -10,6 +10,7 @@ import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { PageHeader } from '../layout/Layout';
 import { DynamicForm } from './DynamicForm';
+import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
@@ -233,6 +234,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const submitLabel = definition.settings.submitLabel || 'Execute';
   const outputLayout = definition.settings.outputLayout || 'below';
   const submitPosition = getSubmitPosition(definition.settings);
+  const modelInfo = !scrUrl && definition.settings.showModelInfo && module && modelIdOf(module)
+    ? <ModelInfoPanel module={module} />
+    : null;
 
   // Unified layout for inline/below modes
   const unifiedLayout = definition.layout;
@@ -437,6 +441,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             {error}
           </Alert>
         )}
+
+        {modelInfo}
       </div>
     );
   }
@@ -491,6 +497,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           {error}
         </Alert>
       )}
+
+      {modelInfo}
     </div>
   );
 };
