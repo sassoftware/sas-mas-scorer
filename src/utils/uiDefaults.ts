@@ -61,7 +61,7 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
       return ['readonly', 'kpi', 'gauge', 'badge', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
-      return ['readonly', 'badge', 'checkbox', 'hidden'];
+      return ['readonly', 'badge', 'checkbox', 'image', 'hidden'];
     }
     if (isDatagridType(type)) {
       return ['table', 'barchart', 'readonly', 'hidden'];

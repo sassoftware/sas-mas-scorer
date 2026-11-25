@@ -25,4 +25,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   currency: 'Currency',
   kpi: 'KPI Tile',
   barchart: 'Bar Chart',
+  image: 'Image',
 };

@@ -1040,3 +1040,22 @@
   gap: var(--space-2);
   margin-top: var(--space-4);
 }
+
+/* A returned image. */
+.ui-runner__image {
+  margin: 0;
+}
+
+.ui-runner__image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ui-runner__image a:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+  display: inline-block;
+}

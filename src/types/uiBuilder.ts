@@ -92,7 +92,9 @@ export type WidgetType =
   /** A result as a large number with unit and bands (3.1). */
   | 'kpi'
   /** A list or DataGrid result as horizontal bars (3.1). */
-  | 'barchart';
+  | 'barchart'
+  /** A returned image: base64, a data URL or an https link (3.1). */
+  | 'image';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -135,6 +137,10 @@ export interface FieldValidation {
   chartSort?: 'desc' | 'asc';
   /** Bar chart (3.1): show only this many bars (the table view shows all). */
   chartTop?: number;
+  /** Image output (3.1): alternative text for screen readers (default: the label). */
+  imageAlt?: string;
+  /** Image output (3.1): largest height in pixels. */
+  imageMaxHeight?: number;
 }
 
 /** A KPI band: values below `below` (or any value, when unset) get this word and colour. */

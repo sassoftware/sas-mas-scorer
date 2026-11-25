@@ -516,6 +516,26 @@ export const FieldConfigPanel: React.FC<Props> = ({
           <div className="ui-builder__config-section-title">Validation</div>
         )}
 
+        {field.widget === 'image' && (
+          <>
+            <div className="ui-builder__config-section-title">Image</div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('imgalt')}>Alternative text</label>
+              <input id={fid('imgalt')} className="sas-input" placeholder={field.label}
+                aria-describedby={fid('imgalt-hint')}
+                value={field.validation?.imageAlt ?? ''}
+                onChange={(e) => setValidation({ imageAlt: e.target.value || undefined })} />
+              <span className="ui-builder__config-type-hint" id={fid('imgalt-hint')}>What a screen reader says for the image. Empty uses the label.</span>
+            </div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('imgh')}>Largest height (pixels)</label>
+              <input id={fid('imgh')} type="number" min="40" className="sas-input" placeholder="As large as it fits"
+                value={field.validation?.imageMaxHeight ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ imageMaxHeight: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+            </div>
+          </>
+        )}
+
         {field.widget === 'barchart' && (
           <>
             <div className="ui-builder__config-section-title">Bar Chart</div>

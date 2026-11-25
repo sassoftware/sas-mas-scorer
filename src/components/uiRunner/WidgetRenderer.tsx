@@ -21,6 +21,7 @@ import { CheckboxInputWidget, CheckboxOutputWidget } from './widgets/CheckboxWid
 import { FileInputWidget } from './widgets/FileWidget';
 import { KpiWidget } from './widgets/KpiWidget';
 import { BarChartWidget } from './widgets/BarChartWidget';
+import { ImageWidget } from './widgets/ImageWidget';
 import { PercentCurrencyInputWidget, PercentCurrencyOutputWidget } from './widgets/PercentCurrencyWidget';
 import { InputWidgetProps } from './widgets/types';
 
@@ -83,6 +84,8 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return field.direction === 'input'
         ? <PercentCurrencyInputWidget {...inputProps} />
         : <PercentCurrencyOutputWidget field={field} value={value} />;
+    case 'image':
+      return <ImageWidget field={field} value={value} />;
     case 'barchart':
       return <BarChartWidget field={field} value={value} labelId={rest.labelId} />;
     case 'kpi':
