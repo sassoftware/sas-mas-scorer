@@ -361,6 +361,66 @@ export const Inspector: React.FC<Props> = (props) => {
           onClose={() => props.onSelect(null)}
         />
 
+        <div className="ui-builder__config-section-title">Show only when</div>
+        {(() => {
+          const others = definition.layout.sections.flatMap(s => s.fields).filter(f =>
+            f.parameterId !== field.parameterId
+            && f.direction !== 'static'
+            && (field.direction === 'input' ? f.direction === 'input' : true));
+          const c = field.showWhen;
+          const setCond = (next: UIField['showWhen']) => props.onFieldChange(field.parameterId, { ...field, showWhen: next });
+          return (
+            <>
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('sw-field')}>Field</label>
+                <select
+                  id={fid('sw-field')}
+                  className="sas-input"
+                  value={c?.field ?? ''}
+                  onChange={(e) => setCond(e.target.value ? { op: c?.op ?? 'eq', value: c?.value, value2: c?.value2, field: e.target.value } : undefined)}
+                >
+                  <option value="">Always shown</option>
+                  {others.map(f => <option key={f.parameterId} value={f.parameterId}>{f.label} ({f.direction === 'input' ? 'input' : 'result'})</option>)}
+                </select>
+              </div>
+              {c && (
+                <div className="ui-builder__config-row">
+                  <div className="ui-builder__config-field">
+                    <label htmlFor={fid('sw-op')}>Condition</label>
+                    <select id={fid('sw-op')} className="sas-input" value={c.op}
+                      onChange={(e) => setCond({ ...c, op: e.target.value as NonNullable<UIField['showWhen']>['op'] })}>
+                      <option value="eq">is</option>
+                      <option value="ne">is not</option>
+                      <option value="gt">is above</option>
+                      <option value="lt">is below</option>
+                      <option value="between">is between</option>
+                      <option value="present">has a value</option>
+                      <option value="missing">is missing</option>
+                    </select>
+                  </div>
+                  {c.op !== 'missing' && c.op !== 'present' && (
+                    <div className="ui-builder__config-field">
+                      <label htmlFor={fid('sw-val')}>{c.op === 'between' ? 'From' : 'Value'}</label>
+                      <input id={fid('sw-val')} className="sas-input" value={c.value ?? ''} onChange={(e) => setCond({ ...c, value: e.target.value })} />
+                    </div>
+                  )}
+                  {c.op === 'between' && (
+                    <div className="ui-builder__config-field">
+                      <label htmlFor={fid('sw-val2')}>To</label>
+                      <input id={fid('sw-val2')} className="sas-input" value={c.value2 ?? ''} onChange={(e) => setCond({ ...c, value2: e.target.value })} />
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="ui-builder__config-type-hint">
+                {field.direction === 'input'
+                  ? 'While hidden, this input is not checked and sends its default value, or missing without one. A checkbox or toggle compares its sent value (1 or 0, Y or N).'
+                  : 'Compares the value entered, or the value MAS returned. Results and text blocks can depend on inputs or on other results.'}
+              </p>
+            </>
+          );
+        })()}
+
         <div className="ui-builder__config-section-title">Placement</div>
         {definition.layout.sections.length > 1 && (
           <div className="ui-builder__config-field">

@@ -6,6 +6,7 @@ import { UISection, UILayout, UIField, FieldErrors, SubmitPosition } from '../..
 import { StepParameter } from '../../types';
 import { effectiveWidth, findParameter, lastInputSectionId, safeColor } from '../../utils/uiDefaults';
 import { WidgetRenderer } from './WidgetRenderer';
+import { conditionHolds } from '../../utils/showWhen';
 
 interface Props {
   layout: UILayout;
@@ -143,7 +144,7 @@ export const DynamicForm: React.FC<Props> = ({
 
   const renderSection = (section: UISection, sIdx: number, plain = false) => {
     const visibleFields = section.fields
-      .filter(f => f.visible)
+      .filter(f => f.visible && conditionHolds(f, { layout }, inputValues, outputValues))
       .sort((a, b) => a.order - b.order);
 
     if (visibleFields.length === 0) return null;

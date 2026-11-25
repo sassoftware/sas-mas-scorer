@@ -3,6 +3,7 @@
 
 import type React from 'react';
 import { Step, StepParameter, StepParameterType } from '../types';
+import { conditionHolds } from './showWhen';
 import {
   SubmitPosition,
   UIDefinition,
@@ -500,6 +501,11 @@ export function buildRunValues(
       if (field.direction !== 'input') continue;
       const param = findParameter(inputs, field.parameterId);
       if (!param) continue;
+      // Hidden by its "Show only when" condition: the default, or missing.
+      if (!conditionHolds(field, definition, values)) {
+        run[param.name] = convertValueForType(field.defaultValue ?? null, param.type);
+        continue;
+      }
       run[param.name] = convertValueForType(resolveInputValue(field, param, values), param.type);
     }
   }

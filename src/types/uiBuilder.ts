@@ -60,6 +60,17 @@ export interface UIField {
   placeholder?: string;
   width: 'full' | 'half' | 'third';
   validation?: FieldValidation;
+  /**
+   * Show the field only when another field meets a condition (3.1). An input
+   * hidden this way sends its default value, or missing without one.
+   */
+  showWhen?: {
+    /** The other field's parameterId (an input; or, for results and text, a result too). */
+    field: string;
+    op: 'eq' | 'ne' | 'gt' | 'lt' | 'between' | 'missing' | 'present';
+    value?: string;
+    value2?: string;
+  };
 }
 
 export type WidgetType =

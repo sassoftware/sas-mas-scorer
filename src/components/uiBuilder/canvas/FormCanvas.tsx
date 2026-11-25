@@ -9,6 +9,7 @@ import { MarkdownWidget } from '../../uiRunner/widgets/MarkdownWidget';
 import { accentButtonStyle, effectiveWidth, findParameter, getSubmitPosition, lastInputSectionId, safeColor } from '../../../utils/uiDefaults';
 import { widgetLabels } from '../widgetMap';
 import { DragPayload, isCanvasDrag, readDrag, startDrag } from './dnd';
+import { describeCondition } from '../../../utils/showWhen';
 import { fieldCount, orderedFields } from './canvasOps';
 
 export type Selection =
@@ -257,6 +258,7 @@ export const FormCanvas: React.FC<Props> = ({
         <span className="cb-field__meta" aria-hidden="true">
           {directionText(field)} · {widgetLabels[field.widget]}
           {missing && ' · not in the signature'}
+          {describeCondition(definition, field) && ` · ${describeCondition(definition, field)}`}
         </span>
       </div>
     );

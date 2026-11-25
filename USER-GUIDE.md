@@ -703,6 +703,12 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Max length** | For Text Input and Text Area on a string input. Empty uses the size the step signature declares |
 | **Min** / **Max** / **Step Size** | For Number Input and Slider. Min and Max are checked before the app runs; Step Size is how much the arrow keys (or the slider) change the value |
 
+### Show Only When
+
+**Show only when** (in a field's settings) shows the field only while another field meets a condition: *is*, *is not*, *is above*, *is below*, *is between*, *has a value* or *is missing*. For example, show the co-applicant inputs only when *Joint application* is `1`. An input can depend on other inputs; a result or text block can also depend on results. A checkbox or toggle is compared by the value it sends (`1` or `0`, `Y` or `N`), a date input by its SAS date value.
+
+While an input is hidden it is not checked before the run and sends its **Default Value**, or missing when it has none, whatever was entered before it was hidden. The canvas shows every field, with the condition under it (*shown when in_date is above 24000*).
+
 ### Widget Types
 
 | Widget | Use For | Configuration |
