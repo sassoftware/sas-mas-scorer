@@ -12,6 +12,7 @@ import { PageHeader } from '../layout/Layout';
 import { DynamicForm } from './DynamicForm';
 import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { RunMessages } from './RunMessages';
+import { LastRun, ResultDownloads } from './ResultDownloads';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
@@ -74,6 +75,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   );
 
   const [outputValues, setOutputValues] = useState<Record<string, unknown>>({});
+  // What the last run sent, for the result downloads.
+  const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [module, setModule] = useState<Module | null>(null);
   const [moduleError, setModuleError] = useState<string | null>(null);
   // Pre-run check: off until the first blocked run, then live as the user
@@ -184,6 +187,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       // no longer lists are left out, and step inputs without a field go out
       // as null (buildStepInput fills every step input).
       const values = buildRunValues(definition, step, inputValues);
+      setLastRun({ inputs: values, at: new Date().toISOString() });
       if (scrUrl) {
         if (!scrInfo) return;
         // Every signature input goes out; one without a field as null.
@@ -209,6 +213,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const handleReset = useCallback(() => {
     setInputValues(getInitialInputValues(definition));
     setOutputValues({});
+    setLastRun(null);
     setBlockedRuns(0);
     reset();
   }, [reset, definition]);
@@ -431,6 +436,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   disabled={true}
                 />
                 <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
+                {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} />}
               </CardBody>
             </Card>
           )}
@@ -485,6 +491,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             submit={submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition }}
           />
           <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
+          {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} />}
         </CardBody>
         {submitPosition === 'bottom' && (
           <CardFooter>

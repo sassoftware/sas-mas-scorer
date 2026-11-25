@@ -150,6 +150,25 @@ export const Inspector: React.FC<Props> = (props) => {
           </div>
           <Button variant="secondary" size="small" onClick={props.onAddSection}>Add section</Button>
 
+          <fieldset className="cb-inspector__checks">
+            <legend className="cb-inspector__label">Downloads after a run</legend>
+            {(['csv', 'json'] as const).map(kind => (
+              <label key={kind}>
+                <input
+                  type="checkbox"
+                  checked={(s.downloads ?? []).includes(kind)}
+                  onChange={(e) => {
+                    const next = new Set(s.downloads ?? []);
+                    if (e.target.checked) next.add(kind); else next.delete(kind);
+                    const list = (['csv', 'json'] as const).filter(k => next.has(k));
+                    props.onSettingsChange({ ...s, downloads: list.length ? list : undefined });
+                  }}
+                />
+                {' '}Offer the inputs and results as {kind === 'csv' ? 'a CSV file' : 'a JSON file'}
+              </label>
+            ))}
+          </fieldset>
+
           <h3 className="cb-inspector__step">Messages after a run</h3>
           <p className="cb-inspector__hint">
             Show your own text when a result meets a condition, for example "Refer to underwriting" when the probability is above 0.7. Every matching message is shown, in this order. The app only compares what MAS returned with your value.

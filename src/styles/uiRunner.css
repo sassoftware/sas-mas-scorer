@@ -919,3 +919,11 @@
   min-width: 4ch;
   text-align: right;
 }
+
+/* Result downloads after a run. */
+.ui-runner__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}

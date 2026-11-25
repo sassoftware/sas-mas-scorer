@@ -183,6 +183,8 @@ export interface UISettings {
   showModelInfo?: boolean;
   /** Messages shown after a run when a result meets a condition (3.1). */
   messageRules?: MessageRule[];
+  /** Offer the last run's inputs and results as a file (3.1). */
+  downloads?: ('csv' | 'json')[];
 }
 
 /** "When <result> <op> <value>, show <message>": only compares what MAS returned. */

@@ -997,3 +997,17 @@
 .cb-rules__rule .sas-input {
   width: 100%;
 }
+
+.cb-inspector__checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+}
+
+.cb-inspector__checks label {
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
