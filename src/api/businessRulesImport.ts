@@ -78,7 +78,11 @@ const sendRulesCsv = async (
   }
   return {
     raw: String(response.data),
-    contentType: response.headers?.['content-type'],
+    // axios types a header as string, number, list or null; the caller wants text.
+    contentType: (() => {
+      const value = response.headers?.['content-type'];
+      return value === null || value === undefined ? undefined : String(value);
+    })(),
     status: response.status,
   };
 };

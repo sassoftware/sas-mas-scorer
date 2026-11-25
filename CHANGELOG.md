@@ -68,6 +68,12 @@ The start of the redesign. The UI app builder becomes canvas first, building the
 - **SAS Logon's sign-in approval answer is recognised as an ended session.** When SAS Viya answered a request with SAS Logon's JSON approval document (seen in the desktop app after the server restarted), the app took it for the data it asked for: a job's page failed with *This page could not be loaded* and lists could read it as empty. The app now renews the sign-in and retries, as it does for the SAS Logon page
 - **A list answered with something that is not a list no longer reads as empty.** When SAS Viya was starting or going down, a service could answer a list request with a web page or an empty body; every list in the app took that as "no items". Test Coverage then showed 0 % with *Data collection (complete)* (no tests found, models missing) instead of saying the tests could not be read. Such an answer now fails the request with a message saying the service may be unavailable, so Test Coverage reports the collection as not collected
 
+### Security
+
+- **Dependencies updated for known vulnerabilities** (`npm audit fix`, no major versions): axios 1.21.1, react-router 7.18.7, Vite 7.3.8, and with them form-data, follow-redirects, @xmldom/xmldom, fflate and fast-uri. `npm audit --omit=dev` now finds nothing in the packages the app ships; what remains is in the build and lint tools (electron-builder 25, typescript-eslint 6), whose fixes need major upgrades planned after 3.1.0
+- **CI audits the shipped packages**: `checks.yml` fails on a high or critical vulnerability in a dependency the app ships (`npm audit --omit=dev --audit-level=high`)
+- esbuild's install script is approved in `package.json` (`allowScripts`), so `npm ci` no longer warns about it; a new esbuild version needs approving again
+
 ## [3.0.0] - 2026-11-19
 
 Run SCR images on your own computer: the desktop app pulls a SAS Container Runtime image with Podman or Docker, runs it, and scores it like any other SCR endpoint. A preview, in the desktop app only. The web app and the Job Execution / Visual Analytics build get the new name, the header change and the paste fix below.
