@@ -1,8 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import { sasViyaClient } from './client';
-import { getCasServers } from './cas';
+import { SAS_NAME, withCasSession } from './casSession';
 
 /** Where an app writes its run log: a CAS library and table. */
 export interface RunLogTarget {
@@ -28,10 +27,8 @@ export interface RunLogRow {
   outputs: string;
 }
 
-/** CAS library and table names a DATA step can use (plain SAS names). */
-export const SAS_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
+export { SAS_NAME };
 
-const JSON_HEADERS = { headers: { 'Content-Type': 'application/json', Accept: 'application/json' } };
 // A DATA step string literal holds at most 32,767 characters.
 const MAX_LITERAL = 32000;
 
@@ -41,18 +38,6 @@ function sasLiteral(value: string): string {
   if (text.length > MAX_LITERAL) text = `${text.slice(0, MAX_LITERAL - 20)}…(truncated)`;
   return `'${text.replace(/'/g, "''")}'`;
 }
-
-let firstServer: Promise<string> | null = null;
-const defaultServer = () => {
-  if (!firstServer) {
-    firstServer = getCasServers().then(s => {
-      if (!s[0]) throw new Error('No CAS server is available.');
-      return s[0].name;
-    });
-    firstServer.catch(() => { firstServer = null; });
-  }
-  return firstServer;
-};
 
 /**
  * Append one row to the log table through a short CAS session (casProxy):
@@ -65,18 +50,7 @@ export async function appendRunLog(target: RunLogTarget, row: RunLogRow): Promis
   if (!SAS_NAME.test(target.caslib) || !SAS_NAME.test(target.table)) {
     throw new Error(`${target.caslib}.${target.table} is not a CAS library and table name the log can use.`);
   }
-  const server = target.server || await defaultServer();
-  const base = `/casProxy/servers/${encodeURIComponent(server)}/cas`;
-  const session: string = (await sasViyaClient.post(`${base}/sessions`, {}, JSON_HEADERS)).data.session;
-  const action = async (name: string, params: Record<string, unknown>) => {
-    const r = await sasViyaClient.post(`${base}/sessions/${session}/actions/${name}`, params, JSON_HEADERS);
-    const severity = r.data?.disposition?.severity;
-    if (severity === 'Error') {
-      throw new Error(r.data?.disposition?.formattedStatus || (r.data?.log ?? '').trim().split('\n').pop() || `${name} failed`);
-    }
-    return r.data;
-  };
-  try {
+  await withCasSession(async (action) => {
     const assign = (Object.entries(row) as [string, string | number][])
       .map(([k, v]) => `${k}=${typeof v === 'number' ? (Number.isFinite(v) ? String(v) : '.') : sasLiteral(v)};`)
       .join(' ');
@@ -92,7 +66,5 @@ export async function appendRunLog(target: RunLogTarget, row: RunLogRow): Promis
         ? `data ${into}(append=yes); set casuser._mss_log_row; run;`
         : `data ${into}(promote=yes); set casuser._mss_log_row; run;`,
     });
-  } finally {
-    sasViyaClient.delete(`${base}/sessions/${session}`).catch(() => undefined);
-  }
+  }, target.server);
 }

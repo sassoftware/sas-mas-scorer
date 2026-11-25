@@ -16,6 +16,7 @@ import { widgetLabels } from './widgetMap';
 import { isoFromSasDate, isoFromSasDatetime, sasDateFromIso, sasDatetimeFromIso } from '../../utils/sasDate';
 import { CURRENCIES, currencyOf } from '../../utils/numberFormat';
 import { KPI_TONES } from '../uiRunner/widgets/KpiWidget';
+import { LookupSettings } from './canvas/LookupSettings';
 import { KpiBand } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
@@ -871,6 +872,10 @@ export const FieldConfigPanel: React.FC<Props> = ({
               </div>
             )}
           </>
+        )}
+
+        {isInput && (field.widget === 'dropdown' || field.widget === 'radio') && (
+          <LookupSettings validation={field.validation} onChange={(lookup) => setValidation({ lookup })} />
         )}
 
         {showOptions && (

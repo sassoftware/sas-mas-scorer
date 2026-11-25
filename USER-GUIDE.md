@@ -742,6 +742,10 @@ While an input is hidden it is not checked before the run and sends its **Defaul
 | **Hidden** | Sending a fixed value without showing it | Default value (sent on every execution) |
 | **Markdown** | Displaying formatted text, instructions, or images | Markdown content with `![alt](url)` image support |
 
+### Options from a CAS Table
+
+A **Dropdown** or **Radio Buttons** input can read its options from a CAS table instead of a typed list: tick **Options from a CAS table** and choose the CAS library, the table (loaded tables are listed), the **Value column** (what is sent) and the **Label column** (what is shown; default: the value). **Read the options now** shows what the app will get. The app reads the table again every time it opens (the distinct pairs, sorted by label, up to 1,000), so the list follows the table. The table must be loaded in CAS and app users need read access to it. When the table can't be read, the app says so and shows the options typed in the builder instead.
+
 ### Dates and Times
 
 MAS takes a date or datetime only as a number: a **SAS date** is the number of days since 1 January 1960 (24 November 2026 is 24434) and a **SAS datetime** the number of seconds since 1 January 1960 00:00:00. MAS rejects dates sent as text. The **Date** and **Date and Time** widgets let the app user pick a date (and time) and send that number; the number is shown under the picker (*Sent to MAS as 24434 (SAS date value)*). A SAS datetime has no time zone, so the time is sent exactly as picked, never shifted by the computer's time zone.

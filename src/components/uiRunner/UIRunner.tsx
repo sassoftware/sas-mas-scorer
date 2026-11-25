@@ -4,7 +4,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { prefillFromQuery } from '../../utils/prefill';
-import { UIDefinition } from '../../types/uiBuilder';
+import { FieldOption, UIDefinition, UILayout } from '../../types/uiBuilder';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
@@ -18,6 +18,7 @@ import { BatchFromFile } from './BatchFromFile';
 import { SaveScenarioButton, decisionSourceOf } from './SaveScenarioButton';
 import { appendRunLog, RunLogRow } from '../../api/casRunLog';
 import { getCurrentUser } from '../../api/identities';
+import { readLookupOptions } from '../../api/casLookup';
 import { RunHistory } from '../scoring/RunHistory';
 import { RunRecord, useRunHistory } from '../scoring/scoringSession';
 import { useStepExecution, useStep } from '../../hooks';
@@ -91,6 +92,31 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   // Run log: the first failure to write it is shown once; results are never held back.
   const [logProblem, setLogProblem] = useState<string | null>(null);
   const logFailedRef = useRef(false);
+  // Lookup dropdowns: options read from CAS when the app opens, by field.
+  const [lookups, setLookups] = useState<Record<string, FieldOption[]>>({});
+  const [lookupProblems, setLookupProblems] = useState<string[]>([]);
+  useEffect(() => {
+    const fields = definition.layout.sections.flatMap(s => s.fields)
+      .filter(f => f.direction === 'input' && f.validation?.lookup && (f.widget === 'dropdown' || f.widget === 'radio'));
+    if (fields.length === 0) return;
+    let live = true;
+    Promise.all(fields.map(f => readLookupOptions(f.validation!.lookup!)
+      .then(options => ({ id: f.parameterId, options, problem: null as string | null }))
+      .catch(err => ({ id: f.parameterId, options: null, problem: `${f.label}: ${err instanceof Error ? err.message : String(err)}` }))))
+      .then(results => {
+        if (!live) return;
+        setLookups(Object.fromEntries(results.filter(r => r.options).map(r => [r.id, r.options as FieldOption[]])));
+        setLookupProblems(results.flatMap(r => (r.problem ? [r.problem] : [])));
+      });
+    return () => { live = false; };
+  }, [definition.layout]);
+  const viewLayout = useMemo<UILayout>(() => (Object.keys(lookups).length === 0 ? definition.layout : {
+    ...definition.layout,
+    sections: definition.layout.sections.map(s => ({
+      ...s,
+      fields: s.fields.map(f => (lookups[f.parameterId] ? { ...f, validation: { ...f.validation, options: lookups[f.parameterId] } } : f)),
+    })),
+  }), [definition.layout, lookups]);
   // What the last run sent, for the result downloads.
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   // Tabs or steps: which shown section is on screen, and the step whose
@@ -385,7 +411,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     : null;
 
   // Unified layout for inline/below modes
-  const unifiedLayout = definition.layout;
+  const unifiedLayout = viewLayout;
 
   const fieldLabel = (parameterId: string) => {
     for (const s of definition.layout.sections) {
@@ -482,6 +508,12 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     </Alert>
   );
 
+  const lookupNote = lookupProblems.length > 0 && (
+    <Alert variant="warning" title="Some options could not be read from CAS">
+      {lookupProblems.join(' ')} The options set in the app are shown instead.
+    </Alert>
+  );
+
   const logNote = logProblem && (
     <Alert variant="warning" title="Run log not written" dismissible onClose={() => setLogProblem(null)}>
       {logProblem}
@@ -523,16 +555,16 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     // Build separate input-only and output-only layouts; static fields go
     // into the input side.
     const inputLayout = {
-      ...definition.layout,
-      sections: definition.layout.sections.map(s => ({
+      ...viewLayout,
+      sections: viewLayout.sections.map(s => ({
         ...s,
         fields: s.fields.filter(f => f.direction === 'input' || f.direction === 'static'),
       })).filter(s => s.fields.length > 0),
     };
 
     const outputLayout_ = {
-      ...definition.layout,
-      sections: definition.layout.sections.map(s => ({
+      ...viewLayout,
+      sections: viewLayout.sections.map(s => ({
         ...s,
         fields: s.fields.filter(f => f.direction === 'output'),
       })).filter(s => s.fields.length > 0),
@@ -551,6 +583,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
 
         {driftNotice}
         {prefillNote}
+        {lookupNote}
         {logNote}
 
         <div className="ui-runner__content ui-runner__content--side-by-side">
@@ -653,6 +686,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
 
       {driftNotice}
         {prefillNote}
+        {lookupNote}
         {logNote}
 
       <Card>

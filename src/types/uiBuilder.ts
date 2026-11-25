@@ -160,6 +160,11 @@ export interface FieldValidation {
   gridColumns?: { name: string; dataType: string }[];
   /** DataGrid editor (3.1): most rows (default: the decision's limit, else 1000). */
   maxRows?: number;
+  /**
+   * Dropdown or radio buttons (3.1): read the options from a CAS table each
+   * time the app opens; `options` stay as the fallback.
+   */
+  lookup?: { caslib: string; table: string; valueColumn: string; labelColumn?: string };
   /** Checkbox group (3.1): fewest and most options that may be ticked. */
   minChecked?: number;
   maxChecked?: number;
