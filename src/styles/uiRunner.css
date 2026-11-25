@@ -621,3 +621,67 @@
 .ui-runner__checkbox-result--yes .ui-runner__checkbox-icon {
   color: var(--sas-success-dark);
 }
+
+/* File upload: preview, name and size, the encoded length against the limit. */
+.ui-runner__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px dashed var(--sas-gray-400);
+  border-radius: var(--radius-md);
+  background: var(--sas-white);
+}
+
+.ui-runner__file--over {
+  border-style: solid;
+  border-color: var(--sas-blue-primary);
+  background: var(--sas-blue-lighter);
+}
+
+.ui-runner__file--invalid {
+  border-color: var(--sas-error-dark);
+}
+
+.ui-runner__file-input {
+  max-width: 100%;
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__file-input:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__file-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--sas-gray-200);
+}
+
+.ui-runner__file-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.ui-runner__file-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.ui-runner__file-hint {
+  color: var(--sas-text-muted);
+}
+
+.ui-runner__file-over {
+  color: var(--sas-error-dark);
+  font-weight: var(--font-weight-medium);
+}

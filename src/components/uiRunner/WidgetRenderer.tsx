@@ -18,6 +18,7 @@ import { MarkdownWidget } from './widgets/MarkdownWidget';
 import { TableWidget } from './widgets/TableWidget';
 import { DateInputWidget, DateOutputWidget } from './widgets/DateWidget';
 import { CheckboxInputWidget, CheckboxOutputWidget } from './widgets/CheckboxWidget';
+import { FileInputWidget } from './widgets/FileWidget';
 import { InputWidgetProps } from './widgets/types';
 
 interface Props {
@@ -74,6 +75,8 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return field.direction === 'input'
         ? <CheckboxInputWidget {...inputProps} />
         : <CheckboxOutputWidget field={field} value={value} type={rest.parameter?.type} />;
+    case 'file':
+      return <FileInputWidget {...inputProps} />;
     case 'hidden':
       return null;
     default:

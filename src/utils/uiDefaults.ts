@@ -81,7 +81,7 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
       return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'string':
       // Toggle sends configurable on/off codes ("Y"/"N" by default).
-      return ['text', 'dropdown', 'radio', 'toggle', 'checkbox', 'textarea', 'readonly', 'hidden'];
+      return ['text', 'dropdown', 'radio', 'toggle', 'checkbox', 'textarea', 'file', 'readonly', 'hidden'];
     case 'binary':
       return ['textarea', 'readonly', 'hidden'];
     default:

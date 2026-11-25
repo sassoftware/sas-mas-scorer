@@ -194,7 +194,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
   const showRequired = isInput && field.widget !== 'hidden' && field.widget !== 'readonly';
   // Text limits apply to string parameters (or a field whose parameter is gone).
   const showMaxLength = isInput
-    && (field.widget === 'text' || field.widget === 'textarea')
+    && (field.widget === 'text' || field.widget === 'textarea' || field.widget === 'file')
     && (!parameter || parameter.type === 'string');
   const showToggleValues = isInput && (field.widget === 'toggle' || field.widget === 'checkbox');
   const toggleDefaults = getDefaultToggleValues(parameter?.type);
@@ -397,6 +397,8 @@ export const FieldConfigPanel: React.FC<Props> = ({
           <>
             <div className="ui-builder__config-section-title">Input Settings</div>
 
+            {/* A file upload has no placeholder or default: the user always picks the file. */}
+            {field.widget !== 'file' && (
             <div className="ui-builder__config-field">
               <label htmlFor={fid('placeholder')}>Placeholder</label>
               <input
@@ -407,8 +409,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
                 onChange={(e) => handleChange('placeholder', e.target.value || undefined)}
               />
             </div>
+            )}
 
-            {(field.widget === 'date' || field.widget === 'datetime') ? (
+            {field.widget === 'file' ? null : (field.widget === 'date' || field.widget === 'datetime') ? (
               <div className="ui-builder__config-field">
                 <label htmlFor={fid('default')}>Default Value</label>
                 <input
@@ -507,6 +510,55 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {isInput && field.widget === 'file' && (
+          <>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('accept')}>File types</label>
+              <select
+                id={fid('accept')}
+                className="sas-input"
+                value={['', 'image/*', 'image/png,image/jpeg', 'application/pdf', '.csv,.txt,.json'].includes(field.validation?.fileAccept ?? '') ? (field.validation?.fileAccept ?? '') : 'custom'}
+                onChange={(e) => setValidation({ fileAccept: e.target.value === 'custom' ? (field.validation?.fileAccept || '.') : e.target.value || undefined })}
+              >
+                <option value="">Any file</option>
+                <option value="image/*">Images</option>
+                <option value="image/png,image/jpeg">PNG and JPEG images</option>
+                <option value="application/pdf">PDF documents</option>
+                <option value=".csv,.txt,.json">Text files (CSV, TXT, JSON)</option>
+                <option value="custom">Other (list them)</option>
+              </select>
+            </div>
+            {!['', 'image/*', 'image/png,image/jpeg', 'application/pdf', '.csv,.txt,.json'].includes(field.validation?.fileAccept ?? '') && (
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('accept-list')}>Accepted extensions or types</label>
+                <input
+                  id={fid('accept-list')}
+                  className="sas-input"
+                  aria-describedby={fid('accept-hint')}
+                  value={field.validation?.fileAccept ?? ''}
+                  placeholder=".dcm,.tif"
+                  onChange={(e) => setValidation({ fileAccept: e.target.value || undefined })}
+                />
+                <span className="ui-builder__config-type-hint" id={fid('accept-hint')}>Comma-separated, for example .dcm,.tif or image/webp.</span>
+              </div>
+            )}
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('fformat')}>Send the file as</label>
+              <select
+                id={fid('fformat')}
+                className="sas-input"
+                aria-describedby={fid('fformat-hint')}
+                value={field.validation?.fileFormat ?? 'base64'}
+                onChange={(e) => setValidation({ fileFormat: e.target.value === 'dataUrl' ? 'dataUrl' : undefined })}
+              >
+                <option value="base64">Base64 text only</option>
+                <option value="dataUrl">Data URL (with the data:…;base64, prefix)</option>
+              </select>
+              <span className="ui-builder__config-type-hint" id={fid('fformat-hint')}>Choose what the module's code expects. Base64 is about a third larger than the file.</span>
+            </div>
+          </>
         )}
 
         {showMaxLength && (

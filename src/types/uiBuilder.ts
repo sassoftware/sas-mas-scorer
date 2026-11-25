@@ -80,7 +80,9 @@ export type WidgetType =
   /** A SAS datetime (seconds since 1960-01-01 00:00) as a date and time (3.1). */
   | 'datetime'
   /** On/off as a checkbox (3.1): sends the on/off values like Toggle; a result shows Yes or No. */
-  | 'checkbox';
+  | 'checkbox'
+  /** A file picked or dropped, sent base64-encoded as a string input (3.1). */
+  | 'file';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -103,6 +105,10 @@ export interface FieldValidation {
   onValue?: string;
   /** Value a Toggle sends when off (default 0, or "N" for a string parameter). */
   offValue?: string;
+  /** File upload (3.1): the file types offered, as an input accept list ("image/*", ".pdf"). */
+  fileAccept?: string;
+  /** File upload (3.1): plain base64 (default) or a data URL with its "data:…;base64," prefix. */
+  fileFormat?: 'base64' | 'dataUrl';
 }
 
 /** A field's runtime problem, shown inline under the control. */

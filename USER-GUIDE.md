@@ -701,6 +701,7 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
 | **Table** | A decision DataGrid output as a table (the default for DataGrid outputs), or an array output as one column | — (up to 200 rows are shown, with a count of the rest) |
+| **File Upload** | A string input that takes a file, such as an image for a computer vision model. The user picks or drops a file; the app sends it base64-encoded | File types (any, images, PNG and JPEG, PDF, text files, or a list), Send the file as (base64 text or a data URL), Max length (default: the size in the step signature) |
 | **Checkbox** | On/off: a checkbox for an input (sends the same values as Toggle Switch), a ticked or empty box with *Yes* or *No* for a result | Value when on / off (default `1` / `0`, or `Y` / `N` for a string) |
 | **Date** | A SAS date: a date picker for an input, a readable date for a result | Default value (picked with the same date picker) |
 | **Date and Time** | A SAS datetime: a date and time picker for an input (to the second), a readable date and time for a result | Default value (picked with the same picker) |
@@ -712,6 +713,12 @@ Select a field to configure it in the inspector. A field has these settings:
 MAS takes a date or datetime only as a number: a **SAS date** is the number of days since 1 January 1960 (24 November 2026 is 24434) and a **SAS datetime** the number of seconds since 1 January 1960 00:00:00. MAS rejects dates sent as text. The **Date** and **Date and Time** widgets let the app user pick a date (and time) and send that number; the number is shown under the picker (*Sent to MAS as 24434 (SAS date value)*). A SAS datetime has no time zone, so the time is sent exactly as picked, never shifted by the computer's time zone.
 
 MAS lists date, datetime and boolean variables as plain numbers. For a module published from a SAS Intelligent Decisioning decision, the builder reads the decision's own variable types: a **date** variable gets the **Date** widget, a **datetime** variable the **Date and Time** widget (only that one of the two is offered for it), and a **boolean** variable the **Checkbox**, for inputs and results. MAS takes a boolean as `1` or `0` (it rejects `true` and `"Y"`), which is what the Checkbox sends by default. For other modules, choose these widgets for a numeric input or result yourself.
+
+### Files
+
+The **File Upload** widget reads the file in the browser and sends it base64-encoded as the string input: plain base64 text, or a data URL with the `data:…;base64,` prefix, whichever the module's code expects. Images show a small preview. The file goes nowhere but into the scoring request.
+
+Base64 is about a third larger than the file. The encoded length is checked against the field's **Max length** (or the size the step signature declares) as soon as the file is picked, and the field says by how much it is over (*Too large to send: 122,976 characters encoded, 117,976 over the limit of 5,000.*); the app will not run until a file that fits is picked. The app does not shrink or convert files.
 
 ### Output Formatting
 
