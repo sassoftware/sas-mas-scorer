@@ -21,4 +21,6 @@ export const widgetLabels: Record<WidgetType, string> = {
   datetime: 'Date and Time',
   checkbox: 'Checkbox',
   file: 'File Upload',
+  percent: 'Percent',
+  currency: 'Currency',
 };

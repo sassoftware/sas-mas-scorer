@@ -82,7 +82,11 @@ export type WidgetType =
   /** On/off as a checkbox (3.1): sends the on/off values like Toggle; a result shows Yes or No. */
   | 'checkbox'
   /** A file picked or dropped, sent base64-encoded as a string input (3.1). */
-  | 'file';
+  | 'file'
+  /** A number as a percentage (3.1): entered or shown with %, sent as a fraction or as points. */
+  | 'percent'
+  /** A number as an amount of money (3.1): entered or shown with the currency symbol. */
+  | 'currency';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -109,6 +113,10 @@ export interface FieldValidation {
   fileAccept?: string;
   /** File upload (3.1): plain base64 (default) or a data URL with its "data:…;base64," prefix. */
   fileFormat?: 'base64' | 'dataUrl';
+  /** Percent (3.1): 'fraction' (default) sends 12.5 % as 0.125; 'points' sends 12.5. */
+  percentScale?: 'fraction' | 'points';
+  /** Currency (3.1): an ISO 4217 code such as EUR or USD (default EUR). */
+  currency?: string;
 }
 
 /** A field's runtime problem, shown inline under the control. */

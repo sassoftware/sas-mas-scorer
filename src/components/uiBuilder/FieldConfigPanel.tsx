@@ -13,6 +13,7 @@ import {
 } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
 import { isoFromSasDate, isoFromSasDatetime, sasDateFromIso, sasDatetimeFromIso } from '../../utils/sasDate';
+import { CURRENCIES, currencyOf } from '../../utils/numberFormat';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
 
@@ -510,6 +511,38 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {field.widget === 'percent' && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('pscale')}>{isInput ? 'Send 12.5 % as' : 'The module returns 12.5 % as'}</label>
+            <select
+              id={fid('pscale')}
+              className="sas-input"
+              value={field.validation?.percentScale ?? 'fraction'}
+              onChange={(e) => setValidation({ percentScale: e.target.value === 'points' ? 'points' : undefined })}
+            >
+              <option value="fraction">0.125 (a fraction)</option>
+              <option value="points">12.5 (percentage points)</option>
+            </select>
+          </div>
+        )}
+
+        {field.widget === 'currency' && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('currency')}>Currency</label>
+            <select
+              id={fid('currency')}
+              className="sas-input"
+              value={currencyOf(field)}
+              onChange={(e) => setValidation({ currency: e.target.value })}
+            >
+              {(CURRENCIES.includes(currencyOf(field)) ? CURRENCIES : [currencyOf(field), ...CURRENCIES]).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <span className="ui-builder__config-type-hint">Only shown with the amount; the module gets the plain number.</span>
+          </div>
         )}
 
         {isInput && field.widget === 'file' && (

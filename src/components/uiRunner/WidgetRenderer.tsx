@@ -19,6 +19,7 @@ import { TableWidget } from './widgets/TableWidget';
 import { DateInputWidget, DateOutputWidget } from './widgets/DateWidget';
 import { CheckboxInputWidget, CheckboxOutputWidget } from './widgets/CheckboxWidget';
 import { FileInputWidget } from './widgets/FileWidget';
+import { PercentCurrencyInputWidget, PercentCurrencyOutputWidget } from './widgets/PercentCurrencyWidget';
 import { InputWidgetProps } from './widgets/types';
 
 interface Props {
@@ -75,6 +76,11 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return field.direction === 'input'
         ? <CheckboxInputWidget {...inputProps} />
         : <CheckboxOutputWidget field={field} value={value} type={rest.parameter?.type} />;
+    case 'percent':
+    case 'currency':
+      return field.direction === 'input'
+        ? <PercentCurrencyInputWidget {...inputProps} />
+        : <PercentCurrencyOutputWidget field={field} value={value} />;
     case 'file':
       return <FileInputWidget {...inputProps} />;
     case 'hidden':

@@ -58,7 +58,7 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
 export function getCompatibleWidgets(type: StepParameterType, direction: 'input' | 'output'): WidgetType[] {
   if (direction === 'output') {
     if (type === 'decimal' || type === 'integer' || type === 'bigint') {
-      return ['readonly', 'gauge', 'badge', 'checkbox', 'date', 'datetime', 'hidden'];
+      return ['readonly', 'gauge', 'badge', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
       return ['readonly', 'badge', 'checkbox', 'hidden'];
@@ -74,11 +74,11 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
 
   switch (type) {
     case 'decimal':
-      return ['number', 'slider', 'dropdown', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'integer':
     case 'bigint':
       // Toggle sends 1/0 by default; a decimal flag is rare enough to leave out.
-      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'string':
       // Toggle sends configurable on/off codes ("Y"/"N" by default).
       return ['text', 'dropdown', 'radio', 'toggle', 'checkbox', 'textarea', 'file', 'readonly', 'hidden'];

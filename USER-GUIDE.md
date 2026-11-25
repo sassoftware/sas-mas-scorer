@@ -701,6 +701,8 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
 | **Table** | A decision DataGrid output as a table (the default for DataGrid outputs), or an array output as one column | — (up to 200 rows are shown, with a count of the rest) |
+| **Percent** | A number entered or shown as a percentage, with the % sign | Send 12.5 % as `0.125` (a fraction, default) or `12.5` (percentage points); Decimal places for a result |
+| **Currency** | A number entered or shown as an amount of money, with the currency symbol | Currency (EUR by default, any ISO code); Decimal places for a result. The module gets the plain number |
 | **File Upload** | A string input that takes a file, such as an image for a computer vision model. The user picks or drops a file; the app sends it base64-encoded | File types (any, images, PNG and JPEG, PDF, text files, or a list), Send the file as (base64 text or a data URL), Max length (default: the size in the step signature) |
 | **Checkbox** | On/off: a checkbox for an input (sends the same values as Toggle Switch), a ticked or empty box with *Yes* or *No* for a result | Value when on / off (default `1` / `0`, or `Y` / `N` for a string) |
 | **Date** | A SAS date: a date picker for an input, a readable date for a result | Default value (picked with the same date picker) |
