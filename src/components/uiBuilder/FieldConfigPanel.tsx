@@ -14,6 +14,8 @@ import {
 import { widgetLabels } from './widgetMap';
 import { isoFromSasDate, isoFromSasDatetime, sasDateFromIso, sasDatetimeFromIso } from '../../utils/sasDate';
 import { CURRENCIES, currencyOf } from '../../utils/numberFormat';
+import { KPI_TONES } from '../uiRunner/widgets/KpiWidget';
+import { KpiBand } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
 
@@ -511,6 +513,79 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {field.widget === 'kpi' && (
+          <>
+            <div className="ui-builder__config-section-title">KPI Tile</div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('unit')}>Unit</label>
+              <input
+                id={fid('unit')}
+                className="sas-input"
+                value={field.validation?.unit ?? ''}
+                placeholder="For example ms, points, %"
+                onChange={(e) => setValidation({ unit: e.target.value || undefined })}
+              />
+            </div>
+            <div className="ui-builder__config-field">
+              <span className="cb-inspector__label" id={fid('bands')}>Bands</span>
+              <span className="ui-builder__config-type-hint" style={{ display: 'block', marginBottom: '6px' }}>
+                Checked in order: the first band the value is below wins. Leave the last band's limit empty for everything above.
+              </span>
+              <div role="group" aria-labelledby={fid('bands')}>
+                {(field.validation?.kpiBands ?? []).map((band, i, all) => {
+                  const update = (patch: Partial<KpiBand>) =>
+                    setValidation({ kpiBands: all.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+                  return (
+                    <div key={i} className="ui-builder__option-row">
+                      <input
+                        type="number"
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: below`}
+                        placeholder="Below (empty: any)"
+                        value={band.below ?? ''}
+                        onChange={(e) => update({ below: e.target.value === '' ? undefined : Number(e.target.value) })}
+                      />
+                      <input
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: word shown`}
+                        placeholder="Word, e.g. High"
+                        value={band.label}
+                        onChange={(e) => update({ label: e.target.value })}
+                      />
+                      <select
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: colour`}
+                        value={band.tone}
+                        onChange={(e) => update({ tone: e.target.value as KpiBand['tone'] })}
+                      >
+                        {(Object.keys(KPI_TONES) as KpiBand['tone'][]).map(t => (
+                          <option key={t} value={t}>{KPI_TONES[t].name}</option>
+                        ))}
+                      </select>
+                      <IconButton
+                        size="small"
+                        variant="danger"
+                        onClick={() => setValidation({ kpiBands: all.filter((_b, j) => j !== i) })}
+                        title="Remove band"
+                        aria-label={`Remove band ${i + 1}`}
+                      >
+                        <CloseIcon />
+                      </IconButton>
+                    </div>
+                  );
+                })}
+              </div>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => setValidation({ kpiBands: [...(field.validation?.kpiBands ?? []), { label: '', tone: 'neutral' }] })}
+              >
+                Add band
+              </Button>
+            </div>
+          </>
         )}
 
         {field.widget === 'percent' && (

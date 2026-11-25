@@ -23,4 +23,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   file: 'File Upload',
   percent: 'Percent',
   currency: 'Currency',
+  kpi: 'KPI Tile',
 };

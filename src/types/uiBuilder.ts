@@ -86,7 +86,9 @@ export type WidgetType =
   /** A number as a percentage (3.1): entered or shown with %, sent as a fraction or as points. */
   | 'percent'
   /** A number as an amount of money (3.1): entered or shown with the currency symbol. */
-  | 'currency';
+  | 'currency'
+  /** A result as a large number with unit and bands (3.1). */
+  | 'kpi';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -117,6 +119,17 @@ export interface FieldValidation {
   percentScale?: 'fraction' | 'points';
   /** Currency (3.1): an ISO 4217 code such as EUR or USD (default EUR). */
   currency?: string;
+  /** KPI tile (3.1): text after the number ("ms", "points"). */
+  unit?: string;
+  /** KPI tile (3.1): bands checked in order; the first the value is below wins. */
+  kpiBands?: KpiBand[];
+}
+
+/** A KPI band: values below `below` (or any value, when unset) get this word and colour. */
+export interface KpiBand {
+  below?: number;
+  label: string;
+  tone: 'good' | 'warning' | 'critical' | 'info' | 'neutral';
 }
 
 /** A field's runtime problem, shown inline under the control. */

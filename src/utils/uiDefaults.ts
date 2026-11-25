@@ -58,7 +58,7 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
 export function getCompatibleWidgets(type: StepParameterType, direction: 'input' | 'output'): WidgetType[] {
   if (direction === 'output') {
     if (type === 'decimal' || type === 'integer' || type === 'bigint') {
-      return ['readonly', 'gauge', 'badge', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'hidden'];
+      return ['readonly', 'kpi', 'gauge', 'badge', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
       return ['readonly', 'badge', 'checkbox', 'hidden'];
