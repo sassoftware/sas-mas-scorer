@@ -348,7 +348,7 @@ The file format is detected automatically from the extension, and a badge next t
 
 ### Uploading a File
 
-Click the file picker and choose a file in one of the supported formats, or drag and drop the file onto the upload area. From the keyboard, the file picker is the way in. The file is parsed entirely in the browser — nothing is uploaded to a server.
+Click **Browse files** and choose a file in one of the supported formats (listed under the button), or drag and drop the file onto the dashed area. From the keyboard, **Browse files** is the way in. Once loaded, the area shrinks to one row with the file name and format, **Choose another** (or drop another file on the row) and **Clear**. The file is parsed entirely in the browser — nothing is uploaded to a server.
 
 ### Custom Delimiter (CSV / TSV only)
 
@@ -1363,11 +1363,10 @@ The page is a three-step workflow shown as tabs at the top.
 ### Step 1 — Input Schema
 
 1. Set the **Input variable name** — the name of the SID Character variable that will hold the raw string at runtime (default `input_string`).
-2. Provide a sample payload one of three ways:
-   - **Paste** JSON or XML directly into the text area.
-   - **Upload file** — choose a `.json`, `.xml`, or `.txt` file.
-   - **Load JSON sample** / **Load XML sample** — insert a built-in example to experiment with.
-3. Click **Parse & extract variables**. The format (JSON or XML) is detected automatically.
+2. Provide a sample payload, choosing the **Input method**:
+   - **Upload file** — click **Browse files** and choose a `.json`, `.xml`, or `.txt` file, or drop it on the dashed area. It is parsed straight away and the page moves on to Variable Mapping; its text also fills **Paste text**, so you can adjust it and parse again.
+   - **Paste text** — paste JSON or XML into the text box and click **Parse & extract variables**.
+3. The format (JSON or XML) is detected automatically.
 
 ### Step 2 — Variable Mapping
 
@@ -1433,7 +1432,7 @@ The page is a four-step wizard. Click any enabled step in the step bar to move b
 
 ### Step 1 — Upload
 
-- Click **Choose a CSV file** or drag & drop the file onto the drop zone — or Tab to the drop zone and press **Space** to open the file dialog. Files must be UTF-8 CSV with the standard header row (`ruleset_id,ruleset_nm,folder_path,…`).
+- **Upload file**: click **Browse files** or drag and drop the file onto the dashed area (from the keyboard, Tab to **Browse files** and press **Space**). **Paste text**: paste the CSV into the text box and click **Validate & Continue**. Either way it must be CSV with the standard header row (`ruleset_id,ruleset_nm,folder_path,…`); files must be UTF-8.
 - **Download template** in the page header produces an empty CSV with the correct header row.
 - After loading, the page shows row, rule set, and rule counts and moves on to Review & Fix automatically. Files with a missing or wrong header are rejected here with an explanation of what was expected.
 - A previously downloaded rejection file (which carries an extra reason column) can be re-uploaded as-is — the extra column is recognized and ignored.

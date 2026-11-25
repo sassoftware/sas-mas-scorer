@@ -19,3 +19,4 @@ export * from './Pagination';
 export * from './ChunkErrorBoundary';
 export * from './DownloadFallback';
 export * from './ListTable';
+export * from './FileIntake';

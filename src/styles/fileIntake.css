@@ -1,0 +1,185 @@
+/* Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* File intake (FileIntake.tsx, Figma 11/13): the one way the app takes a
+   file in. A dashed drop area with Browse files, optionally under an
+   Upload file / Paste text switch; a loaded file shrinks it to one row. */
+
+.file-intake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.file-intake__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.file-intake__caption {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+/* Segmented switch: the chosen side is a raised white pill on grey. */
+.file-intake__switch {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--sas-gray-100);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.file-intake__switch-option {
+  min-height: 28px;
+  padding: 0 var(--space-4);
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-700);
+  background: transparent;
+}
+
+.file-intake__switch-option:hover {
+  color: var(--sas-gray-900);
+}
+
+.file-intake__switch-option[aria-pressed='true'] {
+  background: var(--sas-white);
+  color: var(--sas-gray-900);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+@media (forced-colors: active) {
+  .file-intake__switch-option[aria-pressed='true'] {
+    outline: 2px solid Highlight;
+  }
+}
+
+/* Positioned so the .sr-only file input is clipped against the area and not
+   against whatever positioned ancestor happens to be above it. */
+.file-intake__drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  background: var(--sas-gray-50);
+  border: 1.5px dashed var(--sas-gray-400);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.file-intake__drop--active {
+  border-color: var(--sas-blue-primary);
+  background: var(--sas-blue-light);
+}
+
+.file-intake__drop--disabled {
+  opacity: 0.6;
+}
+
+.file-intake__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sas-blue-light);
+  color: var(--sas-blue-primary);
+}
+
+.file-intake__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.file-intake__prompt {
+  font-size: var(--font-size-base);
+  color: var(--sas-gray-800);
+}
+
+.file-intake__hint {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+/* The input is visually hidden but focusable; its label is the button, so
+   the label carries the focus ring and the disabled look. */
+.file-intake__browse {
+  cursor: pointer;
+  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
+  line-height: normal;
+}
+
+.file-intake__input:focus-visible + .file-intake__browse {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.file-intake__input:disabled + .file-intake__browse {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.file-intake__paste {
+  min-height: min(320px, 40vh);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+
+.file-intake__loaded {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-gray-50);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.file-intake__loaded--drag {
+  border-color: var(--sas-blue-primary);
+  border-style: dashed;
+  background: var(--sas-blue-light);
+}
+
+.file-intake__file-icon {
+  display: inline-flex;
+  color: var(--sas-blue-primary);
+}
+
+.file-intake__file-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.file-intake__file-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.file-intake__loaded-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}

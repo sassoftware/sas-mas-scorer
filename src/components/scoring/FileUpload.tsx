@@ -1,12 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { StepParameter } from '../../types';
-import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
+import { Card, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
+import { FileIntake } from '../common/FileIntake';
 import {
   FileFormatAdapter,
   MappedColumn,
@@ -91,7 +92,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onExecuteBatch,
   executing,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [sources, setSources] = useState<InputSources>({});
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +103,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [delimiter, setDelimiter] = useState<string | null>(null);
   const [customDelimiter, setCustomDelimiter] = useState<string>('');
-  const [dragOver, setDragOver] = useState(false);
   // Optional expected-output columns, and what was suggested by name
   const [expectedSources, setExpectedSources] = useState<ExpectedSources>(NO_EXPECTED);
   const [suggestedExpected, setSuggestedExpected] = useState<ExpectedSources>(NO_EXPECTED);
@@ -161,37 +160,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     await runAdapter(adapter, file);
   }, [runAdapter]);
 
-  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) handleFile(file);
-  }, [handleFile]);
-
-  // Drag and drop is the pointer shortcut; the file picker (a focusable input
-  // with a visible label) stays the keyboard path. preventDefault on dragover
-  // and drop also stops the browser from opening the file and leaving the app.
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = executing ? 'none' : 'copy';
-    if (!executing) setDragOver(true);
-  }, [executing]);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    // Moving onto a child element fires dragleave on the zone; only a pointer
-    // that really left it clears the highlight.
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (executing) return;
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    // A later pick of the same file must still fire the input's change event
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    handleFile(file);
-  }, [executing, handleFile]);
-
   const handleSheetChange = useCallback(async (sheetName: string) => {
     if (!currentFile || !currentAdapter) return;
     setError(null);
@@ -239,9 +207,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     setCurrentAdapter(null);
     setDelimiter(null);
     setCustomDelimiter('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
   }, []);
 
   const summary = useMemo(() => summarizeSources(parameters, sources), [parameters, sources]);
@@ -287,43 +252,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   return (
     <Card className="csv-upload">
-      <CardHeader>
-        <h3>Batch File Upload</h3>
-      </CardHeader>
       <CardBody>
-        <div
-          className={`csv-upload__file-section csv-upload__dropzone${dragOver ? ' csv-upload__dropzone--active' : ''}`}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={acceptAttribute()}
-            onChange={handleFileSelect}
-            className="csv-upload__file-input"
-            id="file-upload-input"
-            aria-describedby="file-upload-hint"
-            disabled={executing}
-          />
-          <label htmlFor="file-upload-input" className="csv-upload__file-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-            </svg>
-            <span>{fileName || 'Choose file...'}</span>
-          </label>
-          {formatLabel && <Badge variant="info">{formatLabel}</Badge>}
-          {fileName && (
-            <Button variant="tertiary" size="small" onClick={handleClear} disabled={executing}>
-              Clear
-            </Button>
-          )}
-          <span className="csv-upload__dropzone-hint" id="file-upload-hint">
-            {dragOver ? 'Drop the file to load it' : 'or drag and drop a file here'} ({supportedFormats})
-          </span>
-        </div>
+        <FileIntake
+          className="csv-upload__intake"
+          accept={acceptAttribute()}
+          prompt="Drag and drop your file here, or"
+          acceptHint={`Accepts ${supportedFormats}; one row per execution`}
+          onFile={handleFile}
+          disabled={executing}
+          loaded={fileName ? {
+            name: fileName,
+            detail: formatLabel ? <Badge variant="info">{formatLabel}</Badge> : undefined,
+            onClear: executing ? undefined : handleClear,
+          } : null}
+        />
 
         {error && (
           <Alert variant="error" title="Error" dismissible onClose={() => setError(null)}>
