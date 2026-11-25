@@ -15,6 +15,7 @@ import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { RunMessages } from './RunMessages';
 import { LastRun, ResultDownloads } from './ResultDownloads';
 import { BatchFromFile } from './BatchFromFile';
+import { SaveScenarioButton, decisionSourceOf } from './SaveScenarioButton';
 import { RunHistory } from '../scoring/RunHistory';
 import { RunRecord, useRunHistory } from '../scoring/scoringSession';
 import { useStepExecution, useStep } from '../../hooks';
@@ -335,6 +336,11 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       disabled={executing}
     />
   ) : null;
+  // Save as test case: MAS decision modules only, after a run that returned results.
+  const saveScenario = !scrUrl && definition.settings.saveScenario && module && step && lastRun
+    && decisionSourceOf(module) && output?.outputs?.length
+    ? <SaveScenarioButton module={module} step={step} inputs={lastRun.inputs} outputs={output.outputs} />
+    : null;
   const batch = definition.settings.batchFromFile
     ? <BatchFromFile definition={definition} step={step} scrInfo={scrUrl ? scrInfo : null} />
     : null;
@@ -538,7 +544,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   disabled={true}
                 />
                 <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
-                {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} />}
+                {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} extra={saveScenario} />}
               </CardBody>
             </Card>
           )}
@@ -634,7 +640,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             stepNav={stepNav}
           />
           <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
-          {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} />}
+          {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} extra={saveScenario} />}
         </CardBody>
         {footerButton && (
           <CardFooter>

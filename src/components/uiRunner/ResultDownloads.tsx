@@ -17,6 +17,8 @@ interface Props {
   definition: UIDefinition;
   run: LastRun | null;
   outputs: Record<string, unknown>;
+  /** More actions for the finished run (Save as test case). */
+  extra?: React.ReactNode;
 }
 
 /**
@@ -24,9 +26,9 @@ interface Props {
  * author turned them on. CSV has one line per value (kind, name, value; a
  * DataGrid or list as JSON text); JSON keeps the values' own types.
  */
-export const ResultDownloads: React.FC<Props> = ({ definition, run, outputs }) => {
+export const ResultDownloads: React.FC<Props> = ({ definition, run, outputs, extra }) => {
   const kinds = definition.settings.downloads ?? [];
-  if (kinds.length === 0 || !run || Object.keys(outputs).length === 0) return null;
+  if ((kinds.length === 0 && !extra) || !run || Object.keys(outputs).length === 0) return null;
   const base = safeFilename(`${definition.name || definition.moduleId}-${run.at.replace(/[:.]/g, '-')}`);
   const source = definition.scrUrl ? { scrEndpoint: definition.scrUrl } : { masModule: definition.moduleId, step: definition.stepId };
 
@@ -43,7 +45,7 @@ export const ResultDownloads: React.FC<Props> = ({ definition, run, outputs }) =
   };
 
   return (
-    <div className="ui-runner__downloads" role="group" aria-label="Download this run">
+    <div className="ui-runner__downloads" role="group" aria-label="This run">
       {kinds.includes('csv') && (
         <button type="button" className="sas-button sas-button--secondary sas-button--small" onClick={csv}>
           Download results (CSV)
@@ -54,6 +56,7 @@ export const ResultDownloads: React.FC<Props> = ({ definition, run, outputs }) =
           Download results (JSON)
         </button>
       )}
+      {extra}
     </div>
   );
 };

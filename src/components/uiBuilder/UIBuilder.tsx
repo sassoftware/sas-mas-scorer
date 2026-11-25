@@ -30,6 +30,7 @@ import { getScoreableStep } from '../../utils/moduleHelper';
 import { inspectEndpoint, scrStep } from '../../api/scr';
 import { DateKinds, getDecisionDateKinds, getDecisionGridSchemas, GridSchema } from '../../api/decisionDateTypes';
 import { modelIdOf } from '../uiRunner/ModelInfoPanel';
+import { decisionSourceOf } from '../uiRunner/SaveScenarioButton';
 
 interface UIBuilderProps {
   /** Existing definition to edit, or null for new */
@@ -482,6 +483,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
           dateKinds={dateKinds}
           gridSchemas={gridSchemas}
           isModelModule={!scrUrl && !!modelIdOf(module)}
+          isDecisionModule={!scrUrl && !!decisionSourceOf(module)}
           source={source}
           onChange={applyChange}
           selectionResetKey={selectionResetKey}

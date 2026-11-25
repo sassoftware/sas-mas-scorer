@@ -21,6 +21,8 @@ interface Props {
   dateKinds: Record<string, 'date' | 'datetime' | 'checkbox'>;
   /** The module was published from SAS Model Manager (offers the model information panel). */
   isModelModule?: boolean;
+  /** The module was published from a SAS Intelligent Decisioning decision (offers Save as test case). */
+  isDecisionModule?: boolean;
   gridSchemas?: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>;
   selection: Selection;
   onSelect: (selection: Selection) => void;
@@ -142,6 +144,22 @@ export const Inspector: React.FC<Props> = (props) => {
             </select>
             <p className="ui-builder__config-type-hint">You can also drag the button on the canvas.</p>
           </div>
+          {props.isDecisionModule && (
+            <div className="ui-builder__config-field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!s.saveScenario}
+                  onChange={(e) => props.onSettingsChange({ ...s, saveScenario: e.target.checked || undefined })}
+                  aria-describedby={fid('scenario-hint')}
+                />
+                {' '}Save as test case
+              </label>
+              <span className="ui-builder__config-type-hint" id={fid('scenario-hint')}>
+                After a run, app users can save the inputs and results as a scenario of the decision in SAS Intelligent Decisioning. They need write access to the folder they choose.
+              </span>
+            </div>
+          )}
           {props.isModelModule && (
             <div className="ui-builder__config-field">
               <label>

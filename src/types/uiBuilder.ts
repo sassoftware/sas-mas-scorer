@@ -214,6 +214,8 @@ export interface UISettings {
   batchFromFile?: boolean;
   /** Show the last runs in this browser tab, to restore inputs or compare two runs (3.1). */
   runHistory?: boolean;
+  /** Offer "Save as test case": the last run saved as a decision scenario (3.1). */
+  saveScenario?: boolean;
 }
 
 /** "When <result> <op> <value>, show <message>": only compares what MAS returned. */
