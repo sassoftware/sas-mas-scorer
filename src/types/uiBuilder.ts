@@ -107,7 +107,9 @@ export type WidgetType =
   /** A returned image: base64, a data URL or an https link (3.1). */
   | 'image'
   /** A DataGrid input edited in place, with CSV fill (3.1). */
-  | 'datagrid';
+  | 'datagrid'
+  /** A checkbox per option for a list (array) input (3.1). */
+  | 'checkboxgroup';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -158,6 +160,9 @@ export interface FieldValidation {
   gridColumns?: { name: string; dataType: string }[];
   /** DataGrid editor (3.1): most rows (default: the decision's limit, else 1000). */
   maxRows?: number;
+  /** Checkbox group (3.1): fewest and most options that may be ticked. */
+  minChecked?: number;
+  maxChecked?: number;
 }
 
 /** A KPI band: values below `below` (or any value, when unset) get this word and colour. */

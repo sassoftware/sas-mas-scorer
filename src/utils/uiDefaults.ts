@@ -89,6 +89,7 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
     default:
       if (isDatagridType(type)) return ['datagrid', 'textarea', 'hidden'];
       // Array types
+      if (type.endsWith('Array')) return ['textarea', 'checkboxgroup', 'readonly', 'hidden'];
       return ['textarea', 'readonly', 'hidden'];
   }
 }

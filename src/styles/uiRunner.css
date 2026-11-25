@@ -1138,3 +1138,10 @@
   color: var(--sas-error-dark);
   font-size: var(--font-size-sm);
 }
+
+/* Checkbox group (list inputs). */
+.ui-runner__checkgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}

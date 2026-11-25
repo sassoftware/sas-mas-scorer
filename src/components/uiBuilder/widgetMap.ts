@@ -27,4 +27,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   barchart: 'Bar Chart',
   image: 'Image',
   datagrid: 'DataGrid Editor',
+  checkboxgroup: 'Checkbox Group',
 };

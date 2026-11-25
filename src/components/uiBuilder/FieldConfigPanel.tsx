@@ -195,7 +195,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
   };
 
   const isInput = field.direction === 'input';
-  const showOptions = field.widget === 'dropdown' || field.widget === 'radio';
+  const showOptions = field.widget === 'dropdown' || field.widget === 'radio' || field.widget === 'checkboxgroup';
   const showMinMax = field.widget === 'slider' || field.widget === 'number';
   const showStep = field.widget === 'slider' || field.widget === 'number';
   const showRequired = isInput && field.widget !== 'hidden' && field.widget !== 'readonly';
@@ -517,6 +517,23 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {isInput && field.widget === 'checkboxgroup' && (
+          <div className="ui-builder__config-row">
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('minchk')}>Tick at least</label>
+              <input id={fid('minchk')} type="number" min="0" className="sas-input" placeholder="Any"
+                value={field.validation?.minChecked ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ minChecked: e.target.value === '' || n < 0 ? undefined : Math.floor(n) }); }} />
+            </div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('maxchk')}>Tick at most</label>
+              <input id={fid('maxchk')} type="number" min="1" className="sas-input" placeholder="Any"
+                value={field.validation?.maxChecked ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ maxChecked: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+            </div>
+          </div>
         )}
 
         {isInput && field.widget === 'datagrid' && (

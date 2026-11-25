@@ -73,6 +73,13 @@ export function validateFieldValue(
 ): string | null {
   if (field.direction !== 'input' || !field.visible || UNCHECKED_WIDGETS.has(field.widget)) return null;
 
+  if (field.widget === 'checkboxgroup') {
+    const n = Array.isArray(value) ? value.length : 0;
+    const { minChecked, maxChecked } = field.validation ?? {};
+    if (minChecked !== undefined && n < minChecked) return `Tick at least ${minChecked} (now ${n}).`;
+    if (maxChecked !== undefined && n > maxChecked) return `Tick at most ${maxChecked} (now ${n}).`;
+  }
+
   if (isEmptyValue(value)) {
     if (!field.validation?.required) return null;
     return field.widget === 'dropdown' || field.widget === 'radio'
