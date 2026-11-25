@@ -11,6 +11,7 @@ import { Badge } from '../common/Badge';
 import { PageHeader } from '../layout/Layout';
 import { DynamicForm } from './DynamicForm';
 import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
+import { RunMessages } from './RunMessages';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
@@ -429,6 +430,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   onInputChange={setInputValues}
                   disabled={true}
                 />
+                <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
               </CardBody>
             </Card>
           )}
@@ -482,6 +484,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             focusErrorsRequest={blockedRuns}
             submit={submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition }}
           />
+          <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
         </CardBody>
         {submitPosition === 'bottom' && (
           <CardFooter>

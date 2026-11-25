@@ -812,3 +812,36 @@
   font-size: var(--font-size-sm);
   color: var(--sas-gray-800);
 }
+
+/* The app author's messages after a run (message rules). */
+.ui-runner__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ui-runner__message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+  color: var(--sas-gray-900);
+}
+
+.ui-runner__message-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.ui-runner__message--info { background: var(--sas-info-light); border-color: var(--sas-info-dark); }
+.ui-runner__message--info .ui-runner__message-icon { color: var(--sas-info-dark); }
+.ui-runner__message--success { background: var(--sas-success-light); border-color: var(--sas-success-dark); }
+.ui-runner__message--success .ui-runner__message-icon { color: var(--sas-success-dark); }
+.ui-runner__message--warning { background: var(--sas-warning-light); border-color: var(--sas-warning-dark); }
+.ui-runner__message--warning .ui-runner__message-icon { color: var(--sas-warning-dark); }
+.ui-runner__message--error { background: var(--sas-error-light); border-color: var(--sas-error-dark); }
+.ui-runner__message--error .ui-runner__message-icon { color: var(--sas-error-dark); }

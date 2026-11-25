@@ -13,6 +13,7 @@ import { canNudge, findField } from './canvasOps';
 import { Selection } from './FormCanvas';
 import { startDrag } from './dnd';
 import { ColorChoice } from './ColorChoice';
+import { MessageRulesEditor } from './MessageRulesEditor';
 
 interface Props {
   definition: UIDefinition;
@@ -148,6 +149,16 @@ export const Inspector: React.FC<Props> = (props) => {
             />
           </div>
           <Button variant="secondary" size="small" onClick={props.onAddSection}>Add section</Button>
+
+          <h3 className="cb-inspector__step">Messages after a run</h3>
+          <p className="cb-inspector__hint">
+            Show your own text when a result meets a condition, for example "Refer to underwriting" when the probability is above 0.7. Every matching message is shown, in this order. The app only compares what MAS returned with your value.
+          </p>
+          <MessageRulesEditor
+            rules={s.messageRules ?? []}
+            outputs={step?.outputs ?? []}
+            onChange={(rules) => props.onSettingsChange({ ...s, messageRules: rules.length ? rules : undefined })}
+          />
         </div>
       </aside>
     );

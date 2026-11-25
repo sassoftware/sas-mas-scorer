@@ -338,6 +338,15 @@ export const FormCanvas: React.FC<Props> = ({
         {!inputAnchor && submitPosition === 'afterInputs' && submitButton('afterInputs')}
         {submitButton('bottom')}
 
+        {(definition.settings.messageRules?.length ?? 0) > 0 && (
+          <div className="cb-model-info" aria-hidden="true">
+            <strong>Messages after a run</strong>
+            <span>
+              {definition.settings.messageRules!.length} message{definition.settings.messageRules!.length === 1 ? '' : 's'}, shown when the results meet their conditions. Edit them in the app settings.
+            </span>
+          </div>
+        )}
+
         {definition.settings.showModelInfo && !definition.scrUrl && (
           <div className="cb-model-info" aria-hidden="true">
             <strong>Model information</strong>

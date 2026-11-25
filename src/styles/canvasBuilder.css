@@ -954,3 +954,46 @@
   color: var(--sas-gray-900);
   font-size: var(--font-size-base);
 }
+
+/* Message rules editor (app settings). */
+.cb-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.cb-rules__rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.cb-rules__rule legend {
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.cb-rules__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.cb-rules__rule label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+  min-width: 0;
+}
+
+.cb-rules__rule .sas-input {
+  width: 100%;
+}

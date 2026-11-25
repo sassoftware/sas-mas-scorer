@@ -171,6 +171,21 @@ export interface UISettings {
   accentColor?: string;
   /** Show the SAS Model Manager model behind a model module (3.1). */
   showModelInfo?: boolean;
+  /** Messages shown after a run when a result meets a condition (3.1). */
+  messageRules?: MessageRule[];
+}
+
+/** "When <result> <op> <value>, show <message>": only compares what MAS returned. */
+export interface MessageRule {
+  id: string;
+  /** The result (output parameter) name. */
+  result: string;
+  op: 'eq' | 'ne' | 'gt' | 'lt' | 'between' | 'missing';
+  value?: string;
+  /** The upper end for 'between'. */
+  value2?: string;
+  message: string;
+  tone: 'info' | 'success' | 'warning' | 'error';
 }
 
 export type SubmitPosition = 'top' | 'afterInputs' | 'bottom';
