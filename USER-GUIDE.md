@@ -1245,22 +1245,20 @@ Click **Retry now** in the banner (or the page-level **Refresh**) to try at once
 
 ### Job Detail Page
 
-Selecting a job opens its detail page at `/jobs/<id>`. The header shows:
+Selecting a job opens its detail page at `/jobs/<id>`. At the top:
 
-- Job name and a state badge.
-- Creator, type, start time, ID, and a live elapsed counter (running jobs).
-- End timestamp and final elapsed (terminal jobs).
-- For a failed job, the first error of its log: **First error (line N):** followed by the error text.
-- A **← Back to Job Monitoring** link.
-- A **Refresh** button that re-fetches the job record and log/listing for this one job.
-- A red **Cancel Job** or **Delete Job** button (see *Cancelling or Deleting a Job* below).
-- For a finished job, **Rerun** and **Rerun with changes…** (see *Rerunning a Job* below), and the **Application** that submitted it.
+- The breadcrumb **Job Monitoring › name**, the job name with its state badge beside it, and its description.
+- **Refresh**, which re-fetches the job record and log/listing for this one job.
+- For a running job, a red **Cancel Job** button (see *Cancelling or Deleting a Job* below).
+- For a finished job, **Rerun** (when offered; see *Rerunning a Job* below) and a **⋮** menu with **Rerun with changes…** and **Delete job…**.
+
+Under it, a card lists the job's facts as labels over values: **Created by**, **Type**, **Started**, **Elapsed** (a live counter while the job runs), **Ended**, the **Application** that submitted it, and the **ID**. The card also holds, when they apply, why **Rerun is not offered**, and for a failed job the first error of its log: **First error (line N):** followed by the error text.
 
 The open tab is part of the link (`?tab=code`, for example), so a reload, **Back** or a shared link shows the same tab.
 
 #### Cancelling or Deleting a Job
 
-The detail page exposes a single destructive action whose label depends on the job's current state. Both actions open a confirmation dialog before anything is sent to SAS Viya — clicking the red button alone never causes the action to fire.
+The detail page offers one destructive action, depending on the job's state: **Cancel Job** while it runs, **Delete job…** in the **⋮** menu once it has finished. Both open a confirmation dialog before anything is sent to SAS Viya; choosing the action alone never fires it.
 
 **Cancel Job** — appears for any non-terminal job (`running`, `pending`, `paused`).
 
@@ -1273,7 +1271,7 @@ The detail page exposes a single destructive action whose label depends on the j
 
 **Delete Job** — appears for any terminal job (`completed`, `failed`, `canceled`, `timedOut`).
 
-1. Click the red **Delete Job** button.
+1. Open the **⋮** menu and choose **Delete job…**.
 2. A dialog appears: *"Delete this job? You're about to permanently delete `<JobName>` from SAS Viya. The job record, its log, its listing, and any attached result files will be removed. This cannot be undone."*
 3. Click **Delete job** to proceed, or **Keep job** / press Esc to dismiss.
 4. The app issues `DELETE /jobExecution/jobs/<id>`. The record and all its attached files are removed from the tenant.
@@ -1314,17 +1312,19 @@ Each line is colour-coded by type, with a tinted background and a coloured left 
 | **Title** | Green, larger and bold |
 | **Message / Byline / Footnote** | Pink / Lavender / Purple |
 
-Toolbar buttons:
+Toolbar buttons (above the log, beside the line count):
 
-- **Pause auto-scroll** / **Resume auto-scroll** — toggle whether new lines auto-scroll you to the bottom.
+- **Pause auto-scroll** / **Resume auto-scroll** — while the job runs: toggle whether new lines auto-scroll you to the bottom.
 - **Copy** — copies the whole log text to the clipboard (no type prefixes — just the SAS content), whatever filter is set.
 - **Download** — saves the log as `<JobName>-<8charId>.log`.
-- **Refresh now** — force-fetch the latest log content. The lines already shown stay on screen while it loads.
+- **Refresh now** — while the job runs: force-fetch the latest log content. The lines already shown stay on screen while it loads.
 
-**Finding errors:** the toolbar counts the lines, errors and warnings (e.g. *4,210 lines · 3 errors · 12 warnings*). Below it:
+Copy and Download appear once there is output. With no output at all, a grey box says so (*No output yet.* while running, *This job wrote no log.* once finished).
 
-- **Show** — **All lines**, **Errors and warnings**, or **Errors only**. While filtering, each line keeps its line number.
-- **Search the log…** — searches the whole log (within the current **Show** filter) and moves to the first match as you type. **Enter** goes to the next match, **Shift+Enter** to the previous one.
+**Finding errors:** below the toolbar:
+
+- **All lines**, **Errors and warnings**, **Errors** — quick-filter chips, each with its count (e.g. *Errors (3)*). While filtering, each line keeps its line number.
+- **Search the log…** — searches the whole log (within the chosen chip) and moves to the first match as you type. **Enter** goes to the next match, **Shift+Enter** to the previous one.
 - **Previous** / **Next** — step through the search matches, or, without a search, through the errors (the warnings when the log has none). The position is shown beside them, e.g. *Error 2 of 10* or *Match 3 of 41*, and stepping wraps around at either end.
 
 #### Listing
@@ -1342,7 +1342,7 @@ The line numbers are display-only — both Copy and Download produce the clean, 
 
 #### Parameters
 
-A table of every parameter declared on the job definition, paired with the value actually submitted at runtime:
+Every parameter declared on the job definition, paired with the value actually submitted at runtime, in the shared list layout: the chips **All** and **Changed from default** (overridden or extra values), a search by name, and columns that sort and can be hidden from their **⋮** menu:
 
 | Column | Description |
 |--------|-------------|

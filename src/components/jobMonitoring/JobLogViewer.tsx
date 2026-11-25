@@ -4,7 +4,6 @@
 import React, {
   useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -77,6 +76,12 @@ const LINE_TYPE_LABELS: Partial<Record<LogLineType, string>> = {
   note: 'Note',
 };
 
+const SEVERITY_CHIPS: { value: SeverityFilter; label: string }[] = [
+  { value: 'all', label: 'All lines' },
+  { value: 'problems', label: 'Errors and warnings' },
+  { value: 'errors', label: 'Errors' },
+];
+
 const lineStartsWithLabel = (text: string, label: string): boolean =>
   text.trimStart().toUpperCase().startsWith(label.toUpperCase());
 
@@ -115,7 +120,6 @@ export const JobLogViewer: React.FC<JobLogViewerProps> = ({
   const [jumpNonce, setJumpNonce] = useState<number>(0);
   const [announcement, setAnnouncement] = useState<string>('');
   const startPendingRef = useRef<boolean>(startAtFirstError);
-  const severityId = useId();
 
   // Window geometry. `firstRow` is the first row in the DOM (overscan
   // included); it only changes when the window actually moves, so a scroll
@@ -351,71 +355,71 @@ export const JobLogViewer: React.FC<JobLogViewerProps> = ({
 
   return (
     <div className="job-log">
-      <div className="job-log__toolbar">
-        <div className="job-log__toolbar-info">
-          {loading && lines.length === 0
-            ? 'Loading…'
-            : `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}${isLive ? ' · live' : ''}`}
-          {showProblems && hasContent && (
-            <span className="job-log__problem-counts">
-              {' · '}
-              <span className={problems.errorCount > 0 ? 'job-log__count--error' : undefined}>
-                {plural(problems.errorCount, 'error')}
-              </span>
-              {' · '}
-              <span className={problems.warningCount > 0 ? 'job-log__count--warning' : undefined}>
-                {plural(problems.warningCount, 'warning')}
-              </span>
-            </span>
-          )}
+      {(hasContent || isLive || loading) && (
+        <div className="job-log__toolbar">
+          <div className="job-log__toolbar-info">
+            {loading && lines.length === 0
+              ? 'Loading…'
+              : `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'}${isLive ? ' · live' : ''}`}
+          </div>
+          <div className="job-log__toolbar-actions">
+            {/* Only a running job's output grows, so only then is there
+                anything to follow or fetch again. */}
+            {isLive && (
+              <Button
+                variant="tertiary"
+                size="small"
+                onClick={() => setAutoScroll((prev) => !prev)}
+              >
+                {autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
+              </Button>
+            )}
+            {/* Nothing to copy or save until there is output. */}
+            {hasContent && (
+              <>
+                <Button variant="tertiary" size="small" onClick={handleCopy}>
+                  {copied ? 'Copied!' : 'Copy'}
+                </Button>
+                <Button variant="tertiary" size="small" onClick={handleDownload}>
+                  Download
+                </Button>
+              </>
+            )}
+            {isLive && (
+              <Button variant="tertiary" size="small" onClick={onRefresh}>
+                Refresh now
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="job-log__toolbar-actions">
-          <Button
-            variant="tertiary"
-            size="small"
-            onClick={() => setAutoScroll((prev) => !prev)}
-          >
-            {autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
-          </Button>
-          <Button
-            variant="tertiary"
-            size="small"
-            onClick={handleCopy}
-            disabled={!hasContent}
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </Button>
-          <Button
-            variant="tertiary"
-            size="small"
-            onClick={handleDownload}
-            disabled={!hasContent}
-          >
-            Download
-          </Button>
-          <Button variant="tertiary" size="small" onClick={onRefresh}>
-            Refresh now
-          </Button>
-        </div>
-      </div>
+      )}
 
       {hasContent && (
         <div className="job-log__findbar">
+          {/* The quick-filter chips of the shared list layout, with counts. */}
           {showProblems && (
-            <div className="job-log__filter">
-              <label className="job-log__filter-label" htmlFor={severityId}>
-                Show
-              </label>
-              <select
-                id={severityId}
-                className="job-log__select"
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value as SeverityFilter)}
-              >
-                <option value="all">All lines</option>
-                <option value="problems">Errors and warnings</option>
-                <option value="errors">Errors only</option>
-              </select>
+            <div className="list-chips job-log__chips" role="group" aria-label={`Show lines of the ${outputName}`}>
+              {SEVERITY_CHIPS.map((chip) => {
+                const on = severity === chip.value;
+                const count =
+                  chip.value === 'all'
+                    ? lines.length
+                    : chip.value === 'errors'
+                      ? problems.errorCount
+                      : problems.errorCount + problems.warningCount;
+                return (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    className={`list-chip${on ? ' list-chip--on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => setSeverity(chip.value)}
+                  >
+                    {chip.label}
+                    <span className="list-chip__count"> ({count.toLocaleString()})</span>
+                  </button>
+                );
+              })}
             </div>
           )}
           <div className="job-log__search" onKeyDown={handleSearchKeyDown}>
@@ -468,7 +472,11 @@ export const JobLogViewer: React.FC<JobLogViewerProps> = ({
           {error}
         </Alert>
       )}
-      <div className="job-log__lines" ref={scrollRef} onScroll={handleScroll}>
+      <div
+        className={`job-log__lines${total === 0 && !loading && !visibleLines ? ' job-log__lines--none' : ''}`}
+        ref={scrollRef}
+        onScroll={handleScroll}
+      >
         {total === 0 && !loading ? (
           <div className="job-log__empty">{visibleLines ? filteredEmpty : emptyMessage}</div>
         ) : (

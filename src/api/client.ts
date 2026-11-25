@@ -56,12 +56,24 @@ const failure = (message: string, details: FailureDetails): ViyaApiError => {
  * An ended cookie session (web and jobdef builds) does not answer 401: SAS
  * Viya redirects the request to /SASLogon/login, the browser follows the
  * redirect, and the client gets HTTP 200 with the logon page or its JSON info
- * document instead of the resource. Recognised by the final URL, or by an HTML
- * page where JSON was asked for.
+ * document instead of the resource. Recognised by the final URL, by an HTML
+ * page where JSON was asked for, or by SAS Logon's OAuth approval document
+ * (auth_request, approved_scopes, …), which comes back as JSON and, through
+ * the desktop app's main process, without a final URL to tell it apart.
  */
 const isSasLogonResponse = (response: AxiosResponse): boolean => {
   const finalUrl = (response.request as { responseURL?: string } | undefined)?.responseURL;
-  if (finalUrl && SASLOGON_RE.test(finalUrl) && !SASLOGON_RE.test(requestedUrl(response.config))) {
+  const toLogon = SASLOGON_RE.test(requestedUrl(response.config));
+  if (finalUrl && SASLOGON_RE.test(finalUrl) && !toLogon) {
+    return true;
+  }
+  const data = response.data as Record<string, unknown> | null | undefined;
+  if (
+    !toLogon &&
+    data && typeof data === 'object' && !Array.isArray(data) &&
+    'auth_request' in data &&
+    ('approved_scopes' in data || 'undecided_scopes' in data)
+  ) {
     return true;
   }
   const responseType = response.config.responseType;

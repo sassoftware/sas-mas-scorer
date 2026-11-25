@@ -261,7 +261,8 @@ export const parseComputeLogHref = (href: string): ComputeLogIds | null => {
 };
 
 export const getJobLogHref = (job: ExecutionJob): string | null => {
-  const link = job.links.find((l) => l.rel === 'log');
+  // A job read while the service was unavailable can come without links.
+  const link = job.links?.find((l) => l.rel === 'log');
   return link?.href ?? link?.uri ?? null;
 };
 

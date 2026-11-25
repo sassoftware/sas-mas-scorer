@@ -446,6 +446,19 @@
   gap: var(--space-4);
 }
 
+/* Title plus a state badge or chip beside it (PageHeader titleAddon). */
+.sas-page-header__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.sas-page-header__title-row .sas-page-header__title {
+  margin-bottom: 0;
+}
+
 .sas-page-header__title {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);

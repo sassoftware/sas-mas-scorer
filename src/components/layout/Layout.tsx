@@ -170,6 +170,8 @@ interface PageHeaderProps {
   subtitle?: string;
   breadcrumbs?: { label: string; onClick?: () => void }[];
   actions?: React.ReactNode;
+  /** Beside the title, outside the heading: a state badge or chip (3.1). */
+  titleAddon?: React.ReactNode;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -178,6 +180,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   subtitle,
   breadcrumbs,
   actions,
+  titleAddon,
 }) => {
   return (
     <div className="sas-page-header">
@@ -207,10 +210,20 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       )}
       <div className="sas-page-header__main">
         <div className="sas-page-header__title-group">
-          <h1 className="sas-page-header__title">
-            {title}
-            {count && <span className="sas-page-header__count">{count}</span>}
-          </h1>
+          {(() => {
+            const heading = (
+              <h1 className="sas-page-header__title">
+                {title}
+                {count && <span className="sas-page-header__count">{count}</span>}
+              </h1>
+            );
+            return titleAddon ? (
+              <div className="sas-page-header__title-row">
+                {heading}
+                {titleAddon}
+              </div>
+            ) : heading;
+          })()}
           {subtitle && <p className="sas-page-header__subtitle">{subtitle}</p>}
         </div>
         {actions && <div className="sas-page-header__actions">{actions}</div>}

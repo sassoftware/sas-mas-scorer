@@ -328,11 +328,99 @@
   gap: var(--space-3);
 }
 
-/* Why a finished job offers no Rerun (submitted by another service). */
-.job-detail__rerun-note {
+/* The ⋮ beside Refresh / Rerun: an outlined square, the height of the
+ * small buttons next to it. */
+.job-detail__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--sas-blue-primary);
+  border-radius: var(--radius-md);
+  background: var(--sas-white);
+  color: var(--sas-blue-primary);
+  cursor: pointer;
+}
+
+.job-detail__more:hover,
+.job-detail__more[aria-expanded='true'] {
+  background: var(--sas-blue-light);
+}
+
+.job-detail__more:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+/* The job's facts (3.1): small labels over values in a card, as on the
+ * decision flow and module pages. */
+.sas-card.job-detail__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.job-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-6);
   margin: 0;
-  font-size: var(--font-size-sm);
+}
+
+.job-detail__facts dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.job-detail__facts dd {
+  margin: 2px 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.job-detail__fact--wide {
+  grid-column: span 2;
+}
+
+.job-detail__id {
+  font-family: var(--font-family-mono);
+}
+
+.job-detail__elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .job-detail__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Why a finished job offers no Rerun (submitted by another service): an
+ * info note inside the facts card. */
+.job-detail__rerun-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--sas-blue-light);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+.job-detail__rerun-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--sas-blue-primary);
 }
 
 /* ─── Rerun dialog ─── */
@@ -385,19 +473,6 @@
 .job-rerun__field-hint {
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
-}
-
-.job-detail__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-}
-
-.job-detail__meta strong {
-  color: var(--sas-gray-800);
-  font-weight: var(--font-weight-medium);
 }
 
 /* A failed job's first ERROR line, as the reason it failed. One line,
@@ -485,18 +560,6 @@
   gap: var(--space-2);
 }
 
-/* Error / warning counts beside the line count. Dark tones keep the text at
- * AA contrast on the gray toolbar; the words carry the meaning, not colour. */
-.job-log__count--error {
-  color: var(--sas-error-dark);
-  font-weight: var(--font-weight-semibold);
-}
-
-.job-log__count--warning {
-  color: var(--sas-warning-dark);
-  font-weight: var(--font-weight-semibold);
-}
-
 /* Severity filter, in-log search and Previous / Next. */
 .job-log__findbar {
   display: flex;
@@ -505,32 +568,9 @@
   gap: var(--space-3);
 }
 
-.job-log__filter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.job-log__filter-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-700);
-}
-
-/* Border at gray-400 so the control's edge meets the 3:1 non-text minimum. */
-.job-log__select {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--sas-gray-400);
-  border-radius: var(--radius-md);
-  background-color: var(--sas-white);
-  color: var(--sas-gray-900);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-}
-
-.job-log__select:focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: 2px;
+/* The severity chips are the shared .list-chips (listTable.css). */
+.job-log__chips {
+  flex-wrap: wrap;
 }
 
 .job-log__search {
@@ -572,6 +612,31 @@
   padding: var(--space-4);
   text-align: center;
   font-family: var(--font-family-mono);
+}
+
+/* No output at all: the grey empty box used across the app (3.1), not a
+ * screen-high black panel with one line in it. */
+.job-log__lines.job-log__lines--none,
+.job-output__none {
+  height: auto;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-gray-100);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  color: var(--sas-gray-700);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  white-space: normal;
+}
+
+.job-log__lines--none .job-log__empty {
+  padding: 0;
+  color: inherit;
+  font-family: inherit;
 }
 
 .job-log__line {

@@ -1,9 +1,8 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useMemo } from 'react';
-import { DataTable, Column } from '../common/DataTable';
-import { EmptyState } from '../common/EmptyState';
+import React, { useMemo, useState } from 'react';
+import { ListColumn, ListTable, ListToolbar, useListSort } from '../common/ListTable';
 import { ExecutionJobParameter } from '../../types/jobExecution';
 
 interface ParameterRow {
@@ -17,6 +16,8 @@ interface ParameterRow {
   overridden: boolean;
   extra: boolean;
 }
+
+type ParamChip = 'all' | 'changed';
 
 interface JobParametersPanelProps {
   parameters: ExecutionJobParameter[] | undefined;
@@ -66,10 +67,15 @@ export const JobParametersPanel: React.FC<JobParametersPanelProps> = ({
     return [...fromDeclared, ...extras];
   }, [parameters, parameterArguments]);
 
-  const columns: Column<ParameterRow>[] = [
+  const [chip, setChip] = useState<ParamChip>('all');
+  const [query, setQuery] = useState('');
+
+  // The shared list layout (3.1): chips, search, sortable columns.
+  const columns = useMemo<ListColumn<ParameterRow>[]>(() => [
     {
       key: 'name',
-      header: 'Name',
+      label: 'Name',
+      sortValue: (row) => row.name.toLowerCase(),
       render: (row) => (
         <div className="job-monitoring__cell-name">
           <span className="job-monitoring__cell-name-main">{row.name}</span>
@@ -81,24 +87,28 @@ export const JobParametersPanel: React.FC<JobParametersPanelProps> = ({
     },
     {
       key: 'type',
-      header: 'Type',
-      width: '120px',
+      label: 'Type',
+      width: '130px',
+      sortValue: (row) => row.type.toLowerCase(),
       render: (row) => row.type,
     },
     {
       key: 'required',
-      header: 'Required',
-      width: '100px',
+      label: 'Required',
+      width: '110px',
+      sortValue: (row) => (row.required ? 0 : 1),
       render: (row) => (row.required ? 'Yes' : 'No'),
     },
     {
       key: 'default',
-      header: 'Default',
+      label: 'Default',
+      sortValue: (row) => row.defaultValue,
       render: (row) => <span className="job-monitoring__cell-mono">{row.defaultValue}</span>,
     },
     {
       key: 'actual',
-      header: 'Argument',
+      label: 'Argument',
+      sortValue: (row) => row.actualValue ?? '',
       render: (row) => {
         if (row.actualValue === null) {
           return <span className="job-params__value-default">— (default)</span>;
@@ -122,23 +132,51 @@ export const JobParametersPanel: React.FC<JobParametersPanelProps> = ({
         );
       },
     },
-  ];
+  ], []);
+
+  const changedCount = rows.filter((r) => r.overridden || r.extra).length;
+  const needle = query.trim().toLowerCase();
+  const filtered = useMemo(
+    () => rows.filter((r) =>
+      (chip === 'all' || r.overridden || r.extra)
+      && (!needle || r.name.toLowerCase().includes(needle) || (r.label ?? '').toLowerCase().includes(needle))),
+    [rows, chip, needle],
+  );
+  const [sorted, sort, setSort] = useListSort(filtered, columns, null);
 
   if (rows.length === 0) {
-    return <EmptyState title="This job has no parameters." />;
+    return <div className="job-output__none" role="status">This job has no parameters.</div>;
   }
 
   return (
     <div className="job-params">
       <p className="job-params__note">
-        Shows each parameter declared on the job definition alongside the value passed in at submission.
+        Each parameter declared on the job definition, with the value passed in at submission.
       </p>
-      <DataTable<ParameterRow>
+      <ListToolbar<ParamChip>
+        chips={[
+          { value: 'all', label: 'All', count: rows.length },
+          { value: 'changed', label: 'Changed from default', count: changedCount },
+        ]}
+        activeChip={chip}
+        onChipChange={setChip}
+        chipsLabel="Filter parameters"
+        search={{
+          value: query,
+          onChange: setQuery,
+          placeholder: 'Search parameters',
+          ariaLabel: 'Search parameters by name',
+        }}
+      />
+      <ListTable<ParameterRow>
         columns={columns}
-        data={rows}
-        keyField="key"
-        striped
-        hoverable={false}
+        rows={sorted}
+        rowKey={(row) => row.key}
+        label="Job parameters"
+        storageKey="job-parameters"
+        sort={sort}
+        onSortChange={setSort}
+        emptyMessage="No parameter matches."
       />
     </div>
   );
