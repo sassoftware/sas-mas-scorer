@@ -974,10 +974,11 @@ Lists every segmentation tree in the environment; search by name or description 
 
 ### Reading the Page
 
-- **Header** — name, description, version and counts (splits, paths, outcomes), a link that opens the tree in SAS Intelligent Decisioning, **Test whole tree…**, **Tests on this tree…**, **Find path for a record…** and **Export paths (CSV)**.
-- **Find bar** — above the centre view: find in the tree and step through matches, paths, dead ends or failed paths, with the **Variables** summary below it (see [Find in Tree](#find-in-tree)).
+- **Header** — the breadcrumb **Segmentation Trees › name** (back to the list), the name with a link at the right that opens the tree in SAS Intelligent Decisioning, the description, version and counts (splits, paths, outcomes), and **Test whole tree…**, **Tests on this tree…**, **Find path for a record…** and **Export paths (CSV)**.
+- **View tabs** — **Diagram**, **Outline**, **Icicle** and **Split** above the find bar; the arrow keys move between them, and the view you used last opens next time.
+- **Find bar** — under the view tabs: find in the tree and step through matches, paths, dead ends or failed paths, with the **Variables** summary below it (see [Find in Tree](#find-in-tree)).
 - **Breadcrumb** — the path from the top of the tree to where you are. Click any step to jump back to that level. The **▾** beside a step lists the other branches at that level (with how many paths sit below each, or the outcome it assigns) and switches to one of them, so you can move sideways without climbing back up.
-- **Centre: Split, Outline, Diagram or Icicle** — four ways to look at the tree (see below). All three follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
+- **Centre: Diagram, Outline, Icicle or Split** — four ways to look at the tree (see below). All four follow the same selection, so the breadcrumb and path panel always describe what you clicked last.
 - **Left: Outcomes** — every outcome with its output values and how many paths reach it. Search by name or value, group by an output variable (e.g. `ScenarioGroup`), or filter to outcomes with failed or unreachable paths. Clicking an outcome reached by one path jumps straight to it; an outcome reached by several paths expands to list them, showing the conditions **every** path shares once and only what differs under each path.
 - **Right: the path panel** — the conditions that lead to the selected point, the outcome and the values it assigns, and — after a test run — whether that path passed.
 

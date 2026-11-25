@@ -1982,3 +1982,13 @@
 .segtree-tests__confirm p {
   margin: 0 0 var(--space-2);
 }
+
+/* 3.1 (Figma 11/13): the SAS Intelligent Decisioning link at the right of
+   the title row; the view tabs sit above the find bar. */
+.segtree__heading {
+  justify-content: space-between;
+}
+
+.segtree__centre > .segtree-tabs {
+  margin-bottom: var(--space-3);
+}
