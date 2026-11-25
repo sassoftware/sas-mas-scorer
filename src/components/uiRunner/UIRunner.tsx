@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { prefillFromQuery } from '../../utils/prefill';
 import { UIDefinition } from '../../types/uiBuilder';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
@@ -76,6 +77,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   );
 
   const [outputValues, setOutputValues] = useState<Record<string, unknown>>({});
+  // Inputs filled from the app link (?name=value), named in a note.
+  const location = useLocation();
+  const [prefilled, setPrefilled] = useState<string[] | null>(null);
   // What the last run sent, for the result downloads.
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   // Tabs or steps: which shown section is on screen, and the step whose
@@ -180,6 +184,16 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       setOutputValues(vals);
     }
   }, [output, definition.layout.sections]);
+
+  // Fill inputs from the link once the signature is known (for the types).
+  // Only fills the form: the app never runs on its own.
+  useEffect(() => {
+    if (preview || prefilled !== null || !step) return;
+    const types = Object.fromEntries((step.inputs ?? []).map(p => [p.name.toLowerCase(), p.type]));
+    const { values, names } = prefillFromQuery(definition, location.search, types);
+    setPrefilled(names);
+    if (names.length > 0) setInputValues(prev => ({ ...prev, ...values }));
+  }, [preview, prefilled, step, definition, location.search]);
 
   // Tabs or steps: once results arrive, show the first section with results.
   useEffect(() => {
@@ -361,6 +375,12 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     </Alert>
   );
 
+  const prefillNote = prefilled && prefilled.length > 0 && (
+    <Alert variant="info" title="Filled from the link">
+      {nameList(prefilled)} {prefilled.length === 1 ? 'was' : 'were'} filled in from the link. Check the values, then run the app.
+    </Alert>
+  );
+
   const validationSummary = invalidCount > 0 && (
     <Alert key={blockedRuns} variant="error" title="Not run: check the highlighted fields">
       {invalidCount === 1 ? '1 field needs' : `${invalidCount} fields need`} attention:{' '}
@@ -423,6 +443,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         )}
 
         {driftNotice}
+        {prefillNote}
 
         <div className="ui-runner__content ui-runner__content--side-by-side">
           {/* Input side */}
@@ -522,6 +543,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       {renderHeader()}
 
       {driftNotice}
+        {prefillNote}
 
       <Card>
         <CardHeader
