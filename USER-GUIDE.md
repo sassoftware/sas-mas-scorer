@@ -1212,11 +1212,12 @@ When you open the page, choose a period or click Refresh, a **Counting jobs…**
 
 **Running Panel** shows one card per active job with:
 
-- The job name and a state badge (pulsing for `running` / `pending`).
-- Description, creator, type, start time, and a live elapsed timer that ticks every second.
+- The job name and a state badge (with a pulsing dot for `running` / `pending`).
+- The description, if the job has one, under the name.
+- **Created by**, **Type**, **Started** and **Elapsed** (a live timer that ticks every second).
 - A **Monitor** button that opens the job's detail page.
 
-This panel auto-refreshes every 5 seconds.
+With no active jobs it says **No jobs are currently running.** This panel auto-refreshes every 5 seconds.
 
 **History Table** lists every finished job, with:
 

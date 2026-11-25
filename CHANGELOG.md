@@ -32,7 +32,7 @@ The start of the redesign. The UI app builder becomes canvas first, building the
 - **Segmentation Trees** — chips **Created by me** (the signed-in user, read from SAS Viya) and **Changed in the last 30 days**, a **Modified by** filter, and every column sorts
 - **Publishing Overview** — the Kind, Destination and Code Type dropdowns became kind chips (**Decision**, **Model**, **Other**) and **Destination** / **Code type** filters in those columns' menus; every column sorts, newest first. A row opens the module's page (MAS destinations) or the flow
 - **Test Coverage** — the Coverage dropdown became chips (**Covered**, **No tests**, **At risk**) with counts, the Type dropdown a filter in the Type column's menu; a covered asset's whole row expands it, and the link icons moved into the row's ⋮
-- **Job Monitoring** — the history's state chips and search share the list layout; the chevron column is gone (the row opens the job)
+- **Job Monitoring** — the history's state chips and search share the list layout; the chevron column is gone (the row opens the job). The running-job cards are plain cards with **Created by**, **Type**, **Started** and **Elapsed** as labels over values and an outlined **Monitor**; the state badge's dot pulses instead of the whole badge, so its word keeps full contrast, and with nothing running a grey box says so
 - **SCR Endpoints** — the saved endpoints list gets runtime chips, a Mode filter, and **Remove** in the row's ⋮
 
 ### Added

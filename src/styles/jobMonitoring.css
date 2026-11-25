@@ -97,62 +97,101 @@
 }
 
 /* Running jobs */
+/* Running jobs (3.1, in the Figma 11/13 language): plain cards, the state
+ * as the badge's word, the facts as small labels over values, and Monitor
+ * as an outlined button. */
 .job-monitoring__running-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.job-monitoring__running-card {
+.sas-card.job-monitoring__running-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  background-color: var(--sas-white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--sas-gray-200);
-  border-left: 4px solid var(--sas-info);
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
 }
 
-.job-monitoring__running-card--pending {
-  border-left-color: var(--sas-gray-400);
-}
-
-.job-monitoring__running-row {
+.job-monitoring__running-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
 }
 
 .job-monitoring__running-name {
+  margin: 0;
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
   color: var(--sas-gray-900);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .job-monitoring__running-desc {
-  margin: 0;
+  margin: calc(-1 * var(--space-2)) 0 0;
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
+  color: var(--sas-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .job-monitoring__running-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  font-size: var(--font-size-xs);
-  color: var(--sas-gray-600);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto));
+  justify-content: start;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
 }
 
-.job-monitoring__running-meta strong {
-  color: var(--sas-gray-800);
-  font-weight: var(--font-weight-medium);
+.job-monitoring__running-meta dt {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.job-monitoring__running-meta dd {
+  margin: 2px 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.job-monitoring__running-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .job-monitoring__running-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .job-monitoring__running-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: auto;
+}
+
+.job-monitoring__running-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--sas-gray-100);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-700);
 }
 
 .job-monitoring__chips {
@@ -241,6 +280,16 @@
 @keyframes job-monitoring-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.55; }
+}
+
+.job-monitoring__live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
 }
 
 .job-monitoring__pulse {

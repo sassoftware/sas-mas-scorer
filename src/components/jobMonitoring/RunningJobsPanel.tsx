@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from 'react';
 import { ExecutionJob } from '../../types/jobExecution';
 import { Button } from '../common/Button';
-import { EmptyState } from '../common/EmptyState';
 import { Loading } from '../common/Loading';
 import { JobStateBadge } from './JobStateBadge';
 import { elapsedSince, formatDuration, formatTimestamp } from './utils';
@@ -33,45 +32,59 @@ export const RunningJobsPanel: React.FC<RunningJobsPanelProps> = ({
   const now = useNowTick(1000);
 
   if (jobs.length === 0) {
-    return loading ? (
-      <Loading size="small" message="Loading running jobs…" />
-    ) : (
-      <EmptyState title="No jobs are currently running." />
+    // A quiet grey box, as in the Job Monitoring frame (Figma 11/13).
+    return (
+      <div className="job-monitoring__running-empty" role="status">
+        {loading ? <Loading size="small" message="Loading running jobs…" /> : 'No jobs are currently running.'}
+      </div>
     );
   }
 
   return (
-    <div className="job-monitoring__running-grid">
+    <ul className="job-monitoring__running-grid" aria-label="Running jobs">
       {jobs.map((job) => {
         const name = job.jobRequest.jobDefinition?.name ?? job.jobRequest.name ?? job.id;
         const description = job.jobRequest.description ?? job.jobRequest.jobDefinition?.description;
         const type = job.jobRequest.jobDefinition?.type ?? '—';
-        const isPending = job.state === 'pending';
         const elapsedMs = elapsedSince(job.creationTimeStamp, now);
         return (
-          <div
-            key={job.id}
-            className={`job-monitoring__running-card${isPending ? ' job-monitoring__running-card--pending' : ''}`}
-          >
-            <div className="job-monitoring__running-row">
-              <span className="job-monitoring__running-name">{name}</span>
+          <li key={job.id} className="sas-card job-monitoring__running-card">
+            <div className="job-monitoring__running-head">
+              <h3 className="job-monitoring__running-name">{name}</h3>
               <JobStateBadge state={job.state} />
             </div>
             {description && <p className="job-monitoring__running-desc">{description}</p>}
-            <div className="job-monitoring__running-meta">
-              <span><strong>By:</strong> {job.createdBy ?? '—'}</span>
-              <span><strong>Type:</strong> {type}</span>
-              <span><strong>Started:</strong> {formatTimestamp(job.creationTimeStamp)}</span>
-              <span><strong>Elapsed:</strong> {formatDuration(elapsedMs)}</span>
-            </div>
+            <dl className="job-monitoring__running-meta">
+              <div>
+                <dt>Created by</dt>
+                <dd>{job.createdBy ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Type</dt>
+                <dd>{type}</dd>
+              </div>
+              <div>
+                <dt>Started</dt>
+                <dd>{formatTimestamp(job.creationTimeStamp)}</dd>
+              </div>
+              <div>
+                <dt>Elapsed</dt>
+                <dd className="job-monitoring__running-elapsed">{formatDuration(elapsedMs)}</dd>
+              </div>
+            </dl>
             <div className="job-monitoring__running-actions">
-              <Button variant="primary" size="small" onClick={() => onOpenJob(job.id)}>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => onOpenJob(job.id)}
+                aria-label={`Monitor ${name}`}
+              >
                 Monitor
               </Button>
             </div>
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 };
