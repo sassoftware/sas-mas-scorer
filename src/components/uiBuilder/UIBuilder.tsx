@@ -70,7 +70,6 @@ const isTextEntry = (el: EventTarget | null): boolean => {
 };
 
 /** The definition with nothing on the page yet (the canvas-first starting point). */
-const emptied = (d: UIDefinition): UIDefinition => ({ ...d, layout: { ...d.layout, sections: [] } });
 
 
 export const UIBuilder: React.FC<UIBuilderProps> = ({
@@ -106,7 +105,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   // The held navigation while the "unsaved changes" dialog is open.
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   const [driftDismissed, setDriftDismissed] = useState(false);
-  // What the quick start's template puts on the page: the generated layout.
+  // What "Use template" puts back on an emptied page: the generated layout.
   const [generatedLayout, setGeneratedLayout] = useState<UILayout | null>(null);
 
   const defRef = useRef(def);
@@ -143,12 +142,10 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
               }
             }
           }
-          // Canvas first: a new app starts on an empty page, with this
-          // layout one click away as the quick start's template.
+          // A new app starts with every input and result on the page.
           setGeneratedLayout(generated.layout);
-          const start = emptied(generated);
-          setDef(start);
-          setBaseline(serialize(start));
+          setDef(generated);
+          setBaseline(serialize(generated));
         }
       })
       .catch(err => {
@@ -193,9 +190,8 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
       if (scoreable) {
         const generated = generateDefaultUI(module.id, scoreable, `${module.name} UI`);
         setGeneratedLayout(generated.layout);
-        const start = emptied(generated);
-        setDef(start);
-        setBaseline(serialize(start));
+        setDef(generated);
+        setBaseline(serialize(generated));
         setStep(scoreable);
       } else {
         setLoadError('No scoreable step found (needs score or execute step)');

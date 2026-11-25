@@ -767,6 +767,7 @@ function App() {
       }
       return (
         <UIBuilder
+          key={`edit:${activeUIDefinition.id}`}
           definition={activeUIDefinition}
           onBack={handleBackToUIApps}
           onSaved={handleUIAppSaved}
@@ -779,6 +780,7 @@ function App() {
     if (activeView === 'ui-app-new' && uiAppNewModuleId) {
       return (
         <UIBuilder
+          key={`new:${uiAppNewModuleId}`}
           definition={null}
           moduleId={uiAppNewModuleId}
           onBack={handleBackToUIApps}
@@ -802,6 +804,7 @@ function App() {
       }
       return (
         <UIBuilder
+          key={`scr:${endpoint.url}`}
           definition={null}
           scrUrl={endpoint.url}
           scrLabel={endpoint.label}

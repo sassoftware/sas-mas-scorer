@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useId } from 'react';
-import { UIDefinition, UIField, UISettings, WidgetType } from '../../../types/uiBuilder';
+import { SubmitPosition, UIDefinition, UIField, UISettings, WidgetType } from '../../../types/uiBuilder';
 import { Step } from '../../../types';
-import { findParameter, getCompatibleWidgets } from '../../../utils/uiDefaults';
+import { findParameter, getCompatibleWidgets, getSubmitPosition } from '../../../utils/uiDefaults';
 import { FieldConfigPanel } from '../FieldConfigPanel';
 import { widgetLabels } from '../widgetMap';
 import { Button } from '../../common/Button';
 import { widgetIcons, widgetShortLabels } from './widgetIcons';
 import { canNudge, findField } from './canvasOps';
 import { Selection } from './FormCanvas';
+import { startDrag } from './dnd';
+import { ColorChoice } from './ColorChoice';
 
 interface Props {
   definition: UIDefinition;
@@ -19,6 +21,8 @@ interface Props {
   onSelect: (selection: Selection) => void;
   onFieldChange: (parameterId: string, field: UIField) => void;
   onWidgetChange: (parameterId: string, widget: WidgetType) => void;
+  /** A widget tile is being dragged onto the canvas. */
+  onDragStateChange: (dragging: boolean) => void;
   onMoveFieldToSection: (parameterId: string, sectionId: string) => void;
   onNudgeField: (parameterId: string, delta: -1 | 1) => void;
   onRemoveField: (parameterId: string) => void;
@@ -27,6 +31,7 @@ interface Props {
   onSettingsChange: (settings: UISettings) => void;
   onColumnsChange: (columns: 1 | 2 | 3) => void;
   onSectionTitleChange: (sectionId: string, title: string) => void;
+  onSectionColorChange: (sectionId: string, color: string | undefined) => void;
   onMoveSection: (sectionId: string, delta: -1 | 1) => void;
   onRemoveSection: (sectionId: string) => void;
   onAddSection: () => void;
@@ -94,6 +99,27 @@ export const Inspector: React.FC<Props> = (props) => {
             </select>
           </div>
           <div className="ui-builder__config-field">
+            <label htmlFor={fid('pos')}>Run button position</label>
+            <select
+              id={fid('pos')}
+              className="sas-input"
+              value={getSubmitPosition(s)}
+              onChange={(e) => props.onSettingsChange({ ...s, submitPosition: e.target.value as SubmitPosition })}
+            >
+              <option value="top">At the top</option>
+              <option value="afterInputs">After the inputs</option>
+              <option value="bottom">At the bottom</option>
+            </select>
+            <p className="ui-builder__config-type-hint">You can also drag the button on the canvas.</p>
+          </div>
+          <ColorChoice
+            label="Run button colour"
+            noneLabel="Standard blue"
+            value={s.accentColor}
+            onChange={(color) => props.onSettingsChange({ ...s, accentColor: color })}
+            hint="The button's text turns white or black, whichever is easier to read."
+          />
+          <div className="ui-builder__config-field">
             <label htmlFor={fid('btn')}>Button label</label>
             <input
               id={fid('btn')}
@@ -129,6 +155,13 @@ export const Inspector: React.FC<Props> = (props) => {
                 onChange={(e) => props.onSectionTitleChange(section.id, e.target.value)}
               />
             </div>
+            <ColorChoice
+              label="Colour line"
+              noneLabel="No line"
+              value={section.color}
+              onChange={(color) => props.onSectionColorChange(section.id, color)}
+              hint="A coloured line beside the section, to group or highlight it."
+            />
             <div className="cb-inspector__row">
               <Button variant="secondary" size="small" disabled={index === 0} onClick={() => props.onMoveSection(section.id, -1)}>Move up</Button>
               <Button variant="secondary" size="small" disabled={index === definition.layout.sections.length - 1} onClick={() => props.onMoveSection(section.id, 1)}>Move down</Button>
@@ -151,7 +184,7 @@ export const Inspector: React.FC<Props> = (props) => {
         <div className="cb-inspector__none">
           <span className="cb-inspector__none-icon" aria-hidden="true" />
           <h2 className="cb-inspector__title">No field selected</h2>
-          <p>Click a field on the canvas or on the left, or drag a widget from the bar below the canvas, to configure it here.</p>
+          <p>Click a field on the canvas or in the structure on the left to choose its widget and settings here.</p>
           <Button variant="tertiary" size="small" onClick={() => props.onSelect({ kind: 'app' })}>App settings</Button>
         </div>
       </aside>
@@ -179,7 +212,7 @@ export const Inspector: React.FC<Props> = (props) => {
         {field.direction !== 'static' && (
           <>
             <h3 className="cb-inspector__step" id={fid('step1')}>Step 1 · Choose a widget</h3>
-            <p className="cb-inspector__hint">Widgets this {param ? param.type : ''} {field.direction} can use. Or drag one from the bar onto the field.</p>
+            <p className="cb-inspector__hint">Widgets this {param ? param.type : ''} {field.direction} can use. Click one, or drag it onto another field on the canvas to use it there.</p>
             <div className="cb-widgets" role="radiogroup" aria-labelledby={fid('step1')}>
               {compatible.map(w => (
                 <button
@@ -188,6 +221,12 @@ export const Inspector: React.FC<Props> = (props) => {
                   role="radio"
                   aria-checked={field.widget === w}
                   className={`cb-widgets__tile${field.widget === w ? ' cb-widgets__tile--on' : ''}`}
+                  draggable
+                  onDragStart={(e) => {
+                    startDrag(e, { kind: 'widget', widget: w });
+                    props.onDragStateChange(true);
+                  }}
+                  onDragEnd={() => props.onDragStateChange(false)}
                   onClick={() => props.onWidgetChange(field.parameterId, w)}
                 >
                   <span className="cb-widgets__icon">{widgetIcons[w]}</span>
@@ -207,6 +246,7 @@ export const Inspector: React.FC<Props> = (props) => {
           usedParameterIds={usedParameterIds}
           sections={definition.layout.sections}
           currentSectionId={location.sectionId}
+          columns={definition.layout.columns}
           onChange={(f) => props.onFieldChange(field.parameterId, f)}
           onMoveToSection={(id) => props.onMoveFieldToSection(field.parameterId, id)}
           onClose={() => props.onSelect(null)}

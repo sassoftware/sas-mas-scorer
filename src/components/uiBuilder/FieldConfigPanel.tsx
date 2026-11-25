@@ -44,6 +44,8 @@ interface Props {
    * header, the Widget Type select and the Placement section.
    */
   variant?: 'panel' | 'inspector';
+  /** The app's column count: 1/3 is offered only with three columns. */
+  columns?: 1 | 2 | 3;
 }
 
 export const FieldConfigPanel: React.FC<Props> = ({
@@ -57,6 +59,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
   onMoveToSection,
   onClose,
   variant = 'panel',
+  columns = 3,
 }) => {
   const inInspector = variant === 'inspector';
   const uid = useId();
@@ -347,19 +350,25 @@ export const FieldConfigPanel: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="ui-builder__config-field">
-          <label htmlFor={fid('width')}>Width</label>
-          <select
-            id={fid('width')}
-            className="sas-input"
-            value={field.width}
-            onChange={(e) => handleChange('width', e.target.value as UIField['width'])}
-          >
-            <option value="third">1/3</option>
-            <option value="half">1/2</option>
-            <option value="full">Full</option>
-          </select>
-        </div>
+        {field.widget === 'table' || columns === 1 ? (
+          <p className="ui-builder__config-type-hint">
+            {field.widget === 'table' ? 'A table always uses the full width.' : 'With one column every field uses the full width.'}
+          </p>
+        ) : (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('width')}>Width</label>
+            <select
+              id={fid('width')}
+              className="sas-input"
+              value={field.width === 'third' && columns < 3 ? 'half' : field.width}
+              onChange={(e) => handleChange('width', e.target.value as UIField['width'])}
+            >
+              {columns === 3 && <option value="third">1/3</option>}
+              <option value="half">1/2</option>
+              <option value="full">Full</option>
+            </select>
+          </div>
+        )}
 
         <div className="ui-builder__config-field">
           <label>

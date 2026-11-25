@@ -19,6 +19,8 @@ import {
   computeSignatureDrift,
   getInitialInputValues,
   hasSignatureDrift,
+  getSubmitPosition,
+  accentButtonStyle,
 } from '../../utils/uiDefaults';
 import { validateInputs } from './fieldValidation';
 
@@ -230,6 +232,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const title = definition.settings.title || definition.name;
   const submitLabel = definition.settings.submitLabel || 'Execute';
   const outputLayout = definition.settings.outputLayout || 'below';
+  const submitPosition = getSubmitPosition(definition.settings);
 
   // Unified layout for inline/below modes
   const unifiedLayout = definition.layout;
@@ -340,6 +343,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       onClick={handleExecute}
       loading={executing}
       disabled={executing || !step}
+      style={accentButtonStyle(definition.settings)}
     >
       {executing ? 'Executing...' : submitLabel}
     </Button>
@@ -399,11 +403,14 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   inputParameters={step?.inputs}
                   fieldErrors={fieldErrors}
                   focusErrorsRequest={blockedRuns}
+                  submit={submitPosition === 'top' ? { node: executeButton, position: 'top' } : undefined}
                 />
               </CardBody>
-              <CardFooter>
-                {executeButton}
-              </CardFooter>
+              {submitPosition !== 'top' && (
+                <CardFooter>
+                  {executeButton}
+                </CardFooter>
+              )}
             </Card>
           )}
 
@@ -467,11 +474,14 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             inputParameters={step?.inputs}
             fieldErrors={fieldErrors}
             focusErrorsRequest={blockedRuns}
+            submit={submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition }}
           />
         </CardBody>
-        <CardFooter>
-          {executeButton}
-        </CardFooter>
+        {submitPosition === 'bottom' && (
+          <CardFooter>
+            {executeButton}
+          </CardFooter>
+        )}
       </Card>
 
       {validationSummary}

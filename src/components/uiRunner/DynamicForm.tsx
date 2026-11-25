@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { UISection, UILayout, UIField, FieldErrors } from '../../types/uiBuilder';
+import { UISection, UILayout, UIField, FieldErrors, SubmitPosition } from '../../types/uiBuilder';
 import { StepParameter } from '../../types';
-import { findParameter } from '../../utils/uiDefaults';
+import { effectiveWidth, findParameter, lastInputSectionId, safeColor } from '../../utils/uiDefaults';
 import { WidgetRenderer } from './WidgetRenderer';
 
 interface Props {
@@ -22,6 +22,11 @@ interface Props {
    * invalid field (after a blocked run).
    */
   focusErrorsRequest?: number;
+  /**
+   * The run button, drawn inside the form: at the top, or after the last
+   * section with inputs. (At the bottom the runner draws it under the form.)
+   */
+  submit?: { node: React.ReactNode; position: Exclude<SubmitPosition, 'bottom'> };
 }
 
 // Build a case-insensitive lookup map: lowercased key -> actual value
@@ -71,6 +76,7 @@ export const DynamicForm: React.FC<Props> = ({
   inputParameters,
   fieldErrors,
   focusErrorsRequest,
+  submit,
 }) => {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const idPrefix = useId();
@@ -133,7 +139,11 @@ export const DynamicForm: React.FC<Props> = ({
     const isCollapsed = collapsedSections.has(section.id);
 
     return (
-      <div key={section.id} className="ui-runner__section">
+      <div
+        key={section.id}
+        className={`ui-runner__section${safeColor(section.color) ? ' ui-runner__section--colored' : ''}`}
+        style={safeColor(section.color) ? ({ '--section-color': section.color } as React.CSSProperties) : undefined}
+      >
         {section.title && (
           <button
             className="ui-runner__section-header"
@@ -180,7 +190,7 @@ export const DynamicForm: React.FC<Props> = ({
               return (
                 <div
                   key={field.parameterId}
-                  className={`ui-runner__field ui-runner__field--${field.width}${error ? ' ui-runner__field--invalid' : ''}`}
+                  className={`ui-runner__field ui-runner__field--${effectiveWidth(field, layout.columns)}${error ? ' ui-runner__field--invalid' : ''}`}
                   data-invalid={error ? 'true' : undefined}
                 >
                   {field.widget !== 'hidden' && field.widget !== 'markdown' && (
@@ -230,9 +240,19 @@ export const DynamicForm: React.FC<Props> = ({
     );
   };
 
+  const submitAfter = submit?.position === 'afterInputs' ? lastInputSectionId(layout) : null;
+  const submitNode = submit && <div className="ui-runner__submit">{submit.node}</div>;
+
   return (
     <div className="ui-runner__form" ref={rootRef}>
-      {layout.sections.map(renderSection)}
+      {submit?.position === 'top' && submitNode}
+      {layout.sections.map((section, i) => (
+        <React.Fragment key={section.id}>
+          {renderSection(section, i)}
+          {submitAfter === section.id && submitNode}
+        </React.Fragment>
+      ))}
+      {submit?.position === 'afterInputs' && !submitAfter && submitNode}
     </div>
   );
 };

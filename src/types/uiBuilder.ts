@@ -41,6 +41,8 @@ export interface UISection {
   id: string;
   title?: string;
   collapsed?: boolean;
+  /** A colour line beside the section (3.1), as #rrggbb. */
+  color?: string;
   fields: UIField[];
 }
 
@@ -127,4 +129,13 @@ export interface UISettings {
   showExecutionTime?: boolean;
   theme?: 'default' | 'compact' | 'card';
   outputLayout?: 'inline' | 'below' | 'side-by-side';
+  /**
+   * Where the run button sits (3.1). Unset means 'bottom', where apps saved
+   * before 3.1 have always shown it; new apps start with 'afterInputs'.
+   */
+  submitPosition?: SubmitPosition;
+  /** The run button's colour (3.1), as #rrggbb; unset is the standard blue. */
+  accentColor?: string;
 }
+
+export type SubmitPosition = 'top' | 'afterInputs' | 'bottom';

@@ -1,10 +1,13 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import type React from 'react';
 import { Step, StepParameter, StepParameterType } from '../types';
 import {
+  SubmitPosition,
   UIDefinition,
   UIField,
+  UILayout,
   UISection,
   UISettings,
   WidgetType,
@@ -142,6 +145,7 @@ export function generateDefaultUI(
     showExecutionTime: true,
     theme: 'default',
     outputLayout: 'below',
+    submitPosition: 'afterInputs',
   };
 
   const now = new Date().toISOString();
@@ -302,6 +306,81 @@ export function getToggleValues(field: UIField, type: string | undefined): { on:
     on: onNum !== null && !Number.isNaN(onNum) ? onNum : 1,
     off: offNum !== null && !Number.isNaN(offNum) ? offNum : 0,
   };
+}
+
+/**
+ * The width a field is drawn at: a table always takes the full width, and
+ * 1/3 means 1/2 below three columns (the grid has no thirds then).
+ */
+export function effectiveWidth(field: UIField, columns: number): UIField['width'] {
+  if (field.widget === 'table') return 'full';
+  if (field.width === 'third' && columns < 3) return 'half';
+  return field.width;
+}
+
+/** Where the run button sits; apps saved before 3.1 show it at the bottom. */
+export function getSubmitPosition(settings: UISettings): SubmitPosition {
+  return settings.submitPosition ?? 'bottom';
+}
+
+/**
+ * The section the run button follows when it sits after the inputs: the
+ * last one with a visible input field. Null when no section has one (the
+ * button then sits at the bottom).
+ */
+export function lastInputSectionId(layout: UILayout, visibleOnly = true): string | null {
+  for (let i = layout.sections.length - 1; i >= 0; i--) {
+    const s = layout.sections[i];
+    if (s.fields.some(f => f.direction === 'input' && (!visibleOnly || f.visible))) return s.id;
+  }
+  return null;
+}
+
+// --- App colours (3.1) ---------------------------------------------------
+
+/** Preset colours for the run button and section lines. */
+export const APP_COLORS: { name: string; value: string }[] = [
+  { name: 'Blue', value: '#0766d1' },
+  { name: 'Teal', value: '#007a87' },
+  { name: 'Green', value: '#1b7f3b' },
+  { name: 'Orange', value: '#c25400' },
+  { name: 'Red', value: '#c0262d' },
+  { name: 'Purple', value: '#6b3fb5' },
+  { name: 'Graphite', value: '#3d4451' },
+];
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** A colour the app can use: #rrggbb only (anything else is ignored). */
+export function safeColor(value: string | undefined): string | undefined {
+  return value && HEX.test(value) ? value : undefined;
+}
+
+function luminance(hex: string): number {
+  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Text colour for a button of this colour: white or black, whichever
+ * contrasts more (one of them always reaches at least 4.58:1, above the
+ * 4.5:1 WCAG AA needs).
+ */
+export function readableTextOn(background: string): string {
+  return contrastRatio(background, '#ffffff') >= contrastRatio(background, '#000000') ? '#ffffff' : '#000000';
+}
+
+/** Inline style for a run button in the app's colour; none for the default. */
+export function accentButtonStyle(settings: UISettings): React.CSSProperties | undefined {
+  const color = safeColor(settings.accentColor);
+  if (!color) return undefined;
+  return { backgroundColor: color, borderColor: color, color: readableTextOn(color) };
 }
 
 /** The step parameter a field is bound to: exact name first, then any case. */

@@ -8,13 +8,16 @@ The start of the redesign. The UI app builder becomes canvas first, building the
 
 ### Changed
 
-- **UI app builder, canvas first** — the module's inputs and results on the left (marked IN or OUT, with a **+** for those not on the page yet), the app drawn with its real widgets in the middle, a widget bar under it, and an inspector on the right. Select a field on the canvas to configure it: **Step 1 · Choose a widget** shows the widgets its type can use, **Step 2 · Fine-tune** holds the settings. Click the app title for the app settings (name, description, columns, results position, button label) and a section title for that section
-- **Drag and drop** — drag a field from the list onto the page, drag fields to reorder them or move them between sections, drag a widget onto a field to change it, or onto empty canvas to add a field with it. Every drag has a click or keyboard equivalent; **Delete** removes the selected field and **Undo** brings it back
-- **New apps start empty**, with **Use template** to put every input and result on the page at once (what a new app used to start with)
+- **UI app builder, canvas first** — the app's structure on the left, the app drawn with its real widgets in the middle, and an inspector on the right. Select a field to configure it: **Step 1 · Choose a widget** shows the widgets its type can use, **Step 2 · Fine-tune** holds the settings. Click the app title for the app settings and a section title for that section. The canvas never shows made-up values: results show **--** until the app runs
+- **App structure** on the left — the sections in page order with their items marked **IN**, **OUT** or **TEXT**, the run button where it sits, **+ Add** under each section (an input or result not on the page yet, or a text block), **+ Add section**, and a **Not on the page** list
+- **Drag and drop** — drag a field from the structure onto the page, drag fields by their grip to reorder them or move them between sections, and drag a widget from the inspector onto a field to change it. Every drag has a click or keyboard equivalent; the **×** on a field, **Delete** on the selected field or **Remove** in the inspector removes it, and **Undo** brings it back
+- **New apps start with every input and result on the page**, in an Inputs and a Results section. **Add every field** puts them back if the page is emptied
 - **The builder uses the whole window** — the navigation sidebar is put away while you build, and the breadcrumb and action bar sit above the canvas instead of in a page header, so the field list, canvas and inspector get the height and width
 - **Action bar** — save status, **Undo**, **Edit** / **Preview**, **More** (Share, Replace or re-sync module), **Save & Run** and **Save**
 - **Signature banner** — only fields whose parameter left the signature are flagged; parameters without a field are listed on the left instead
-- Saved apps open unchanged: the app format is the same
+- **Widths** — 1/3 is offered only with three columns (below that it was drawn as 1/2 anyway), and a table always uses the full width
+- Going straight from one app's builder to another's (for example with **Back**) now opens the second app instead of keeping the first one's fields
+- Saved apps open unchanged; the new settings below are optional, so older apps, exported files and shared links still load
 - **One list layout** for All Modules, View Flows, Segmentation Trees, the Job Monitoring history, Publishing Overview's deployed items, Test Coverage's assets and the saved SCR endpoints: the count beside the title, quick-filter chips with counts, search, and the table in a card. Each column header sorts and has a **⋮** menu: sort ascending or descending, **Filter by …** for columns that offer it, **Hide column** and **Show hidden columns** (remembered on that computer). A filter in use shows as a tag beside the chips. The whole row opens the item; other actions moved from Actions or Links columns into a **⋮** at the row's end
 - **All Modules** — type chips (**All**, **Decision**, **Data**, **Model**) with counts, instead of the Type dropdown, which did not offer Data. The name column shows the description (or the ID) and a tag with the number of saved UI apps on the module. The **Actions** column (**View**) is gone
 - **View Flows** — chips by MAS module (**Published**, **Not published**, **Module removed**), a **Modified by** filter in that column's menu, and every column sorts (name only before)
@@ -26,6 +29,8 @@ The start of the redesign. The UI app builder becomes canvas first, building the
 
 ### Added
 
+- **Movable run button** — drag it on the canvas, or set **Run button position** in the app settings: at the top, after the inputs, or at the bottom. New apps start with it after the inputs; apps saved before 3.1 keep it at the bottom, where the running app has always shown it
+- **Colours** — a **Run button colour** for the app and a **Colour line** beside any section: seven presets or a custom colour. The button's text turns white or black, whichever is easier to read, so it always meets the WCAG 2.1 AA contrast level
 - **Table widget** for outputs — a decision DataGrid as a table (the default for new DataGrid outputs, which used to show as unreadable text), or an array as one column
 
 ## [3.0.0] - 2026-11-19

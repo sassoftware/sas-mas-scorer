@@ -621,7 +621,9 @@ All three take you to the UI Builder.
 
 ### The UI Builder
 
-The builder shows the app the way its users will see it and lets you build it there ("canvas first"). It uses the whole window under the app's header: the navigation sidebar is put away while you build, and the breadcrumb **UI Apps** (above the canvas) returns to the list. It has four parts: the module's fields on the left, the **canvas** in the middle, a **widget bar** under the canvas, and the **inspector** on the right.
+The builder shows the app the way its users will see it and lets you build it there ("canvas first"). It uses the whole window under the app's header: the navigation sidebar is put away while you build, and the breadcrumb **UI Apps** (above the canvas) returns to the list. It has three parts: the app's **structure** on the left, the **canvas** in the middle and the **inspector** on the right.
+
+A new app starts with every input and result of the module already on the page, in an **Inputs** and a **Results** section, with the run button after the inputs.
 
 **Action bar (above the canvas, after the breadcrumb):**
 
@@ -636,29 +638,34 @@ The builder shows the app the way its users will see it and lets you build it th
 
 A UI App is deleted from the **UI Apps** list (see [Managing UI Apps](#managing-ui-apps)), not from the builder.
 
-**Fields (left):** every input and result in the module's step signature (or the SCR endpoint's), marked **IN** or **OUT**. A field already on the page is selected on the canvas when you click it. A field that is not on the page yet is shown with a **+**: click it, or drag it onto the canvas, to add it.
+**Structure (left):** the app as a list, in page order.
+
+- **Title, layout and columns** at the top opens the app settings.
+- Each **section** is listed with its items under it. Each item is marked **IN** (an input), **OUT** (a result) or **TEXT** (a text block), and a hidden field says *hidden*. Click an item to select it on the canvas, or drag it onto the canvas to move it.
+- The **Run button** is listed where it sits; clicking it opens the app settings.
+- **+ Add** under a section adds an input or result that is not on the page yet, or a **Text block**, to that section. **+ Add section** adds a section.
+- **Not on the page** lists the inputs and results that have no field. Click one to add it, or drag it onto the canvas.
 
 **Canvas (middle):** the app's title, its sections and fields, the run button, and the results, each field drawn with its real widget.
 
-- A **new app starts empty**. **Use template** (under *Quick start*) puts every input and result on the page in the usual pattern: an **Inputs** section, the run button, and a **Results** section. You can also add fields one at a time.
+- If you remove every field, **Add every field** puts them all back in an **Inputs** and a **Results** section.
 - **Click** a field to select it and configure it in the inspector. Click the app's title for the app settings, or a section's title for that section.
-- **Drag** a field to move it: drop it on another field to place it before that one, or on a section's drop area to put it at the end of the section. The drop areas show while you drag.
-- **Delete** (or **Backspace**) removes the selected field; **Undo** brings it back.
+- **Drag** a field (by its grip, shown on the left when you point at it) to move it: drop it on another field to place it before that one, or on a section's drop area to put it at the end of the section. The drop areas show while you drag.
+- The **×** at a field's top right, **Delete** (or **Backspace**) on the selected field, or **Remove** in the inspector removes it; **Undo** brings it back.
+- **Drag the run button** to the top of the form, after the inputs, or to the bottom. The places it can go show while you drag. **Run button position** in the app settings does the same.
 - A field marked with an orange outline is **not in the signature** any more; a faded one is **hidden**.
 - Outputs show **--** (or, for a table, *Rows appear here after a run*) until the app runs: the canvas does not invent values.
-
-**Widget bar (under the canvas):** 123 (number), Dropdown, Badge, Gauge, Read only, Table, Toggle and Text block.
-
-- Drag a widget **onto a field** to show that field with it, if its type allows it.
-- Drag a widget **onto empty canvas** (the *Drop a widget here* area or a section's drop area) to add the first field not yet on the page that the widget suits, shown with that widget. **Text block** adds a block of formatted text.
-- **Clicking** a widget does the same from the keyboard: it applies to the selected field when it fits, and otherwise adds a field. Hover a widget to see what it will do; a greyed widget has no field it could show.
 
 **Inspector (right):** what you selected.
 
 - **Nothing selected:** a hint, and a link to the **App settings**.
-- **App settings:** name, description, **Columns** (1, 2 or 3), **Results position** (below the inputs, side by side, or inline), **Button label** (default `Execute`), and **Add section**.
-- **A section:** its title, **Move up** / **Move down**, **Add section**, and **Remove section** (which removes its fields too; Undo restores them).
-- **A field:** **Step 1 · Choose a widget** lists the widgets the field's type can use, and **Step 2 · Fine-tune** holds its settings (below). **Placement** moves it to another section, up or down, or removes it.
+- **App settings:** name, description, **Columns** (1, 2 or 3), **Results position** (below the inputs, side by side, or inline), **Run button position** (at the top, after the inputs, or at the bottom), **Run button colour**, **Button label** (default `Execute`), and **Add section**.
+- **A section:** its title, a **Colour line** beside it, **Move up** / **Move down**, **Add section**, and **Remove section** (which removes its fields too; Undo restores them).
+- **A field:** **Step 1 · Choose a widget** lists the widgets the field's type can use: click one, or drag it onto another field on the canvas to use it there. **Step 2 · Fine-tune** holds its settings (below). **Placement** moves it to another section, up or down, or removes it.
+
+**Colours:** the run button and each section's line can take one of seven preset colours or a custom one. The button's text turns white or black, whichever is easier to read on that colour, so it always meets the WCAG 2.1 AA contrast level. A section's line is only decoration: its title keeps the normal text colour.
+
+Apps saved before 3.1 keep their run button at the bottom of the form, where it has always been.
 
 **Field Configuration:**
 
@@ -670,7 +677,7 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Mapped Parameter** | The step parameter the field is bound to; its type and declared size are shown below it |
 | **Label** | Display name shown to the user |
 | **Description / Help Text** | Help text shown below the field |
-| **Width** | 1/3, 1/2 or Full of the section width |
+| **Width** | 1/3 (with three columns), 1/2 or Full of the section width. A table always uses the full width |
 | **Visible** | Whether the field is shown in the form. A hidden input with a default value is sent on every execution |
 | **Placeholder** | Hint text shown when the field is empty |
 | **Default Value** | Pre-populated value, stored by the parameter's type: a number for a numeric parameter, comma-separated values sent as an array for an array parameter, and text exactly as typed for a string parameter |
@@ -714,7 +721,7 @@ Output fields have additional options:
 
 ### When the Module Changes
 
-Inputs and results the app has no field for are simply listed on the left with a **+**, whether they are new in the module or were never added. A parameter the app has no field for is sent as missing (null).
+Inputs and results the app has no field for are listed under **Not on the page** on the left, whether they are new in the module or were never added. A parameter the app has no field for is sent as missing (null).
 
 When the app has fields for parameters the module's step signature **no longer lists**, a banner above the builder names them: these fields are not sent. **Remove orphaned fields** removes them (**Undo** reverses it), and the banner can be dismissed. To re-read the module (for example after it was republished), use **More → Replace or re-sync module…** and pick the current module again.
 

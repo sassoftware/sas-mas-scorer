@@ -13,15 +13,25 @@ import { Direction } from './canvasOps';
 export type DragPayload =
   | { kind: 'widget'; widget: WidgetType }
   | { kind: 'param'; name: string; direction: Direction }
-  | { kind: 'field'; parameterId: string };
+  | { kind: 'field'; parameterId: string }
+  | { kind: 'submit' };
 
 const MIME = 'application/x-mas-scorer-canvas';
 
 export function startDrag(event: React.DragEvent, payload: DragPayload): void {
   event.dataTransfer.setData(MIME, JSON.stringify(payload));
   // Some browsers start no drag without a plain-text entry.
-  event.dataTransfer.setData('text/plain', payload.kind === 'widget' ? payload.widget : payload.kind === 'param' ? payload.name : payload.parameterId);
-  event.dataTransfer.effectAllowed = payload.kind === 'field' ? 'move' : 'copy';
+  event.dataTransfer.setData('text/plain', dragText(payload));
+  event.dataTransfer.effectAllowed = payload.kind === 'field' || payload.kind === 'submit' ? 'move' : 'copy';
+}
+
+function dragText(payload: DragPayload): string {
+  switch (payload.kind) {
+    case 'widget': return payload.widget;
+    case 'param': return payload.name;
+    case 'field': return payload.parameterId;
+    default: return 'run button';
+  }
 }
 
 /** True while the drag carries one of ours (the data itself is readable only on drop). */

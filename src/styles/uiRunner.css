@@ -545,3 +545,22 @@
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
 }
+
+/* The run button inside the form (at the top, or after the inputs). */
+.ui-runner__submit {
+  display: flex;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+/* A section with a colour line (3.1): the line is decoration; the title
+   keeps its normal text colour, so contrast never depends on the colour. */
+.ui-runner__section--colored {
+  border-left: 4px solid var(--section-color);
+  padding-left: var(--space-3);
+}
+
+/* A run button in the app's own colour: darken on hover instead of the
+   standard blue hover colour. */
+.sas-button--primary[style]:hover:not(:disabled) {
+  filter: brightness(0.9);
+}

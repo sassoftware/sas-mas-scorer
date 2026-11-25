@@ -212,6 +212,16 @@ export function renameSection(def: UIDefinition, sectionId: string, title: strin
   return withSections(def, def.layout.sections.map(s => (s.id === sectionId ? { ...s, title } : s)));
 }
 
+export function setSectionColor(def: UIDefinition, sectionId: string, color: string | undefined): UIDefinition {
+  return withSections(def, def.layout.sections.map(s => {
+    if (s.id !== sectionId) return s;
+    const next = { ...s };
+    if (color) next.color = color;
+    else delete next.color;
+    return next;
+  }));
+}
+
 export function moveSection(def: UIDefinition, sectionId: string, delta: -1 | 1): UIDefinition {
   const sections = [...def.layout.sections];
   const i = sections.findIndex(s => s.id === sectionId);
@@ -221,46 +231,9 @@ export function moveSection(def: UIDefinition, sectionId: string, delta: -1 | 1)
   return withSections(def, sections);
 }
 
-/** Which way a widget points: input controls, output displays, or either. */
-export function widgetDirection(widget: WidgetType): Direction | 'both' | 'static' {
-  switch (widget) {
-    case 'gauge':
-    case 'badge':
-    case 'table':
-      return 'output';
-    case 'readonly':
-    case 'hidden':
-      return 'both';
-    case 'markdown':
-      return 'static';
-    default:
-      return 'input';
-  }
-}
-
 /** Whether a widget can show this field (its parameter's type and direction allow it). */
 export function widgetFits(widget: WidgetType, field: UIField, param: StepParameter | null): boolean {
   if (field.direction === 'static') return widget === 'markdown';
   if (!param) return false;
   return getCompatibleWidgets(param.type, field.direction).includes(widget);
-}
-
-/**
- * The parameter a widget dropped on empty canvas should show: the first one
- * with no field yet that the widget fits, inputs first for input widgets and
- * outputs first otherwise. Null when none fits.
- */
-export function parameterForWidget(
-  def: UIDefinition,
-  step: Step | null,
-  widget: WidgetType
-): { param: StepParameter; direction: Direction } | null {
-  const open = unplacedParameters(def, step);
-  const dir = widgetDirection(widget);
-  const preferred: Direction[] = dir === 'output' ? ['output'] : dir === 'input' ? ['input'] : ['output', 'input'];
-  for (const d of preferred) {
-    const hit = open.find(p => p.direction === d && getCompatibleWidgets(p.param.type, d).includes(widget));
-    if (hit) return hit;
-  }
-  return null;
 }
