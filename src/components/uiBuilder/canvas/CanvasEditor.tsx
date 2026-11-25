@@ -253,6 +253,7 @@ export const CanvasEditor: React.FC<Props> = ({
         onDescriptionChange={(d) => onChange({ ...definition, description: d || undefined }, 'Edit description', 'description')}
         onSettingsChange={(settings) => onChange({ ...definition, settings }, 'Change app settings', 'settings')}
         onColumnsChange={(columns) => onChange({ ...definition, layout: { ...definition.layout, columns } }, 'Change columns')}
+        onDisplayChange={(display) => onChange({ ...definition, layout: { ...definition.layout, display: display === 'page' ? undefined : display } }, 'Change how sections are shown')}
         onSectionTitleChange={(id, title) => onChange(renameSection(definition, id, title), 'Rename section', `section-title:${id}`)}
         onSectionColorChange={(id, color) => onChange(setSectionColor(definition, id, color), 'Change section colour', `section-color:${id}`)}
         onMoveSection={(id, delta) => onChange(moveSection(definition, id, delta), 'Move section')}

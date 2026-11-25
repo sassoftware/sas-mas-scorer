@@ -663,6 +663,13 @@ A UI App is deleted from the **UI Apps** list (see [Managing UI Apps](#managing-
 - **A section:** its title, a **Colour line** beside it, **Move up** / **Move down**, **Add section**, and **Remove section** (which removes its fields too; Undo restores them).
 - **A field:** **Step 1 · Choose a widget** lists the widgets the field's type can use: click one, or drag it onto another field on the canvas to use it there. **Step 2 · Fine-tune** holds its settings (below). **Placement** moves it to another section, up or down, or removes it.
 
+**Show sections as:** in the app settings, sections can be shown on **One page** (the default), as **Tabs**, or as **Steps**.
+
+- **Tabs** — one tab per section with fields; the arrow keys, Home and End move between tabs. The run button sits under the tabs (or above them, with *Run button position: At the top*). After a run the first tab with results opens, and a blocked run opens the tab with the first problem.
+- **Steps** — one section at a time, with *Step 2 of 3: Results* and a progress line. **Next** checks that step's fields first and stays on the step when one needs attention; **Back** keeps what was entered. The run button is on the last step with inputs; after a run the first step with results opens.
+
+The canvas keeps showing every section so you can edit them, with a note naming the tabs or steps; **Preview** shows them as the app will. Tabs and steps apply when the results are below the inputs or inline.
+
 **Score a file:** in the app settings, **Score a file** adds a section under the form where app users upload a CSV file (with a header line) and score every row. Columns are matched to the app's inputs by name or label, without regard to case; an input without a column uses its default, and the section names those inputs. Values are sent as they are in the file, except that a date input also accepts dates written as `2026-11-24` (and a date and time input `2026-11-24 14:30:00`). Every row gets the same checks as a single run; a row that fails them is listed as *Not sent* with the reason. Rows are scored four at a time with a progress bar and **Cancel**, brief server errors are retried, and the results show in a table (first 200 rows) with **Download all results (CSV)** for every row, its inputs, results and message.
 
 **Downloads after a run:** in the app settings, **Downloads after a run** offers the last run's inputs and results as a CSV file (one line per value: kind, name, value; a DataGrid or list as JSON text) and/or a JSON file (with the app name, the module or endpoint, the run time and the values in their own types). The buttons appear under the results once a run has finished.

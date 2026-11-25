@@ -298,6 +298,14 @@ export const FormCanvas: React.FC<Props> = ({
           </div>
         )}
 
+        {(definition.layout.display ?? 'page') !== 'page' && (
+          <div className="cb-display-note" aria-hidden="true">
+            Shown as {definition.layout.display === 'tabs' ? 'tabs' : 'steps'}:{' '}
+            {sections.filter(s => s.fields.some(f => f.visible)).map(s => s.title || 'Untitled').join(definition.layout.display === 'tabs' ? ' | ' : ' → ')}.
+            The canvas shows every section so you can edit them; Preview shows them as the app will.
+          </div>
+        )}
+
         {submitButton('top')}
 
         {sections.map(section => {

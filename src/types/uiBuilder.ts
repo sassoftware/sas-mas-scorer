@@ -35,6 +35,8 @@ export interface UIDefinitionSummary {
 export interface UILayout {
   columns: 1 | 2 | 3;
   sections: UISection[];
+  /** How the runner shows the sections (3.1): one page (default), tabs, or steps with Back / Next. */
+  display?: 'page' | 'tabs' | 'steps';
 }
 
 export interface UISection {

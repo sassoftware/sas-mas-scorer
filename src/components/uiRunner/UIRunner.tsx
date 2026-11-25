@@ -9,7 +9,7 @@ import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { PageHeader } from '../layout/Layout';
-import { DynamicForm } from './DynamicForm';
+import { DynamicForm, shownSections } from './DynamicForm';
 import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { RunMessages } from './RunMessages';
 import { LastRun, ResultDownloads } from './ResultDownloads';
@@ -78,6 +78,10 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const [outputValues, setOutputValues] = useState<Record<string, unknown>>({});
   // What the last run sent, for the result downloads.
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  // Tabs or steps: which shown section is on screen, and the step whose
+  // fields Next found problems in (only that step's errors show).
+  const [activeSection, setActiveSection] = useState(0);
+  const [stepCheck, setStepCheck] = useState<string | null>(null);
   const [module, setModule] = useState<Module | null>(null);
   const [moduleError, setModuleError] = useState<string | null>(null);
   // Pre-run check: off until the first blocked run, then live as the user
@@ -158,10 +162,12 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     [definition, step]
   );
 
-  const fieldErrors = useMemo(
-    () => (blockedRuns > 0 ? validateInputs(definition, step, inputValues) : {}),
-    [blockedRuns, definition, step, inputValues]
-  );
+  const fieldErrors = useMemo(() => {
+    if (blockedRuns > 0) return validateInputs(definition, step, inputValues);
+    if (!stepCheck) return {};
+    const ids = new Set(definition.layout.sections.find(s => s.id === stepCheck)?.fields.map(f => f.parameterId) ?? []);
+    return Object.fromEntries(Object.entries(validateInputs(definition, step, inputValues)).filter(([k]) => ids.has(k)));
+  }, [blockedRuns, stepCheck, definition, step, inputValues]);
   const invalidCount = Object.keys(fieldErrors).length;
 
   // Map outputs when execution completes
@@ -175,14 +181,27 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     }
   }, [output, definition.layout.sections]);
 
+  // Tabs or steps: once results arrive, show the first section with results.
+  useEffect(() => {
+    const display = definition.layout.display ?? 'page';
+    if (display === 'page' || Object.keys(outputValues).length === 0) return;
+    const at = shownSections(definition.layout).findIndex(s => s.fields.some(f => f.direction === 'output'));
+    if (at >= 0) setActiveSection(at);
+  }, [outputValues, definition.layout]);
+
   const handleExecute = useCallback(async () => {
     if (!step) return;
     const errors = validateInputs(definition, step, inputValues);
     if (Object.keys(errors).length > 0) {
       setBlockedRuns(n => n + 1);
+      // Tabs or steps: show the first section holding a problem.
+      const shown = shownSections(definition.layout);
+      const at = shown.findIndex(s => s.fields.some(f => f.parameterId in errors));
+      if (at >= 0) setActiveSection(at);
       return;
     }
     setBlockedRuns(0);
+    setStepCheck(null);
     try {
       // Converted by the signature's types; fields whose parameter the step
       // no longer lists are left out, and step inputs without a field go out
@@ -216,6 +235,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     setOutputValues({});
     setLastRun(null);
     setBlockedRuns(0);
+    setStepCheck(null);
+    setActiveSection(0);
     reset();
   }, [reset, definition]);
 
@@ -460,7 +481,42 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     );
   }
 
-  // Inline or below: single unified card
+  // Inline or below: single unified card. Tabs keep the run button under
+  // the panels (or at the top); steps put it on the last step with inputs.
+  const display = unifiedLayout.display ?? 'page';
+  const shown = shownSections(unifiedLayout);
+  const current = Math.min(activeSection, Math.max(shown.length - 1, 0));
+  let runStep = -1;
+  shown.forEach((s, i) => { if (s.fields.some(f => f.direction === 'input' && f.visible)) runStep = i; });
+  if (runStep < 0) runStep = shown.length - 1;
+  const formSubmit = display === 'steps'
+    ? undefined
+    : display === 'tabs'
+      ? (submitPosition === 'top' ? { node: executeButton, position: 'top' as const } : undefined)
+      : (submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition });
+  const footerButton = display === 'page' ? submitPosition === 'bottom' : display === 'tabs' ? submitPosition !== 'top' : false;
+  const goNext = () => {
+    const section = shown[current];
+    const ids = new Set(section.fields.map(f => f.parameterId));
+    const problems = Object.keys(validateInputs(definition, step, inputValues)).filter(k => ids.has(k));
+    if (problems.length > 0) {
+      setStepCheck(section.id);
+      return;
+    }
+    setStepCheck(null);
+    setActiveSection(current + 1);
+  };
+  const stepNav = display === 'steps' && shown.length > 0 ? (
+    <div className="ui-runner__steps-nav">
+      {current > 0 && (
+        <Button variant="secondary" onClick={() => { setStepCheck(null); setActiveSection(current - 1); }}>Back</Button>
+      )}
+      {current === runStep ? executeButton : current < shown.length - 1 && (
+        <Button variant="primary" onClick={goNext}>Next</Button>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="ui-runner">
       {renderHeader()}
@@ -493,12 +549,15 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             inputParameters={step?.inputs}
             fieldErrors={fieldErrors}
             focusErrorsRequest={blockedRuns}
-            submit={submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition }}
+            submit={formSubmit}
+            active={current}
+            onActiveChange={setActiveSection}
+            stepNav={stepNav}
           />
           <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
           {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} />}
         </CardBody>
-        {submitPosition === 'bottom' && (
+        {footerButton && (
           <CardFooter>
             {executeButton}
           </CardFooter>

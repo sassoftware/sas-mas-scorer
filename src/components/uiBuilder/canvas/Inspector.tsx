@@ -34,6 +34,7 @@ interface Props {
   onDescriptionChange: (description: string) => void;
   onSettingsChange: (settings: UISettings) => void;
   onColumnsChange: (columns: 1 | 2 | 3) => void;
+  onDisplayChange: (display: 'page' | 'tabs' | 'steps') => void;
   onSectionTitleChange: (sectionId: string, title: string) => void;
   onSectionColorChange: (sectionId: string, color: string | undefined) => void;
   onMoveSection: (sectionId: string, delta: -1 | 1) => void;
@@ -88,6 +89,30 @@ export const Inspector: React.FC<Props> = (props) => {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('display')}>Show sections as</label>
+            <select
+              id={fid('display')}
+              className="sas-input"
+              aria-describedby={fid('display-hint')}
+              value={definition.layout.display ?? 'page'}
+              onChange={(e) => props.onDisplayChange(e.target.value as 'page' | 'tabs' | 'steps')}
+            >
+              <option value="page">One page</option>
+              <option value="tabs">Tabs</option>
+              <option value="steps">Steps (Back and Next)</option>
+            </select>
+            <span className="ui-builder__config-type-hint" id={fid('display-hint')}>
+              {(definition.layout.display ?? 'page') === 'steps'
+                ? "Each section is a step. Next checks that step's fields; the run button is on the last step with inputs, and the results step follows."
+                : (definition.layout.display ?? 'page') === 'tabs'
+                  ? 'Each section is a tab. After a run the first tab with results opens.'
+                  : 'Every section on one page.'}
+              {(s.outputLayout ?? 'below') === 'side-by-side' && (definition.layout.display ?? 'page') !== 'page'
+                ? ' Tabs and steps apply when the results are below the inputs or inline.'
+                : ''}
+            </span>
           </div>
           <div className="ui-builder__config-field">
             <label htmlFor={fid('out')}>Results position</label>

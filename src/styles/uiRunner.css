@@ -964,3 +964,79 @@
   color: var(--sas-error-dark);
   font-size: var(--font-size-sm);
 }
+
+/* Sections as tabs. */
+.ui-runner__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--sas-gray-300);
+  margin-bottom: var(--space-4);
+}
+
+.ui-runner__tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.ui-runner__tab:hover {
+  color: var(--sas-gray-900);
+  background: var(--sas-gray-100);
+}
+
+.ui-runner__tab--on {
+  color: var(--sas-blue-dark);
+  border-bottom-color: var(--sas-blue-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ui-runner__tab:focus-visible,
+.ui-runner__form--tabs [role='tabpanel']:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Sections as steps. */
+.ui-runner__steps-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.ui-runner__steps-track {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-runner__steps-track li {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sas-gray-200);
+}
+
+.ui-runner__steps-track .ui-runner__step--done,
+.ui-runner__steps-track .ui-runner__step--on {
+  background: var(--sas-blue-primary);
+}
+
+.ui-runner__steps-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--sas-gray-900);
+}
+
+.ui-runner__steps-nav {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
