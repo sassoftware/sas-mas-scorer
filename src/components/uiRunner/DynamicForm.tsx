@@ -50,7 +50,7 @@ function lookupValue(
 }
 
 /** Widgets a <label for> can name (a button counts; a radio group does not). */
-const LABELABLE = new Set(['text', 'number', 'slider', 'dropdown', 'toggle', 'textarea']);
+const LABELABLE = new Set(['text', 'number', 'slider', 'dropdown', 'toggle', 'textarea', 'checkbox', 'date', 'datetime']);
 
 /** "Min 0 · Max 100" / "Up to 20 characters": the author's limits, stated up front. */
 function constraintHint(field: UIField): string | null {

@@ -19,4 +19,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   table: 'Table',
   date: 'Date',
   datetime: 'Date and Time',
+  checkbox: 'Checkbox',
 };

@@ -78,7 +78,9 @@ export type WidgetType =
   /** A SAS date (days since 1960-01-01) as a date picker or a readable date (3.1). */
   | 'date'
   /** A SAS datetime (seconds since 1960-01-01 00:00) as a date and time (3.1). */
-  | 'datetime';
+  | 'datetime'
+  /** On/off as a checkbox (3.1): sends the on/off values like Toggle; a result shows Yes or No. */
+  | 'checkbox';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older

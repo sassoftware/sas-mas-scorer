@@ -38,7 +38,7 @@ interface Props {
   definition: UIDefinition;
   step: Step | null;
   /** Date and datetime parameters (by lowercase name), from the module's decision. */
-  dateKinds?: Record<string, 'date' | 'datetime'>;
+  dateKinds?: Record<string, 'date' | 'datetime' | 'checkbox'>;
   /** "MAS module: x" / "SCR endpoint: url", under the app name. */
   source: string;
   onChange: CanvasChange;

@@ -58,10 +58,10 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
 export function getCompatibleWidgets(type: StepParameterType, direction: 'input' | 'output'): WidgetType[] {
   if (direction === 'output') {
     if (type === 'decimal' || type === 'integer' || type === 'bigint') {
-      return ['readonly', 'gauge', 'badge', 'date', 'datetime', 'hidden'];
+      return ['readonly', 'gauge', 'badge', 'checkbox', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
-      return ['readonly', 'badge', 'hidden'];
+      return ['readonly', 'badge', 'checkbox', 'hidden'];
     }
     if (isDatagridType(type)) {
       return ['table', 'readonly', 'hidden'];
@@ -74,14 +74,14 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
 
   switch (type) {
     case 'decimal':
-      return ['number', 'slider', 'dropdown', 'date', 'datetime', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'integer':
     case 'bigint':
       // Toggle sends 1/0 by default; a decimal flag is rare enough to leave out.
-      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'date', 'datetime', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'string':
       // Toggle sends configurable on/off codes ("Y"/"N" by default).
-      return ['text', 'dropdown', 'radio', 'toggle', 'textarea', 'readonly', 'hidden'];
+      return ['text', 'dropdown', 'radio', 'toggle', 'checkbox', 'textarea', 'readonly', 'hidden'];
     case 'binary':
       return ['textarea', 'readonly', 'hidden'];
     default:
@@ -379,7 +379,7 @@ export function accentButtonStyle(settings: UISettings): React.CSSProperties | u
 export function compatibleWidgetsFor(
   param: StepParameter,
   direction: 'input' | 'output',
-  dateKind?: 'date' | 'datetime'
+  dateKind?: 'date' | 'datetime' | 'checkbox'
 ): WidgetType[] {
   const all = getCompatibleWidgets(param.type, direction);
   if (dateKind === 'date') return all.filter(w => w !== 'datetime');
@@ -387,8 +387,8 @@ export function compatibleWidgetsFor(
   return all;
 }
 
-/** Shows each date and datetime parameter with its picker (or readable date, for a result). */
-export function applyDateKinds(def: UIDefinition, kinds: Record<string, 'date' | 'datetime'>): UIDefinition {
+/** Shows each date, datetime and boolean parameter with its widget (picker, readable date, checkbox). */
+export function applyDateKinds(def: UIDefinition, kinds: Record<string, 'date' | 'datetime' | 'checkbox'>): UIDefinition {
   if (Object.keys(kinds).length === 0) return def;
   return {
     ...def,
@@ -456,7 +456,7 @@ export function resolveInputValue(
   if (field.parameterId in values) return values[field.parameterId];
   if (field.defaultValue !== undefined) return field.defaultValue;
   if (field.widget === 'slider') return field.validation?.min ?? 0;
-  if (field.widget === 'toggle') return getToggleValues(field, param?.type).off;
+  if (field.widget === 'toggle' || field.widget === 'checkbox') return getToggleValues(field, param?.type).off;
   return undefined;
 }
 

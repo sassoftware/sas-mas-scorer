@@ -17,7 +17,7 @@ import { ColorChoice } from './ColorChoice';
 interface Props {
   definition: UIDefinition;
   step: Step | null;
-  dateKinds: Record<string, 'date' | 'datetime'>;
+  dateKinds: Record<string, 'date' | 'datetime' | 'checkbox'>;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onFieldChange: (parameterId: string, field: UIField) => void;

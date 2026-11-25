@@ -236,7 +236,7 @@ export function widgetFits(
   widget: WidgetType,
   field: UIField,
   param: StepParameter | null,
-  dateKind?: 'date' | 'datetime'
+  dateKind?: 'date' | 'datetime' | 'checkbox'
 ): boolean {
   if (field.direction === 'static') return widget === 'markdown';
   if (!param) return false;

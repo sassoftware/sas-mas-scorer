@@ -701,6 +701,7 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
 | **Table** | A decision DataGrid output as a table (the default for DataGrid outputs), or an array output as one column | — (up to 200 rows are shown, with a count of the rest) |
+| **Checkbox** | On/off: a checkbox for an input (sends the same values as Toggle Switch), a ticked or empty box with *Yes* or *No* for a result | Value when on / off (default `1` / `0`, or `Y` / `N` for a string) |
 | **Date** | A SAS date: a date picker for an input, a readable date for a result | Default value (picked with the same date picker) |
 | **Date and Time** | A SAS datetime: a date and time picker for an input (to the second), a readable date and time for a result | Default value (picked with the same picker) |
 | **Hidden** | Sending a fixed value without showing it | Default value (sent on every execution) |
@@ -710,7 +711,7 @@ Select a field to configure it in the inspector. A field has these settings:
 
 MAS takes a date or datetime only as a number: a **SAS date** is the number of days since 1 January 1960 (24 November 2026 is 24434) and a **SAS datetime** the number of seconds since 1 January 1960 00:00:00. MAS rejects dates sent as text. The **Date** and **Date and Time** widgets let the app user pick a date (and time) and send that number; the number is shown under the picker (*Sent to MAS as 24434 (SAS date value)*). A SAS datetime has no time zone, so the time is sent exactly as picked, never shifted by the computer's time zone.
 
-MAS lists date and datetime variables as plain numbers. For a module published from a SAS Intelligent Decisioning decision, the builder reads the decision's own variable types: a **date** variable gets the **Date** widget and a **datetime** variable the **Date and Time** widget, for inputs and results, and only that one of the two is offered for it. For other modules, choose **Date** or **Date and Time** for a numeric input or result yourself.
+MAS lists date, datetime and boolean variables as plain numbers. For a module published from a SAS Intelligent Decisioning decision, the builder reads the decision's own variable types: a **date** variable gets the **Date** widget, a **datetime** variable the **Date and Time** widget (only that one of the two is offered for it), and a **boolean** variable the **Checkbox**, for inputs and results. MAS takes a boolean as `1` or `0` (it rejects `true` and `"Y"`), which is what the Checkbox sends by default. For other modules, choose these widgets for a numeric input or result yourself.
 
 ### Output Formatting
 

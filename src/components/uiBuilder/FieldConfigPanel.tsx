@@ -196,7 +196,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
   const showMaxLength = isInput
     && (field.widget === 'text' || field.widget === 'textarea')
     && (!parameter || parameter.type === 'string');
-  const showToggleValues = isInput && field.widget === 'toggle';
+  const showToggleValues = isInput && (field.widget === 'toggle' || field.widget === 'checkbox');
   const toggleDefaults = getDefaultToggleValues(parameter?.type);
 
   const setValidation = (patch: Partial<NonNullable<UIField['validation']>>) => {
