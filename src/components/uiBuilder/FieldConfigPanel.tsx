@@ -51,6 +51,8 @@ interface Props {
   variant?: 'panel' | 'inspector';
   /** The app's column count: 1/3 is offered only with three columns. */
   columns?: 1 | 2 | 3;
+  /** DataGrid editor: the columns and row limit the decision declares, when known. */
+  gridSchema?: { columns: { name: string; dataType: string }[]; maxRows: number | null };
 }
 
 export const FieldConfigPanel: React.FC<Props> = ({
@@ -65,6 +67,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
   onClose,
   variant = 'panel',
   columns = 3,
+  gridSchema,
 }) => {
   const inInspector = variant === 'inspector';
   const uid = useId();
@@ -514,6 +517,47 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {isInput && field.widget === 'datagrid' && (
+          <>
+            <div className="ui-builder__config-section-title">DataGrid Columns</div>
+            {gridSchema && (
+              <div className="ui-builder__config-field">
+                <Button variant="secondary" size="small"
+                  onClick={() => setValidation({ gridColumns: gridSchema.columns, maxRows: gridSchema.maxRows ?? field.validation?.maxRows })}>
+                  Use the decision's {gridSchema.columns.length} columns
+                </Button>
+              </div>
+            )}
+            <div role="group" aria-label="Grid columns">
+              {(field.validation?.gridColumns ?? []).map((c, i, all) => (
+                <div key={i} className="ui-builder__option-row">
+                  <input className="sas-input" aria-label={`Column ${i + 1} name`} value={c.name}
+                    onChange={(e) => setValidation({ gridColumns: all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+                  <select className="sas-input" aria-label={`Column ${i + 1} type`} value={c.dataType}
+                    onChange={(e) => setValidation({ gridColumns: all.map((x, j) => (j === i ? { ...x, dataType: e.target.value } : x)) })}>
+                    {['string', 'decimal', 'integer', 'date', 'datetime', 'boolean'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <IconButton size="small" variant="danger" title="Remove column" aria-label={`Remove column ${i + 1}`}
+                    onClick={() => setValidation({ gridColumns: all.filter((_x, j) => j !== i) })}>
+                    <CloseIcon />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+            <Button variant="tertiary" size="small"
+              onClick={() => setValidation({ gridColumns: [...(field.validation?.gridColumns ?? []), { name: `column${(field.validation?.gridColumns?.length ?? 0) + 1}`, dataType: 'string' }] })}>
+              Add column
+            </Button>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('maxrows')}>Most rows</label>
+              <input id={fid('maxrows')} type="number" min="1" className="sas-input" placeholder="1000"
+                value={field.validation?.maxRows ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ maxRows: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+              <span className="ui-builder__config-type-hint">Empty allows 1,000 rows{gridSchema?.maxRows ? `; the decision allows ${gridSchema.maxRows}` : ''}.</span>
+            </div>
+          </>
         )}
 
         {field.widget === 'image' && (

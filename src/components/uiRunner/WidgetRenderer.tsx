@@ -22,6 +22,7 @@ import { FileInputWidget } from './widgets/FileWidget';
 import { KpiWidget } from './widgets/KpiWidget';
 import { BarChartWidget } from './widgets/BarChartWidget';
 import { ImageWidget } from './widgets/ImageWidget';
+import { DataGridEditorWidget } from './widgets/DataGridEditorWidget';
 import { PercentCurrencyInputWidget, PercentCurrencyOutputWidget } from './widgets/PercentCurrencyWidget';
 import { InputWidgetProps } from './widgets/types';
 
@@ -84,6 +85,8 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return field.direction === 'input'
         ? <PercentCurrencyInputWidget {...inputProps} />
         : <PercentCurrencyOutputWidget field={field} value={value} />;
+    case 'datagrid':
+      return <DataGridEditorWidget {...inputProps} />;
     case 'image':
       return <ImageWidget field={field} value={value} />;
     case 'barchart':

@@ -26,4 +26,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   kpi: 'KPI Tile',
   barchart: 'Bar Chart',
   image: 'Image',
+  datagrid: 'DataGrid Editor',
 };

@@ -41,6 +41,8 @@ interface Props {
   dateKinds?: Record<string, 'date' | 'datetime' | 'checkbox'>;
   /** The module was published from SAS Model Manager. */
   isModelModule?: boolean;
+  /** DataGrid inputs' declared columns, by lowercase name. */
+  gridSchemas?: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>;
   /** "MAS module: x" / "SCR endpoint: url", under the app name. */
   source: string;
   onChange: CanvasChange;
@@ -66,6 +68,7 @@ export const CanvasEditor: React.FC<Props> = ({
   step,
   dateKinds = {},
   isModelModule = false,
+  gridSchemas = {},
   source,
   onChange,
   selectionResetKey,
@@ -226,6 +229,7 @@ export const CanvasEditor: React.FC<Props> = ({
         step={step}
         dateKinds={dateKinds}
         isModelModule={isModelModule}
+        gridSchemas={gridSchemas}
         selection={selection}
         onSelect={setSelection}
         onFieldChange={(id, field) => {

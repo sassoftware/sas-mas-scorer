@@ -94,7 +94,9 @@ export type WidgetType =
   /** A list or DataGrid result as horizontal bars (3.1). */
   | 'barchart'
   /** A returned image: base64, a data URL or an https link (3.1). */
-  | 'image';
+  | 'image'
+  /** A DataGrid input edited in place, with CSV fill (3.1). */
+  | 'datagrid';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older
@@ -141,6 +143,10 @@ export interface FieldValidation {
   imageAlt?: string;
   /** Image output (3.1): largest height in pixels. */
   imageMaxHeight?: number;
+  /** DataGrid editor (3.1): the grid's columns (usually read from the decision). */
+  gridColumns?: { name: string; dataType: string }[];
+  /** DataGrid editor (3.1): most rows (default: the decision's limit, else 1000). */
+  maxRows?: number;
 }
 
 /** A KPI band: values below `below` (or any value, when unset) get this word and colour. */

@@ -1059,3 +1059,82 @@
   outline-offset: var(--focus-outline-offset);
   display: inline-block;
 }
+
+/* DataGrid editor. */
+.ui-runner__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ui-runner__grid-table td {
+  padding: 2px 4px;
+}
+
+.ui-runner__grid-input {
+  min-width: 110px;
+  min-height: 32px;
+  padding: 2px 6px;
+}
+
+.ui-runner__grid-num {
+  width: 3ch;
+  color: var(--sas-text-muted);
+  text-align: right;
+}
+
+.ui-runner__grid-type {
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ui-runner__grid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ui-runner__grid-file:focus-within {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__grid-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ui-runner__grid-map legend {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__grid-map label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__grid-map .ui-runner__grid-actions {
+  grid-column: 1 / -1;
+}
+
+.ui-runner__grid-input--invalid {
+  border-color: var(--sas-error-dark);
+  box-shadow: inset 0 0 0 1px var(--sas-error-dark);
+}
+
+.ui-runner__grid-problems {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--sas-error-dark);
+  font-size: var(--font-size-sm);
+}

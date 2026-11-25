@@ -21,6 +21,7 @@ interface Props {
   dateKinds: Record<string, 'date' | 'datetime' | 'checkbox'>;
   /** The module was published from SAS Model Manager (offers the model information panel). */
   isModelModule?: boolean;
+  gridSchemas?: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onFieldChange: (parameterId: string, field: UIField) => void;
@@ -340,6 +341,7 @@ export const Inspector: React.FC<Props> = (props) => {
           sections={definition.layout.sections}
           currentSectionId={location.sectionId}
           columns={definition.layout.columns}
+          gridSchema={param ? props.gridSchemas?.[param.name.toLowerCase()] : undefined}
           onChange={(f) => props.onFieldChange(field.parameterId, f)}
           onMoveToSection={(id) => props.onMoveFieldToSection(field.parameterId, id)}
           onClose={() => props.onSelect(null)}

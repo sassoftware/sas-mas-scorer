@@ -9,6 +9,7 @@
  */
 
 import { Step, StepParameter } from '../../types';
+import { gridProblems } from '../../utils/datagrid';
 import { FieldErrors, UIDefinition, UIField } from '../../types/uiBuilder';
 import {
   findParameter,
@@ -76,6 +77,11 @@ export function validateFieldValue(
     return field.widget === 'dropdown' || field.widget === 'radio'
       ? 'Required. Choose an option.'
       : 'Required. Enter a value.';
+  }
+
+  if (field.widget === 'datagrid') {
+    const problems = gridProblems(value, 1);
+    return problems.length ? `Fix the cells that do not fit their column: ${problems[0]}.` : null;
   }
 
   const type = param?.type;

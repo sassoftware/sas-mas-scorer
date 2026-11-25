@@ -24,10 +24,11 @@ import {
   generateDefaultUI,
   hasSignatureDrift,
   applyDateKinds,
+  applyGridSchemas,
 } from '../../utils/uiDefaults';
 import { getScoreableStep } from '../../utils/moduleHelper';
 import { inspectEndpoint, scrStep } from '../../api/scr';
-import { DateKinds, getDecisionDateKinds } from '../../api/decisionDateTypes';
+import { DateKinds, getDecisionDateKinds, getDecisionGridSchemas, GridSchema } from '../../api/decisionDateTypes';
 import { modelIdOf } from '../uiRunner/ModelInfoPanel';
 
 interface UIBuilderProps {
@@ -112,6 +113,8 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const [generatedLayout, setGeneratedLayout] = useState<UILayout | null>(null);
   // Date and datetime parameters, from the decision the module was published from.
   const [dateKinds, setDateKinds] = useState<DateKinds>({});
+  // DataGrid inputs' declared columns, from the same decision.
+  const [gridSchemas, setGridSchemas] = useState<Record<string, GridSchema>>({});
 
   const defRef = useRef(def);
   defRef.current = def;
@@ -204,10 +207,14 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
       if (scoreable) {
         // Dates and datetimes get their pickers from the start: read the
         // decision's types first (an empty answer for other modules).
-        getDecisionDateKinds(module).then(kinds => {
+        Promise.all([getDecisionDateKinds(module), getDecisionGridSchemas(module)]).then(([kinds, grids]) => {
           if (defRef.current) return;
-          const generated = applyDateKinds(generateDefaultUI(module.id, scoreable, `${module.name} UI`), kinds);
+          const generated = applyGridSchemas(
+            applyDateKinds(generateDefaultUI(module.id, scoreable, `${module.name} UI`), kinds),
+            grids
+          );
           setDateKinds(kinds);
+          setGridSchemas(grids);
           setGeneratedLayout(generated.layout);
           setDef(generated);
           setBaseline(serialize(generated));
@@ -220,6 +227,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     }
     setStep(steps.find(s => s.id === current.stepId) ?? scoreable ?? null);
     getDecisionDateKinds(module).then(setDateKinds);
+    getDecisionGridSchemas(module).then(setGridSchemas);
   }, [module, steps]);
 
   // --- Edits and undo ---------------------------------------------------
@@ -472,6 +480,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
           definition={def}
           step={step}
           dateKinds={dateKinds}
+          gridSchemas={gridSchemas}
           isModelModule={!scrUrl && !!modelIdOf(module)}
           source={source}
           onChange={applyChange}

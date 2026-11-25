@@ -51,3 +51,50 @@ export function getDecisionDateKinds(module: Module): Promise<DateKinds> {
   cache.set(key, pending);
   return pending;
 }
+
+/** A decision DataGrid's declared columns and row limit. */
+export interface GridSchema {
+  columns: { name: string; dataType: string }[];
+  maxRows: number | null;
+}
+
+const gridCache = new Map<string, Promise<Record<string, GridSchema>>>();
+
+/**
+ * The columns (dataGridExtension) and row limit (dataGridMaxRowCount) of each
+ * DataGrid input of the decision a module was published from, by lowercase
+ * name (with the trailing-underscore spelling too). Empty for other modules,
+ * for grids the decision declares no columns for, or when it can't be read.
+ */
+export function getDecisionGridSchemas(module: Module): Promise<Record<string, GridSchema>> {
+  const key = module.id.toLowerCase();
+  let pending = gridCache.get(key);
+  if (pending) return pending;
+  const source = module.properties?.find(p => p.name === 'sourceURI')?.value ?? '';
+  if (!source.startsWith('/decisions/flows/')) return Promise.resolve({});
+  pending = getDecisionRevision(source)
+    .then(flow => {
+      const out: Record<string, GridSchema> = {};
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const v of (flow.signature ?? []) as any[]) {
+        if (String(v.dataType).toLowerCase() !== 'datagrid' || v.direction === 'output') continue;
+        const cols = Array.isArray(v.dataGridExtension) ? v.dataGridExtension : [];
+        if (cols.length === 0) continue;
+        const schema: GridSchema = {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          columns: cols.map((c: any) => ({ name: String(c.name), dataType: String(c.dataType ?? 'string') })),
+          maxRows: typeof v.dataGridMaxRowCount === 'number' && v.dataGridMaxRowCount > 0 ? v.dataGridMaxRowCount : null,
+        };
+        const name = String(v.name).toLowerCase();
+        out[name] = schema;
+        out[`${name}_`] = schema;
+      }
+      return out;
+    })
+    .catch(() => {
+      gridCache.delete(key);
+      return {};
+    });
+  gridCache.set(key, pending);
+  return pending;
+}

@@ -33,6 +33,7 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
     return 'readonly';
   }
 
+  if (isDatagridType(type)) return 'datagrid';
   switch (type) {
     case 'decimal':
     case 'integer':
@@ -85,6 +86,7 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
     case 'binary':
       return ['textarea', 'readonly', 'hidden'];
     default:
+      if (isDatagridType(type)) return ['datagrid', 'textarea', 'hidden'];
       // Array types
       return ['textarea', 'readonly', 'hidden'];
   }
@@ -313,7 +315,7 @@ export function getToggleValues(field: UIField, type: string | undefined): { on:
  * 1/3 means 1/2 below three columns (the grid has no thirds then).
  */
 export function effectiveWidth(field: UIField, columns: number): UIField['width'] {
-  if (field.widget === 'table' || field.widget === 'barchart') return 'full';
+  if (field.widget === 'table' || field.widget === 'barchart' || field.widget === 'datagrid') return 'full';
   if (field.width === 'third' && columns < 3) return 'half';
   return field.width;
 }
@@ -385,6 +387,27 @@ export function compatibleWidgetsFor(
   if (dateKind === 'date') return all.filter(w => w !== 'datetime');
   if (dateKind === 'datetime') return all.filter(w => w !== 'date');
   return all;
+}
+
+/** Gives each DataGrid input with the DataGrid Editor the columns and row limit its decision declares. */
+export function applyGridSchemas(
+  def: UIDefinition,
+  schemas: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>
+): UIDefinition {
+  if (Object.keys(schemas).length === 0) return def;
+  return {
+    ...def,
+    layout: {
+      ...def.layout,
+      sections: def.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.map(f => {
+          const g = f.direction === 'input' && f.widget === 'datagrid' ? schemas[f.parameterId.toLowerCase()] : undefined;
+          return g ? { ...f, validation: { ...f.validation, gridColumns: g.columns, ...(g.maxRows ? { maxRows: g.maxRows } : {}) } } : f;
+        }),
+      })),
+    },
+  };
 }
 
 /** Shows each date, datetime and boolean parameter with its widget (picker, readable date, checkbox). */

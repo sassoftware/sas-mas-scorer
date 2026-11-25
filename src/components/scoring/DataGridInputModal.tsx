@@ -13,6 +13,7 @@ import {
   coerceDatagridValue,
   parseDatagrid,
   parseDatagridColumns,
+  toTypedCell,
 } from '../../utils/datagrid';
 
 // Schema info resolved from the decision signature for one datagrid parameter.
@@ -34,24 +35,6 @@ const FLEXIBLE_COLUMN_TYPES = ['string', 'decimal', 'integer', 'date', 'datetime
 
 const cellToText = (cell: unknown): string =>
   cell === null || cell === undefined ? '' : String(cell);
-
-// Convert an edited cell string back to the typed value for the wire format
-const toTypedCell = (raw: string, dataType: string): unknown => {
-  if (raw === '') return null;
-  const t = dataType.toLowerCase();
-  if (t === 'integer' || t === 'int' || t === 'bigint') {
-    const n = parseInt(raw, 10);
-    return Number.isNaN(n) ? null : n;
-  }
-  if (t === 'decimal' || t === 'double' || t === 'number') {
-    const n = Number(raw);
-    return Number.isNaN(n) ? null : n;
-  }
-  if (t === 'boolean') return raw === 'true';
-  // datetime-local inputs omit seconds; SID expects them
-  if (t === 'datetime' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return `${raw}:00`;
-  return raw;
-};
 
 const RemoveIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
