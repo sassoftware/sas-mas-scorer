@@ -185,6 +185,8 @@ export interface UISettings {
   messageRules?: MessageRule[];
   /** Offer the last run's inputs and results as a file (3.1). */
   downloads?: ('csv' | 'json')[];
+  /** Offer "Score a file": every row of a CSV file, with progress and a results download (3.1). */
+  batchFromFile?: boolean;
 }
 
 /** "When <result> <op> <value>, show <message>": only compares what MAS returned. */

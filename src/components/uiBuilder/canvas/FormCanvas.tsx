@@ -338,6 +338,13 @@ export const FormCanvas: React.FC<Props> = ({
         {!inputAnchor && submitPosition === 'afterInputs' && submitButton('afterInputs')}
         {submitButton('bottom')}
 
+        {definition.settings.batchFromFile && (
+          <div className="cb-model-info" aria-hidden="true">
+            <strong>Score a file</strong>
+            <span>App users can upload a CSV file and score every row. Shown under the form.</span>
+          </div>
+        )}
+
         {(definition.settings.messageRules?.length ?? 0) > 0 && (
           <div className="cb-model-info" aria-hidden="true">
             <strong>Messages after a run</strong>

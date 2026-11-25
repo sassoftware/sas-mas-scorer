@@ -150,6 +150,20 @@ export const Inspector: React.FC<Props> = (props) => {
           </div>
           <Button variant="secondary" size="small" onClick={props.onAddSection}>Add section</Button>
 
+          <div className="ui-builder__config-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!s.batchFromFile}
+                onChange={(e) => props.onSettingsChange({ ...s, batchFromFile: e.target.checked || undefined })}
+                aria-describedby={fid('batch-hint')}
+              />
+              {' '}Score a file
+            </label>
+            <span className="ui-builder__config-type-hint" id={fid('batch-hint')}>
+              Adds a section where app users upload a CSV file and score every row, with progress, Cancel and a results download.
+            </span>
+          </div>
           <fieldset className="cb-inspector__checks">
             <legend className="cb-inspector__label">Downloads after a run</legend>
             {(['csv', 'json'] as const).map(kind => (

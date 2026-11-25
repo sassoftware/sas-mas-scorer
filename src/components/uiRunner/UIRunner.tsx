@@ -13,6 +13,7 @@ import { DynamicForm } from './DynamicForm';
 import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
 import { RunMessages } from './RunMessages';
 import { LastRun, ResultDownloads } from './ResultDownloads';
+import { BatchFromFile } from './BatchFromFile';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
@@ -243,6 +244,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const modelInfo = !scrUrl && definition.settings.showModelInfo && module && modelIdOf(module)
     ? <ModelInfoPanel module={module} />
     : null;
+  const batch = definition.settings.batchFromFile
+    ? <BatchFromFile definition={definition} step={step} scrInfo={scrUrl ? scrInfo : null} />
+    : null;
 
   // Unified layout for inline/below modes
   const unifiedLayout = definition.layout;
@@ -450,6 +454,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           </Alert>
         )}
 
+        {batch}
         {modelInfo}
       </div>
     );
@@ -508,6 +513,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         </Alert>
       )}
 
+      {batch}
       {modelInfo}
     </div>
   );
