@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { prefillFromQuery } from '../../utils/prefill';
 import { UIDefinition } from '../../types/uiBuilder';
@@ -16,6 +16,8 @@ import { RunMessages } from './RunMessages';
 import { LastRun, ResultDownloads } from './ResultDownloads';
 import { BatchFromFile } from './BatchFromFile';
 import { SaveScenarioButton, decisionSourceOf } from './SaveScenarioButton';
+import { appendRunLog, RunLogRow } from '../../api/casRunLog';
+import { getCurrentUser } from '../../api/identities';
 import { RunHistory } from '../scoring/RunHistory';
 import { RunRecord, useRunHistory } from '../scoring/scoringSession';
 import { useStepExecution, useStep } from '../../hooks';
@@ -86,6 +88,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const [prefilled, setPrefilled] = useState<string[] | null>(null);
   // Run history (when the app turns it on): kept in this browser tab, per app.
   const { runs: history, record: recordRun, clear: clearHistory } = useRunHistory(`uiapp:${definition.id}`);
+  // Run log: the first failure to write it is shown once; results are never held back.
+  const [logProblem, setLogProblem] = useState<string | null>(null);
+  const logFailedRef = useRef(false);
   // What the last run sent, for the result downloads.
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   // Tabs or steps: which shown section is on screen, and the step whose
@@ -209,6 +214,36 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     if (at >= 0) setActiveSection(at);
   }, [outputValues, definition.layout]);
 
+  // Append the run to the app's CAS log table, when it has one (in the background).
+  const logRun = useCallback((entry: { inputs: Record<string, unknown>; outputs: { name: string; value: unknown }[] | null; latencyMs: number; error?: string }) => {
+    const target = definition.settings.runLog;
+    if (!target || preview) return;
+    void (async () => {
+      let user = '';
+      try { user = (await getCurrentUser()).id; } catch { /* logged without the user */ }
+      const row: RunLogRow = {
+        app_name: definition.name,
+        app_id: definition.id,
+        module: scrUrl ?? definition.moduleId,
+        step: definition.stepId,
+        ran_at: new Date().toISOString(),
+        user_id: user,
+        status: entry.error ? 'failed' : 'completed',
+        message: entry.error ?? '',
+        latency_ms: Math.round(entry.latencyMs),
+        inputs: JSON.stringify(entry.inputs),
+        outputs: JSON.stringify(Object.fromEntries((entry.outputs ?? []).map(o => [o.name, o.value]))),
+      };
+      try {
+        await appendRunLog(target, row);
+      } catch (err) {
+        if (logFailedRef.current) return;
+        logFailedRef.current = true;
+        setLogProblem(`Could not write this run to the CAS table ${target.caslib}.${target.table}: ${err instanceof Error ? err.message : String(err)} Your results are not affected. Later failures are not shown again.`);
+      }
+    })();
+  }, [definition, preview, scrUrl]);
+
   const handleExecute = useCallback(async () => {
     if (!step) return;
     const errors = validateInputs(definition, step, inputValues);
@@ -239,43 +274,47 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           const started = performance.now();
           const result = await scoreForApp(scrInfo, data);
           setOutputValues(result.outputs);
-          recordRun({
-            at: Date.now(),
+          const entry = {
             inputs: data,
             outputs: Object.entries(result.outputs).map(([name, value]) => ({ name, value })),
             latencyMs: performance.now() - started,
-          });
+          };
+          recordRun({ at: Date.now(), ...entry });
+          logRun(entry);
           setScrRun({ executing: false, error: null, ms: result.elapsedMs });
         } catch (err) {
           setScrRun({ executing: false, error: err instanceof Error ? err.message : String(err), ms: null });
-          recordRun({ at: Date.now(), inputs: data, outputs: null, latencyMs: 0, error: err instanceof Error ? err.message : String(err) });
+          const failed = { inputs: data, outputs: null, latencyMs: 0, error: err instanceof Error ? err.message : String(err) };
+          recordRun({ at: Date.now(), ...failed });
+          logRun(failed);
         }
         return;
       }
       const started = performance.now();
       try {
         const result = await masExecute(step, values);
-        recordRun({
-          at: Date.now(),
+        const entry = {
           inputs: values,
           outputs: (result.outputs ?? []).map(o => ({ name: o.name, value: o.value })),
-          executionState: result.executionState,
           latencyMs: performance.now() - started,
-        });
+        };
+        recordRun({ at: Date.now(), ...entry, executionState: result.executionState });
+        logRun(entry);
       } catch (err) {
-        recordRun({
-          at: Date.now(),
+        const failed = {
           inputs: values,
           outputs: null,
           latencyMs: performance.now() - started,
           error: err instanceof Error ? err.message : 'Execution failed',
-        });
+        };
+        recordRun({ at: Date.now(), ...failed });
+        logRun(failed);
         throw err;
       }
     } catch {
       // Error handled by hook
     }
-  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo, recordRun]);
+  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo, recordRun, logRun]);
 
   // Put a past run's inputs back in the form (sent values are keyed by the step's input names).
   const restoreRun = useCallback((run: RunRecord) => {
@@ -443,6 +482,12 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     </Alert>
   );
 
+  const logNote = logProblem && (
+    <Alert variant="warning" title="Run log not written" dismissible onClose={() => setLogProblem(null)}>
+      {logProblem}
+    </Alert>
+  );
+
   const validationSummary = invalidCount > 0 && (
     <Alert key={blockedRuns} variant="error" title="Not run: check the highlighted fields">
       {invalidCount === 1 ? '1 field needs' : `${invalidCount} fields need`} attention:{' '}
@@ -506,6 +551,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
 
         {driftNotice}
         {prefillNote}
+        {logNote}
 
         <div className="ui-runner__content ui-runner__content--side-by-side">
           {/* Input side */}
@@ -607,6 +653,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
 
       {driftNotice}
         {prefillNote}
+        {logNote}
 
       <Card>
         <CardHeader

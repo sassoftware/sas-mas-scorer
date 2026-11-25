@@ -216,6 +216,8 @@ export interface UISettings {
   runHistory?: boolean;
   /** Offer "Save as test case": the last run saved as a decision scenario (3.1). */
   saveScenario?: boolean;
+  /** Append every run to a CAS table, as an audit log (3.1). */
+  runLog?: { caslib: string; table: string };
 }
 
 /** "When <result> <op> <value>, show <message>": only compares what MAS returned. */

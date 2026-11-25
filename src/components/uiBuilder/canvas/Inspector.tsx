@@ -14,6 +14,7 @@ import { Selection } from './FormCanvas';
 import { startDrag } from './dnd';
 import { ColorChoice } from './ColorChoice';
 import { MessageRulesEditor } from './MessageRulesEditor';
+import { RunLogSettings } from './RunLogSettings';
 
 interface Props {
   definition: UIDefinition;
@@ -222,6 +223,7 @@ export const Inspector: React.FC<Props> = (props) => {
               The last 20 runs under the form: put a run's inputs back, or compare two runs. Kept only in the app user's browser tab.
             </span>
           </div>
+          <RunLogSettings settings={s} onChange={props.onSettingsChange} />
           <fieldset className="cb-inspector__checks">
             <legend className="cb-inspector__label">Downloads after a run</legend>
             {(['csv', 'json'] as const).map(kind => (
