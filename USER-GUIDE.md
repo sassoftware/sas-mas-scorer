@@ -910,12 +910,12 @@ The diagram renders the full decision flow with all node types:
 - **Zoom** — Scroll wheel, or use the +/- controls in the bottom-left.
 - **Fit View** — Click the fit-to-screen button to zoom the entire flow into view.
 - **Mini Map** — A small overview in the bottom-right corner for navigation.
-- **Legend** — Toggle the legend to see what each node color and shape represents.
+- **Legend** — Left of the diagram, under **Find node**: what each node colour represents (fold it away with its heading). In windows narrower than 1100 pixels, Find node and the legend sit above the diagram.
 - **Keyboard** — Tab to a node and press **Enter** or **Space** to open its details, as a click does. The selected node has a clear ring, and it is centred when its details open.
 
 ### Find Node
 
-The **Find node** box above the diagram (*Name, type or expression*) filters the nodes by name, node type, expression, or the sub-decision they sit in, and lists the matches (*12 matching nodes*; the first 50 are listed, so type more to narrow a long list). Pick one with the mouse, or with **↑** / **↓** and **Enter**: the diagram zooms to that node and opens its details. **Escape** closes the list.
+The **Find node** box left of the diagram (*Name, type or expression*) filters the nodes by name, node type, expression, or the sub-decision they sit in, and lists the matches (*12 matching nodes*; the first 50 are listed, so type more to narrow a long list). Pick one with the mouse, or with **↑** / **↓** and **Enter**: the diagram zooms to that node and opens its details. **Escape** closes the list.
 
 ### Where Is This Variable Used
 
@@ -952,7 +952,7 @@ When viewing a code file node, click the code link to open a full-screen code vi
 
 ### Workflow History
 
-If the decision has an associated workflow, the flow header shows the current workflow state and last modifier. Click the workflow indicator to open a timeline view showing all state transitions — who made each change, when, and any comments.
+The chip beside the decision's name shows its workflow state, or **No Workflow**. With a workflow, the line under the MAS link says who set the state and when, and **View History** opens a timeline of all state transitions — who made each change, when, and any comments.
 
 ### Export
 

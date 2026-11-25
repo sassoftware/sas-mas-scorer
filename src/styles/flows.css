@@ -107,20 +107,55 @@
 }
 
 .flow-header__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0 0 var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--sas-gray-200);
 }
 
 .flow-header__meta-item {
   font-size: var(--font-size-sm);
-  color: var(--sas-gray-700);
+  color: var(--sas-gray-900);
+  min-width: 0;
+}
+
+.flow-header__meta-item dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .flow-header__meta-label {
+  font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
-  margin-right: var(--space-1);
+}
+
+@media (max-width: 900px) {
+  .flow-header__meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 3.1: name with the workflow chip; the MAS module and SID link row. */
+.flow-header__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.flow-header__links {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.flow-detail__crumbs {
+  margin-bottom: var(--space-2);
 }
 
 .flow-header__meta-mono {
@@ -1244,4 +1279,78 @@ pre.flow-code-modal__code {
 
 .flow-export__status:empty {
   display: none;
+}
+
+/* The MAS score action reads left to right in the flow header (it stays
+   right-aligned in the other views that use it). */
+.flow-header__links .decision-mas__actions {
+  justify-content: flex-start;
+  flex: 1 1 420px;
+}
+
+.flow-header__links .decision-mas {
+  align-items: flex-start;
+  max-width: none;
+}
+
+.flow-header__links .decision-mas__note,
+.flow-header__links .decision-mas__others {
+  text-align: left;
+}
+
+.flow-header__links .decision-mas__note {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--sas-warning);
+  border-radius: var(--radius-md);
+  background: var(--sas-warning-light);
+}
+
+/* 3.1 (Figma 11/13): Find node and the legend in a column left of the
+   diagram; stacked above it in narrower windows. */
+.flow-diagram {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.flow-diagram__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.flow-diagram__side .flow-diagram__toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 0;
+}
+
+.flow-diagram__side .flow-finder {
+  width: 100%;
+}
+
+.flow-diagram__side .flow-diagram__legend {
+  max-width: none;
+  box-shadow: none;
+}
+
+.flow-diagram__side .flow-diagram__legend-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .flow-diagram {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flow-diagram__side .flow-finder {
+    width: min(360px, 100%);
+  }
+
+  .flow-diagram__side .flow-diagram__legend-items {
+    display: flex;
+  }
 }

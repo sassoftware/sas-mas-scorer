@@ -70,10 +70,10 @@ function directionBadgeClass(direction?: string): string {
 function MetaItem({ label, value, mono }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
   return (
-    <span className="flow-header__meta-item">
-      <span className="flow-header__meta-label">{label}:</span>{' '}
-      <span className={mono ? 'flow-header__meta-mono' : undefined}>{value}</span>
-    </span>
+    <div className="flow-header__meta-item">
+      <dt className="flow-header__meta-label">{label}</dt>
+      <dd className={mono ? 'flow-header__meta-mono' : undefined}>{value}</dd>
+    </div>
   );
 }
 
@@ -144,57 +144,59 @@ export default function FlowHeader({
 
   return (
     <div className="flow-header__card">
+      {/* 3.1 (Figma 11/13): name and workflow state, Export at the right; the
+          MAS module and the SAS Intelligent Decisioning link on the next row. */}
       <div className="flow-header__top">
-        <div>
-          {decisionLink && <FlowDeepLink url={decisionLink.url} label={decisionLink.label} showLabel />}
+        <div className="flow-header__title-row">
           <h1 className="flow-header__title">{flow.name}</h1>
-          {flow.description && <p className="flow-header__desc">{flow.description}</p>}
+          {hasWorkflow ? (
+            <span className={wfBadgeClass(wfState)}>{wfState ?? 'Active'}</span>
+          ) : (
+            <span className="flow-wf-badge">No Workflow</span>
+          )}
         </div>
+        <FlowExportButton
+          flow={flow}
+          subDecisionCache={subDecisionCache}
+          restApiCache={restApiCache}
+          ruleSetCache={ruleSetCache}
+        />
+      </div>
+      {flow.description && <p className="flow-header__desc">{flow.description}</p>}
+
+      <div className="flow-header__links">
         {/* Score this decision (journey-3); styles in coverage.css. */}
         <div className="decision-mas__actions">
           <FlowScoreAction flowId={flow.id} flowModifiedTimeStamp={flow.modifiedTimeStamp} />
-          <FlowExportButton
-            flow={flow}
-            subDecisionCache={subDecisionCache}
-            restApiCache={restApiCache}
-            ruleSetCache={ruleSetCache}
-          />
         </div>
+        {decisionLink && <FlowDeepLink url={decisionLink.url} label={decisionLink.label} showLabel />}
       </div>
 
-      {/* Workflow status */}
-      <div className="flow-header__workflow">
-        {hasWorkflow ? (
-          <>
-            <span className={wfBadgeClass(wfState)}>
-              {wfState ?? 'Active'}
+      {hasWorkflow && (wfModifiedBy || onShowWorkflowHistory) && (
+        <div className="flow-header__workflow">
+          {wfModifiedBy && (
+            <span className="flow-header__workflow-meta">
+              Workflow state set by {wfModifiedBy}{wfModifiedTs ? ` on ${formatTimestamp(wfModifiedTs)}` : ''}
             </span>
-            {wfModifiedBy && (
-              <span className="flow-header__workflow-meta">
-                by {wfModifiedBy}{wfModifiedTs ? ` on ${formatTimestamp(wfModifiedTs)}` : ''}
-              </span>
-            )}
-            {onShowWorkflowHistory && (
-              <Button variant="secondary" size="small" onClick={onShowWorkflowHistory}>
-                View History
-              </Button>
-            )}
-          </>
-        ) : (
-          <span className="flow-wf-badge">No Workflow</span>
-        )}
-      </div>
+          )}
+          {onShowWorkflowHistory && (
+            <Button variant="secondary" size="small" onClick={onShowWorkflowHistory}>
+              View History
+            </Button>
+          )}
+        </div>
+      )}
 
-      <div className="flow-header__meta">
+      <dl className="flow-header__meta">
         <MetaItem label="ID" value={flow.id} mono />
         <MetaItem label="Version" value={`${flow.majorRevision}.${flow.minorRevision}`} />
+        <MetaItem label="Nodes" value={String(flow.nodeCount ?? '?')} />
+        <MetaItem label="Validation" value={flow.validationStatus ?? '—'} />
         <MetaItem label="Created" value={formatTimestamp(flow.creationTimeStamp)} />
         <MetaItem label="Modified" value={formatTimestamp(flow.modifiedTimeStamp)} />
         <MetaItem label="Created by" value={flow.createdBy} />
         <MetaItem label="Modified by" value={flow.modifiedBy} />
-        <MetaItem label="Nodes" value={String(flow.nodeCount ?? '?')} />
-        {flow.validationStatus && <MetaItem label="Validation" value={flow.validationStatus} />}
-      </div>
+      </dl>
       {(flow.hasErrors || flow.hasWarnings) && (
         <div className="flow-header__badges">
           {flow.hasErrors && <span className="flow-header__badge--error">Has Errors</span>}
