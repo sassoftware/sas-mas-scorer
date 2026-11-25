@@ -24,4 +24,5 @@ export const widgetLabels: Record<WidgetType, string> = {
   percent: 'Percent',
   currency: 'Currency',
   kpi: 'KPI Tile',
+  barchart: 'Bar Chart',
 };

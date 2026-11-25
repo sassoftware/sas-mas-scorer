@@ -9,6 +9,7 @@ import {
   getCompatibleWidgets,
   getDefaultToggleValues,
   getDefaultWidget,
+  isDatagridType,
   isNumericType,
 } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
@@ -354,9 +355,9 @@ export const FieldConfigPanel: React.FC<Props> = ({
           </div>
         )}
 
-        {field.widget === 'table' || columns === 1 ? (
+        {field.widget === 'table' || field.widget === 'barchart' || columns === 1 ? (
           <p className="ui-builder__config-type-hint">
-            {field.widget === 'table' ? 'A table always uses the full width.' : 'With one column every field uses the full width.'}
+            {field.widget === 'table' || field.widget === 'barchart' ? 'Tables and charts always use the full width.' : 'With one column every field uses the full width.'}
           </p>
         ) : (
           <div className="ui-builder__config-field">
@@ -513,6 +514,45 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {field.widget === 'barchart' && (
+          <>
+            <div className="ui-builder__config-section-title">Bar Chart</div>
+            {parameter && isDatagridType(parameter.type) && (
+              <div className="ui-builder__config-row">
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('chartlabel')}>Label column</label>
+                  <input id={fid('chartlabel')} className="sas-input" placeholder="First text column"
+                    value={field.validation?.chartLabelColumn ?? ''}
+                    onChange={(e) => setValidation({ chartLabelColumn: e.target.value || undefined })} />
+                </div>
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('chartvalue')}>Value column</label>
+                  <input id={fid('chartvalue')} className="sas-input" placeholder="First number column"
+                    value={field.validation?.chartValueColumn ?? ''}
+                    onChange={(e) => setValidation({ chartValueColumn: e.target.value || undefined })} />
+                </div>
+              </div>
+            )}
+            <div className="ui-builder__config-row">
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('chartsort')}>Order</label>
+                <select id={fid('chartsort')} className="sas-input" value={field.validation?.chartSort ?? ''}
+                  onChange={(e) => setValidation({ chartSort: (e.target.value || undefined) as 'desc' | 'asc' | undefined })}>
+                  <option value="">As returned</option>
+                  <option value="desc">Largest first</option>
+                  <option value="asc">Smallest first</option>
+                </select>
+              </div>
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('charttop')}>Show at most</label>
+                <input id={fid('charttop')} type="number" min="1" className="sas-input" placeholder="50 bars"
+                  value={field.validation?.chartTop ?? ''}
+                  onChange={(e) => { const n = Number(e.target.value); setValidation({ chartTop: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+              </div>
+            </div>
+          </>
         )}
 
         {field.widget === 'kpi' && (

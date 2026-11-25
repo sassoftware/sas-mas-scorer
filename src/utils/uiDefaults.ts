@@ -64,10 +64,10 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
       return ['readonly', 'badge', 'checkbox', 'hidden'];
     }
     if (isDatagridType(type)) {
-      return ['table', 'readonly', 'hidden'];
+      return ['table', 'barchart', 'readonly', 'hidden'];
     }
     if (type.endsWith('Array')) {
-      return ['readonly', 'table', 'hidden'];
+      return ['readonly', 'table', 'barchart', 'hidden'];
     }
     return ['readonly', 'hidden'];
   }
@@ -313,7 +313,7 @@ export function getToggleValues(field: UIField, type: string | undefined): { on:
  * 1/3 means 1/2 below three columns (the grid has no thirds then).
  */
 export function effectiveWidth(field: UIField, columns: number): UIField['width'] {
-  if (field.widget === 'table') return 'full';
+  if (field.widget === 'table' || field.widget === 'barchart') return 'full';
   if (field.width === 'third' && columns < 3) return 'half';
   return field.width;
 }

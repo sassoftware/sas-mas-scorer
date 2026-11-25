@@ -845,3 +845,77 @@
 .ui-runner__message--warning .ui-runner__message-icon { color: var(--sas-warning-dark); }
 .ui-runner__message--error { background: var(--sas-error-light); border-color: var(--sas-error-dark); }
 .ui-runner__message--error .ui-runner__message-icon { color: var(--sas-error-dark); }
+
+/* Bar chart: label, bar, value written beside it; a table view on request. */
+.ui-runner__chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ui-runner__chart-toggle {
+  align-self: flex-end;
+  border: 0;
+  background: none;
+  padding: 2px var(--space-1);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--sas-blue-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ui-runner__chart-toggle:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.ui-runner__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ui-runner__bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sas-gray-800);
+}
+
+.ui-runner__bar-track {
+  height: 14px;
+  background: var(--sas-gray-100);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ui-runner__bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--sas-blue-primary);
+  border-radius: 0 4px 4px 0;
+}
+
+.ui-runner__bar--negative {
+  background: var(--sas-gray-600);
+}
+
+.ui-runner__bar-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--sas-gray-900);
+  min-width: 4ch;
+  text-align: right;
+}
