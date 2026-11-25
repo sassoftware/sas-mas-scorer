@@ -60,6 +60,10 @@ The start of the redesign. The UI app builder becomes canvas first, building the
 - **Checkbox widget** — for an on/off input it sends the same values as the Toggle Switch (`1` / `0`, or `Y` / `N` for a string, or the author's own); for a result it shows a ticked or empty box with *Yes* or *No*. A decision's **boolean** variables get it automatically: MAS takes them as `1` / `0` and rejects `true` and `"Y"`
 - **Table widget** for outputs — a decision DataGrid as a table (the default for new DataGrid outputs, which used to show as unreadable text), or an array as one column
 
+### Fixed
+
+- **A list answered with something that is not a list no longer reads as empty.** When SAS Viya was starting or going down, a service could answer a list request with a web page or an empty body; every list in the app took that as "no items". Test Coverage then showed 0 % with *Data collection (complete)* (no tests found, models missing) instead of saying the tests could not be read. Such an answer now fails the request with a message saying the service may be unavailable, so Test Coverage reports the collection as not collected
+
 ## [3.0.0] - 2026-11-19
 
 Run SCR images on your own computer: the desktop app pulls a SAS Container Runtime image with Podman or Docker, runs it, and scores it like any other SCR endpoint. A preview, in the desktop app only. The web app and the Job Execution / Visual Analytics build get the new name, the header change and the paste fix below.
