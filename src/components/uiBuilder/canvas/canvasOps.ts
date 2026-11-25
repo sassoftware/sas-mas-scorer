@@ -10,7 +10,7 @@
 
 import { UIDefinition, UIField, UISection, WidgetType } from '../../../types/uiBuilder';
 import { Step, StepParameter } from '../../../types';
-import { createFieldForParameter, getCompatibleWidgets } from '../../../utils/uiDefaults';
+import { compatibleWidgetsFor, createFieldForParameter, getCompatibleWidgets } from '../../../utils/uiDefaults';
 
 export type Direction = 'input' | 'output';
 
@@ -232,8 +232,13 @@ export function moveSection(def: UIDefinition, sectionId: string, delta: -1 | 1)
 }
 
 /** Whether a widget can show this field (its parameter's type and direction allow it). */
-export function widgetFits(widget: WidgetType, field: UIField, param: StepParameter | null): boolean {
+export function widgetFits(
+  widget: WidgetType,
+  field: UIField,
+  param: StepParameter | null,
+  dateKind?: 'date' | 'datetime'
+): boolean {
   if (field.direction === 'static') return widget === 'markdown';
   if (!param) return false;
-  return getCompatibleWidgets(param.type, field.direction).includes(widget);
+  return compatibleWidgetsFor(param, field.direction, dateKind).includes(widget);
 }

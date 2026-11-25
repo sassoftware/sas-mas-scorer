@@ -6,6 +6,7 @@ import { Button } from '../common/Button';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Alert } from '../common/Alert';
 import { ENV_COLOR_PRESETS, applyEnvironmentColor } from '../../utils/envColor';
+import { ColorSwatch } from '../common/ColorSwatch';
 
 const DEFAULT_HEADER_COLOR = '#0766D1'; // --sas-blue-brand, shown on the "Default" swatch
 
@@ -41,43 +42,6 @@ const cardFrame = ({ title, actions, children, footer }: ConnectionSettingsFrame
     <CardBody>{children}</CardBody>
     {footer && <CardFooter>{footer}</CardFooter>}
   </Card>
-);
-
-interface ColorSwatchProps {
-  name: string;
-  value: string;
-  checked: boolean;
-  onSelect: () => void;
-}
-
-// A native radio gives the swatch its keyboard semantics, checked state and
-// accessible name; the checkmark makes the selection visible without colour.
-const ColorSwatch: React.FC<ColorSwatchProps> = ({ name, value, checked, onSelect }) => (
-  <label className="connection-settings__swatch" title={name}>
-    <input
-      type="radio"
-      name="envColor"
-      className="connection-settings__swatch-input"
-      aria-label={name}
-      checked={checked}
-      onChange={onSelect}
-    />
-    <span className="connection-settings__swatch-color" style={{ background: value }} aria-hidden="true">
-      {checked && (
-        <svg
-          className="connection-settings__swatch-check"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M5 13l4 4L19 7" />
-        </svg>
-      )}
-    </span>
-  </label>
 );
 
 export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
@@ -371,6 +335,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                   <div className="connection-settings__swatches">
                     <div className="connection-settings__swatch-group" role="radiogroup" aria-labelledby={colorLabelId}>
                       <ColorSwatch
+                        group="envColor"
                         name="Default (SAS blue)"
                         value={DEFAULT_HEADER_COLOR}
                         checked={color === ''}
@@ -379,6 +344,7 @@ export const ConnectionSettings: React.FC<ConnectionSettingsProps> = ({
                       {ENV_COLOR_PRESETS.map((preset) => (
                         <ColorSwatch
                           key={preset.value}
+                          group="envColor"
                           name={preset.name}
                           value={preset.value}
                           checked={color === preset.value}

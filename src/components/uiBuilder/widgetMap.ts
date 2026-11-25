@@ -17,4 +17,6 @@ export const widgetLabels: Record<WidgetType, string> = {
   hidden: 'Hidden',
   markdown: 'Markdown Text',
   table: 'Table',
+  date: 'Date',
+  datetime: 'Date and Time',
 };

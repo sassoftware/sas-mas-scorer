@@ -37,6 +37,8 @@ export type CanvasChange = (definition: UIDefinition, label: string, coalesceKey
 interface Props {
   definition: UIDefinition;
   step: Step | null;
+  /** Date and datetime parameters (by lowercase name), from the module's decision. */
+  dateKinds?: Record<string, 'date' | 'datetime'>;
   /** "MAS module: x" / "SCR endpoint: url", under the app name. */
   source: string;
   onChange: CanvasChange;
@@ -60,6 +62,7 @@ interface Props {
 export const CanvasEditor: React.FC<Props> = ({
   definition,
   step,
+  dateKinds = {},
   source,
   onChange,
   selectionResetKey,
@@ -94,11 +97,11 @@ export const CanvasEditor: React.FC<Props> = ({
     place?: { sectionId: string; index?: number },
     widget?: WidgetType
   ) => {
-    const { def, parameterId } = addParameterField(definition, param, direction, place, widget);
+    const { def, parameterId } = addParameterField(definition, param, direction, place, widget ?? dateKinds[param.name.toLowerCase()]);
     onChange(def, `Add field ${param.name}`);
     setSelection({ kind: 'field', id: parameterId });
     announce(`Added ${param.name} to the page.`);
-  }, [definition, onChange, announce]);
+  }, [definition, onChange, announce, dateKinds]);
 
   const addTextBlockAt = (place?: { sectionId: string; index?: number }) => {
     const { def, parameterId } = addTextBlock(definition, place);
@@ -141,7 +144,7 @@ export const CanvasEditor: React.FC<Props> = ({
       if (onField) {
         const loc = findField(definition, onField);
         const param = loc && loc.field.direction !== 'static' ? findParameter(params, loc.field.parameterId) ?? null : null;
-        if (loc && widgetFits(payload.widget, loc.field, param)) {
+        if (loc && widgetFits(payload.widget, loc.field, param, dateKinds[loc.field.parameterId.toLowerCase()])) {
           setWidget(onField, payload.widget);
           setSelection({ kind: 'field', id: onField });
         } else if (loc) {
@@ -218,6 +221,7 @@ export const CanvasEditor: React.FC<Props> = ({
       <Inspector
         definition={definition}
         step={step}
+        dateKinds={dateKinds}
         selection={selection}
         onSelect={setSelection}
         onFieldChange={(id, field) => {

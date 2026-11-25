@@ -12,6 +12,7 @@ import {
   isNumericType,
 } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
+import { isoFromSasDate, isoFromSasDatetime, sasDateFromIso, sasDatetimeFromIso } from '../../utils/sasDate';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
 
@@ -407,6 +408,29 @@ export const FieldConfigPanel: React.FC<Props> = ({
               />
             </div>
 
+            {(field.widget === 'date' || field.widget === 'datetime') ? (
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('default')}>Default Value</label>
+                <input
+                  id={fid('default')}
+                  type={field.widget === 'date' ? 'date' : 'datetime-local'}
+                  step={field.widget === 'datetime' ? 1 : undefined}
+                  className="sas-input"
+                  aria-describedby={fid('default-hint')}
+                  value={field.widget === 'date' ? isoFromSasDate(field.defaultValue) : isoFromSasDatetime(field.defaultValue)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const sas = !raw ? null : field.widget === 'date' ? sasDateFromIso(raw) : sasDatetimeFromIso(raw);
+                    handleChange('defaultValue', sas === null ? undefined : sas);
+                  }}
+                />
+                <span className="ui-builder__config-type-hint" id={fid('default-hint')}>
+                  {field.defaultValue !== undefined && field.defaultValue !== null
+                    ? `Stored as the SAS ${field.widget === 'date' ? 'date' : 'datetime'} value ${String(field.defaultValue)}.`
+                    : `Stored as a SAS ${field.widget === 'date' ? 'date' : 'datetime'} value.`}
+                </span>
+              </div>
+            ) : (
             <div className="ui-builder__config-field">
               <label htmlFor={fid('default')}>Default Value</label>
               <input
@@ -432,6 +456,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   : 'Converted by the parameter type when the app runs.'}
               </span>
             </div>
+            )}
 
             {showRequired && (
               <div className="ui-builder__config-field">

@@ -74,7 +74,11 @@ export type WidgetType =
   | 'hidden'
   | 'markdown'
   /** An output shown as a table: a decision DataGrid, or an array as one column (3.1). */
-  | 'table';
+  | 'table'
+  /** A SAS date (days since 1960-01-01) as a date picker or a readable date (3.1). */
+  | 'date'
+  /** A SAS datetime (seconds since 1960-01-01 00:00) as a date and time (3.1). */
+  | 'datetime';
 
 /**
  * Per-field settings. Every member is optional: definitions saved by older

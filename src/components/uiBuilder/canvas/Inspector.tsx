@@ -4,7 +4,7 @@
 import React, { useId } from 'react';
 import { SubmitPosition, UIDefinition, UIField, UISettings, WidgetType } from '../../../types/uiBuilder';
 import { Step } from '../../../types';
-import { findParameter, getCompatibleWidgets, getSubmitPosition } from '../../../utils/uiDefaults';
+import { compatibleWidgetsFor, findParameter, getSubmitPosition } from '../../../utils/uiDefaults';
 import { FieldConfigPanel } from '../FieldConfigPanel';
 import { widgetLabels } from '../widgetMap';
 import { Button } from '../../common/Button';
@@ -17,6 +17,7 @@ import { ColorChoice } from './ColorChoice';
 interface Props {
   definition: UIDefinition;
   step: Step | null;
+  dateKinds: Record<string, 'date' | 'datetime'>;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onFieldChange: (parameterId: string, field: UIField) => void;
@@ -114,7 +115,7 @@ export const Inspector: React.FC<Props> = (props) => {
           </div>
           <ColorChoice
             label="Run button colour"
-            noneLabel="Standard blue"
+            kind="button"
             value={s.accentColor}
             onChange={(color) => props.onSettingsChange({ ...s, accentColor: color })}
             hint="The button's text turns white or black, whichever is easier to read."
@@ -157,7 +158,7 @@ export const Inspector: React.FC<Props> = (props) => {
             </div>
             <ColorChoice
               label="Colour line"
-              noneLabel="No line"
+              kind="line"
               value={section.color}
               onChange={(color) => props.onSectionColorChange(section.id, color)}
               hint="A coloured line beside the section, to group or highlight it."
@@ -196,7 +197,7 @@ export const Inspector: React.FC<Props> = (props) => {
   const compatible: WidgetType[] = field.direction === 'static'
     ? ['markdown']
     : param
-      ? getCompatibleWidgets(param.type, field.direction)
+      ? compatibleWidgetsFor(param, field.direction, props.dateKinds[param.name.toLowerCase()])
       : (Object.keys(widgetLabels) as WidgetType[]);
   if (!compatible.includes(field.widget)) compatible.push(field.widget);
   const usedParameterIds = new Set(definition.layout.sections.flatMap(s => s.fields.map(f => f.parameterId)));
@@ -212,7 +213,12 @@ export const Inspector: React.FC<Props> = (props) => {
         {field.direction !== 'static' && (
           <>
             <h3 className="cb-inspector__step" id={fid('step1')}>Step 1 · Choose a widget</h3>
-            <p className="cb-inspector__hint">Widgets this {param ? param.type : ''} {field.direction} can use. Click one, or drag it onto another field on the canvas to use it there.</p>
+            <p className="cb-inspector__hint">
+              {param && props.dateKinds[param.name.toLowerCase()]
+                ? `The decision declares this ${field.direction} as a ${props.dateKinds[param.name.toLowerCase()]}. `
+                : ''}
+              Widgets this {param ? param.type : ''} {field.direction} can use. Click one, or drag it onto another field on the canvas to use it there.
+            </p>
             <div className="cb-widgets" role="radiogroup" aria-labelledby={fid('step1')}>
               {compatible.map(w => (
                 <button

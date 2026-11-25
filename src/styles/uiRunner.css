@@ -564,3 +564,10 @@
 .sas-button--primary[style]:hover:not(:disabled) {
   filter: brightness(0.9);
 }
+
+/* Date and datetime picker: the control, then the SAS value it sends. */
+.ui-runner__date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

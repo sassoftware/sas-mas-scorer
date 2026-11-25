@@ -16,6 +16,7 @@ import { GaugeWidget } from './widgets/GaugeWidget';
 import { BadgeWidget } from './widgets/BadgeWidget';
 import { MarkdownWidget } from './widgets/MarkdownWidget';
 import { TableWidget } from './widgets/TableWidget';
+import { DateInputWidget, DateOutputWidget } from './widgets/DateWidget';
 import { InputWidgetProps } from './widgets/types';
 
 interface Props {
@@ -63,6 +64,11 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return <MarkdownWidget content={String(field.defaultValue ?? '')} />;
     case 'table':
       return <TableWidget field={field} value={value} labelId={rest.labelId} />;
+    case 'date':
+    case 'datetime':
+      return field.direction === 'input'
+        ? <DateInputWidget {...inputProps} />
+        : <DateOutputWidget field={field} value={value} />;
     case 'hidden':
       return null;
     default:

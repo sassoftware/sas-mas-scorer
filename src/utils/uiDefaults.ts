@@ -58,7 +58,7 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
 export function getCompatibleWidgets(type: StepParameterType, direction: 'input' | 'output'): WidgetType[] {
   if (direction === 'output') {
     if (type === 'decimal' || type === 'integer' || type === 'bigint') {
-      return ['readonly', 'gauge', 'badge', 'hidden'];
+      return ['readonly', 'gauge', 'badge', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
       return ['readonly', 'badge', 'hidden'];
@@ -74,11 +74,11 @@ export function getCompatibleWidgets(type: StepParameterType, direction: 'input'
 
   switch (type) {
     case 'decimal':
-      return ['number', 'slider', 'dropdown', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'integer':
     case 'bigint':
       // Toggle sends 1/0 by default; a decimal flag is rare enough to leave out.
-      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'string':
       // Toggle sends configurable on/off codes ("Y"/"N" by default).
       return ['text', 'dropdown', 'radio', 'toggle', 'textarea', 'readonly', 'hidden'];
@@ -338,17 +338,6 @@ export function lastInputSectionId(layout: UILayout, visibleOnly = true): string
 
 // --- App colours (3.1) ---------------------------------------------------
 
-/** Preset colours for the run button and section lines. */
-export const APP_COLORS: { name: string; value: string }[] = [
-  { name: 'Blue', value: '#0766d1' },
-  { name: 'Teal', value: '#007a87' },
-  { name: 'Green', value: '#1b7f3b' },
-  { name: 'Orange', value: '#c25400' },
-  { name: 'Red', value: '#c0262d' },
-  { name: 'Purple', value: '#6b3fb5' },
-  { name: 'Graphite', value: '#3d4451' },
-];
-
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /** A colour the app can use: #rrggbb only (anything else is ignored). */
@@ -381,6 +370,39 @@ export function accentButtonStyle(settings: UISettings): React.CSSProperties | u
   const color = safeColor(settings.accentColor);
   if (!color) return undefined;
   return { backgroundColor: color, borderColor: color, color: readableTextOn(color) };
+}
+
+/**
+ * Widgets for a parameter, narrowed by what its decision declares: a date
+ * offers the date picker only, a datetime the date-and-time picker only.
+ */
+export function compatibleWidgetsFor(
+  param: StepParameter,
+  direction: 'input' | 'output',
+  dateKind?: 'date' | 'datetime'
+): WidgetType[] {
+  const all = getCompatibleWidgets(param.type, direction);
+  if (dateKind === 'date') return all.filter(w => w !== 'datetime');
+  if (dateKind === 'datetime') return all.filter(w => w !== 'date');
+  return all;
+}
+
+/** Shows each date and datetime parameter with its picker (or readable date, for a result). */
+export function applyDateKinds(def: UIDefinition, kinds: Record<string, 'date' | 'datetime'>): UIDefinition {
+  if (Object.keys(kinds).length === 0) return def;
+  return {
+    ...def,
+    layout: {
+      ...def.layout,
+      sections: def.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.map(f => {
+          const kind = f.direction === 'static' ? undefined : kinds[f.parameterId.toLowerCase()];
+          return kind ? { ...f, widget: kind } : f;
+        }),
+      })),
+    },
+  };
 }
 
 /** The step parameter a field is bound to: exact name first, then any case. */

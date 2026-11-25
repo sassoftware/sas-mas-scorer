@@ -961,3 +961,10 @@
 .sas-layout--focus .sas-layout__content > :not(.ui-builder--full) {
   margin: var(--space-6);
 }
+
+/* A "none" swatch (the UI builder's "No line"): white with a slash. */
+.connection-settings__swatch-color--none {
+  background:
+    linear-gradient(135deg, transparent 46%, var(--sas-error-dark) 46% 54%, transparent 54%),
+    var(--sas-white);
+}

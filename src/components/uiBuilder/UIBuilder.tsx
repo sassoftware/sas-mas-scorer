@@ -23,9 +23,11 @@ import {
   describeSignatureDrift,
   generateDefaultUI,
   hasSignatureDrift,
+  applyDateKinds,
 } from '../../utils/uiDefaults';
 import { getScoreableStep } from '../../utils/moduleHelper';
 import { inspectEndpoint, scrStep } from '../../api/scr';
+import { DateKinds, getDecisionDateKinds } from '../../api/decisionDateTypes';
 
 interface UIBuilderProps {
   /** Existing definition to edit, or null for new */
@@ -107,6 +109,8 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const [driftDismissed, setDriftDismissed] = useState(false);
   // What "Use template" puts back on an emptied page: the generated layout.
   const [generatedLayout, setGeneratedLayout] = useState<UILayout | null>(null);
+  // Date and datetime parameters, from the decision the module was published from.
+  const [dateKinds, setDateKinds] = useState<DateKinds>({});
 
   const defRef = useRef(def);
   defRef.current = def;
@@ -188,17 +192,24 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     const scoreable = getScoreableStep(module, steps);
     if (!current) {
       if (scoreable) {
-        const generated = generateDefaultUI(module.id, scoreable, `${module.name} UI`);
-        setGeneratedLayout(generated.layout);
-        setDef(generated);
-        setBaseline(serialize(generated));
-        setStep(scoreable);
+        // Dates and datetimes get their pickers from the start: read the
+        // decision's types first (an empty answer for other modules).
+        getDecisionDateKinds(module).then(kinds => {
+          if (defRef.current) return;
+          const generated = applyDateKinds(generateDefaultUI(module.id, scoreable, `${module.name} UI`), kinds);
+          setDateKinds(kinds);
+          setGeneratedLayout(generated.layout);
+          setDef(generated);
+          setBaseline(serialize(generated));
+          setStep(scoreable);
+        });
       } else {
         setLoadError('No scoreable step found (needs score or execute step)');
       }
       return;
     }
     setStep(steps.find(s => s.id === current.stepId) ?? scoreable ?? null);
+    getDecisionDateKinds(module).then(setDateKinds);
   }, [module, steps]);
 
   // --- Edits and undo ---------------------------------------------------
@@ -450,6 +461,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         <CanvasEditor
           definition={def}
           step={step}
+          dateKinds={dateKinds}
           source={source}
           onChange={applyChange}
           selectionResetKey={selectionResetKey}

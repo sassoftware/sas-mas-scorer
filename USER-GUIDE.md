@@ -663,7 +663,7 @@ A UI App is deleted from the **UI Apps** list (see [Managing UI Apps](#managing-
 - **A section:** its title, a **Colour line** beside it, **Move up** / **Move down**, **Add section**, and **Remove section** (which removes its fields too; Undo restores them).
 - **A field:** **Step 1 · Choose a widget** lists the widgets the field's type can use: click one, or drag it onto another field on the canvas to use it there. **Step 2 · Fine-tune** holds its settings (below). **Placement** moves it to another section, up or down, or removes it.
 
-**Colours:** the run button and each section's line can take one of seven preset colours or a custom one. The button's text turns white or black, whichever is easier to read on that colour, so it always meets the WCAG 2.1 AA contrast level. A section's line is only decoration: its title keeps the normal text colour.
+**Colours:** the run button and each section's line use the same quick colours as the environment colour in Connection Settings (SAS blue, Light Blue, Midnight Blue and Pink) or a custom one. The button's text turns white or black, whichever is easier to read on that colour, so it always meets the WCAG 2.1 AA contrast level. A section's line is only decoration: its title keeps the normal text colour.
 
 Apps saved before 3.1 keep their run button at the bottom of the form, where it has always been.
 
@@ -701,8 +701,16 @@ Select a field to configure it in the inspector. A field has these settings:
 | **Gauge** | Visualizing a numeric output as a dial | Min, Max, Color stops |
 | **Badge** | Displaying a status label with color | Value mappings (value to display text) |
 | **Table** | A decision DataGrid output as a table (the default for DataGrid outputs), or an array output as one column | — (up to 200 rows are shown, with a count of the rest) |
+| **Date** | A SAS date: a date picker for an input, a readable date for a result | Default value (picked with the same date picker) |
+| **Date and Time** | A SAS datetime: a date and time picker for an input (to the second), a readable date and time for a result | Default value (picked with the same picker) |
 | **Hidden** | Sending a fixed value without showing it | Default value (sent on every execution) |
 | **Markdown** | Displaying formatted text, instructions, or images | Markdown content with `![alt](url)` image support |
+
+### Dates and Times
+
+MAS takes a date or datetime only as a number: a **SAS date** is the number of days since 1 January 1960 (24 November 2026 is 24434) and a **SAS datetime** the number of seconds since 1 January 1960 00:00:00. MAS rejects dates sent as text. The **Date** and **Date and Time** widgets let the app user pick a date (and time) and send that number; the number is shown under the picker (*Sent to MAS as 24434 (SAS date value)*). A SAS datetime has no time zone, so the time is sent exactly as picked, never shifted by the computer's time zone.
+
+MAS lists date and datetime variables as plain numbers. For a module published from a SAS Intelligent Decisioning decision, the builder reads the decision's own variable types: a **date** variable gets the **Date** widget and a **datetime** variable the **Date and Time** widget, for inputs and results, and only that one of the two is offered for it. For other modules, choose **Date** or **Date and Time** for a numeric input or result yourself.
 
 ### Output Formatting
 
