@@ -2,7 +2,7 @@
 
 All notable changes to the SAS MAS Scorer will be documented in this file.
 
-## [3.1.0] - Unreleased
+## [3.1.0] - 2026-11-27
 
 The start of the redesign. The UI app builder becomes canvas first, building the app on the page as its users will see it and using the whole window, and every list in the app shares one layout: quick-filter chips, search, and a ⋮ menu in each column header to sort, filter and hide columns.
 
