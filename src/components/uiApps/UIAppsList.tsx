@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { UIDefinitionSummary } from '../../types/uiBuilder';
 import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
@@ -9,6 +9,7 @@ import { Alert } from '../common/Alert';
 import { Loading } from '../common/Loading';
 import { EmptyState } from '../common/EmptyState';
 import { UIAppCard } from './UIAppCard';
+import { ListToolbar } from '../common/ListTable';
 import { saveTextFile } from '../../utils/download';
 import {
   listUIDefinitions,
@@ -29,6 +30,7 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [runtime, setRuntime] = useState<'all' | 'mas' | 'scr'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const loadApps = useCallback(async () => {
@@ -88,18 +90,24 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
     input.click();
   };
 
-  const filtered = searchTerm
-    ? apps.filter(a =>
-        a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.moduleId.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : apps;
+  const searched = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return q
+      ? apps.filter(a =>
+          a.name.toLowerCase().includes(q) ||
+          a.moduleId.toLowerCase().includes(q) ||
+          (a.description ?? '').toLowerCase().includes(q)
+        )
+      : apps;
+  }, [apps, searchTerm]);
+  const filtered = searched.filter(a => runtime === 'all' || (runtime === 'scr') === !!a.scrUrl);
+  const deleting = apps.find(a => a.id === confirmDeleteId);
 
   return (
     <div className="ui-apps-list">
       <PageHeader
         title="UI Apps"
-        subtitle={`${apps.length} saved UI app${apps.length !== 1 ? 's' : ''}`}
+        count={loading ? undefined : `${apps.length} app${apps.length === 1 ? '' : 's'}`}
         actions={
           <div className="ui-apps-list__actions">
             <Button variant="secondary" onClick={handleImport}>Import</Button>
@@ -116,7 +124,7 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
 
       {confirmDeleteId && (
         <Alert variant="warning" title="Confirm Delete">
-          <p>Delete this UI App?</p>
+          <p>Delete the UI app <strong>{deleting?.name ?? ''}</strong>? This can't be undone; Export it first to keep a copy.</p>
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <Button variant="danger" size="small" onClick={confirmDelete}>Delete</Button>
             <Button variant="tertiary" size="small" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
@@ -124,16 +132,17 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
         </Alert>
       )}
 
-      <div className="ui-apps-list__search">
-        <input
-          type="text"
-          className="sas-input"
-          aria-label="Search UI apps"
-          placeholder="Search UI apps..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+      <ListToolbar
+        chips={[
+          { value: 'all', label: 'All', count: searched.length },
+          { value: 'mas', label: 'MAS module', count: searched.filter(a => !a.scrUrl).length },
+          { value: 'scr', label: 'SCR endpoint', count: searched.filter(a => !!a.scrUrl).length },
+        ]}
+        activeChip={runtime}
+        onChipChange={setRuntime}
+        chipsLabel="Filter by where the app scores"
+        search={{ value: searchTerm, onChange: setSearchTerm, placeholder: 'Search UI apps', ariaLabel: 'Search UI apps' }}
+      />
 
       {loading ? (
         <Loading message="Loading UI apps..." />
@@ -144,7 +153,7 @@ export const UIAppsList: React.FC<Props> = ({ onRun, onEdit, onCreateNew }) => {
             hint='Create your first custom scoring interface by clicking "Create New" or by opening a MAS module or an SCR endpoint and clicking "Build UI".'
           />
         ) : (
-          <EmptyState title={`No apps match "${searchTerm}"`} />
+          <EmptyState title={searchTerm ? `No apps match "${searchTerm}"` : 'No apps of this kind'} />
         )
       ) : (
         <div className="ui-apps-list__grid">

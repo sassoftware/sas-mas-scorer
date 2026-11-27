@@ -6,7 +6,11 @@ import { Card, CardHeader, CardBody } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { SearchInput } from '../common/SearchInput';
+import { MenuItem } from '../common/MenuButton';
+import {
+  ListChip, ListColumn, ListColumnFilter, ListSort, ListTable, ListToolbar,
+  activeColumnFilters, filterOptions, sortRows, timeValue,
+} from '../common/ListTable';
 import { ProgressBar } from '../common/ProgressBar';
 import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
@@ -33,8 +37,8 @@ import {
   type RunScanStatus,
 } from '../../api/coverage';
 import { masModuleRoute } from '../../api/modelPublish';
-import { AssetTestHealth, ContentType, CollectionProgress, TestScenarioInfo } from '../../types/coverage';
-import { ScoreIcon, useDecisionMasIndex } from './DecisionScoreAction';
+import { AssetTestHealth, ContentItem, ContentType, CollectionProgress, TestScenarioInfo } from '../../types/coverage';
+import { useDecisionMasIndex } from './DecisionScoreAction';
 
 type FilterType = 'all' | ContentType;
 type CoverageFilter = 'all' | 'covered' | 'uncovered' | 'at-risk';
@@ -43,13 +47,10 @@ const TYPE_FILTERS = ['all', 'decision', 'businessRule', 'codeFile', 'model', 't
 const COVERAGE_FILTERS = ['all', 'covered', 'uncovered', 'at-risk'] as const satisfies readonly CoverageFilter[];
 /** URL defaults for the detail table; left out of the URL when unchanged. */
 const LIST_DEFAULTS = { q: '', type: 'all', coverage: 'all' };
-type SortField = 'name' | 'contentType' | 'testScenarioCount' | 'modifiedTimestamp';
 
 /** Rows rendered per page; filtering, sorting and the exports still cover every asset. */
 const PAGE_SIZE = 50;
 
-/** One collator for every comparison — building Intl state per compare is what made sorting slow. */
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 // --- The analysis run, kept outside the component ---------------------------
 //
@@ -157,6 +158,127 @@ export const clearCoverageAnalysisCache = (): void => {
 // coverage view (which would pull it into the entry chunk).
 registerViewCache('coverage', clearCoverageAnalysisCache);
 
+const COVERAGE_CHIP_LABELS: Record<CoverageFilter, string> = {
+  all: 'All',
+  covered: 'Covered',
+  uncovered: 'No tests',
+  'at-risk': 'At risk',
+};
+
+function matchesCoverage(item: ContentItem, filter: CoverageFilter): boolean {
+  if (filter === 'covered') return item.hasTestScenario;
+  if (filter === 'uncovered') return !item.hasTestScenario;
+  if (filter === 'at-risk') return isAtRisk(item);
+  return true;
+}
+
+const CHEVRON = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14" aria-hidden="true">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+/** The All assets columns; Created by starts hidden. */
+function assetColumns({ noTests, health, expandedRows, typeFilter }: {
+  noTests: boolean;
+  health: CoverageRunResult['health'] | undefined;
+  expandedRows: Set<string>;
+  typeFilter: ListColumnFilter;
+}): ListColumn<ContentItem>[] {
+  return [
+    {
+      key: 'name',
+      label: 'Name',
+      sortValue: (item) => item.name,
+      // Inline: ListTable puts the first cell of a row with tests inside a <button>.
+      render: (item) => (
+        <span className="coverage-row__name">
+          {item.testScenarios.length > 0 ? (
+            <span className={`coverage-row__chevron ${expandedRows.has(item.id) ? 'coverage-row__chevron--open' : ''}`}>
+              {CHEVRON}
+            </span>
+          ) : (
+            <span className="coverage-row__chevron coverage-row__chevron--none" />
+          )}
+          <span className="list-cell__main">{item.name}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'type',
+      label: 'Type',
+      width: '150px',
+      sortValue: (item) => getContentTypeLabel(item.contentType),
+      filter: typeFilter,
+      render: (item) => (
+        <Badge variant={getTypeBadgeVariant(item.contentType)} size="small">
+          {getContentTypeLabel(item.contentType)}
+        </Badge>
+      ),
+    },
+    {
+      key: 'coverage',
+      label: 'Coverage',
+      width: '120px',
+      sortValue: (item) => (noTests ? null : item.hasTestScenario ? 1 : 0),
+      render: (item) => noTests ? (
+        <Badge variant="default" size="small">Unknown</Badge>
+      ) : item.hasTestScenario ? (
+        <Badge variant="success" size="small">Covered</Badge>
+      ) : (
+        <Badge variant="error" size="small">No tests</Badge>
+      ),
+    },
+    {
+      key: 'tests',
+      label: 'Tests',
+      width: '90px',
+      align: 'right',
+      firstSortDir: 'desc',
+      sortValue: (item) => item.testScenarioCount,
+      render: (item) => (item.testScenarioCount > 0 ? item.testScenarioCount : ''),
+    },
+    {
+      key: 'health',
+      label: 'Test health',
+      width: '200px',
+      render: (item) => !noTests && item.testHealth ? (
+        <span className="coverage-health__cell">
+          <HealthBadge health={item.testHealth} runScan={health?.runScan} />
+          {item.changedSinceTests && (
+            <Badge variant="warning" size="small">
+              <span className="coverage-health__badge">
+                {CHANGED_ICON}
+                Changed since tests
+              </span>
+            </Badge>
+          )}
+        </span>
+      ) : null,
+    },
+    {
+      key: 'createdBy',
+      label: 'Created by',
+      width: '130px',
+      defaultHidden: true,
+      sortValue: (item) => item.createdBy,
+      render: (item) => item.createdBy,
+    },
+    {
+      key: 'modified',
+      label: 'Modified',
+      width: '120px',
+      firstSortDir: 'desc',
+      sortValue: (item) => timeValue(item.modifiedTimestamp),
+      render: (item) => (
+        <span className="list-nowrap">
+          {item.modifiedTimestamp ? new Date(item.modifiedTimestamp).toLocaleDateString() : ''}
+        </span>
+      ),
+    },
+  ];
+}
+
 export const CoverageAnalysis: React.FC = () => {
   const { running: loading, progress, result, error, cancelled } = useSyncExternalStore(
     subscribeRun,
@@ -173,22 +295,21 @@ export const CoverageAnalysis: React.FC = () => {
   const coverageFilter: CoverageFilter = (COVERAGE_FILTERS as readonly string[]).includes(listParams.coverage)
     ? (listParams.coverage as CoverageFilter)
     : 'all';
-  const setTypeFilter = (type: FilterType) => updateListParams({ type });
+  const setTypeFilter = useCallback((type: FilterType) => updateListParams({ type }), [updateListParams]);
   const setCoverageFilter = (coverage: CoverageFilter) => updateListParams({ coverage });
   // The box follows typing at once; filtering waits for the URL, which is
   // written after a pause so a keystroke does not re-sort the whole tenant.
   const commitSearch = useCallback((q: string) => updateListParams({ q }), [updateListParams]);
   const [searchTerm, setSearchTerm] = useDebouncedUrlText(listParams.q, commitSearch, 200);
   const debouncedSearch = listParams.q;
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sort, setSort] = useState<ListSort>({ key: 'name', dir: 'asc' });
   const [page, setPage] = useState(0);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // A changed filter, search term or sort order starts again from the first page.
   useEffect(() => {
     setPage(0);
-  }, [typeFilter, coverageFilter, debouncedSearch, sortField, sortDir]);
+  }, [typeFilter, coverageFilter, debouncedSearch, sort]);
 
   const toggleRow = useCallback((id: string) => {
     setExpandedRows(prev => {
@@ -203,65 +324,27 @@ export const CoverageAnalysis: React.FC = () => {
     void startCoverageRun();
   }, []);
 
-  const filteredItems = useMemo(() => {
+  // Search narrows the list; the coverage chips count within the type
+  // filter, and the type choices within the coverage filter.
+  const searchedItems = useMemo(() => {
     if (!result) return [];
-    let items = result.items;
-
-    if (typeFilter !== 'all') {
-      items = items.filter(i => i.contentType === typeFilter);
-    }
-    if (coverageFilter === 'covered') {
-      items = items.filter(i => i.hasTestScenario);
-    } else if (coverageFilter === 'uncovered') {
-      items = items.filter(i => !i.hasTestScenario);
-    } else if (coverageFilter === 'at-risk') {
-      items = items.filter(isAtRisk);
-    }
     const term = debouncedSearch.trim().toLowerCase();
-    if (term) {
-      items = items.filter(i =>
-        i.name.toLowerCase().includes(term) ||
-        i.createdBy.toLowerCase().includes(term)
-      );
-    }
-    return items;
-  }, [result, typeFilter, coverageFilter, debouncedSearch]);
+    if (!term) return result.items;
+    return result.items.filter(i =>
+      i.name.toLowerCase().includes(term) ||
+      i.createdBy.toLowerCase().includes(term)
+    );
+  }, [result, debouncedSearch]);
 
-  // Sorting is keyed separately so toggling a column does not re-filter.
-  const sortedItems = useMemo(() => {
-    const items = [...filteredItems].sort((a, b) => {
-      let cmp = 0;
-      if (sortField === 'name') cmp = collator.compare(a.name, b.name);
-      else if (sortField === 'contentType') cmp = collator.compare(a.contentType, b.contentType);
-      else if (sortField === 'testScenarioCount') cmp = a.testScenarioCount - b.testScenarioCount;
-      else if (sortField === 'modifiedTimestamp') cmp = collator.compare(a.modifiedTimestamp ?? '', b.modifiedTimestamp ?? '');
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return items;
-  }, [filteredItems, sortField, sortDir]);
-
-  // Clamp rather than only reset so a shrinking list never shows an empty page.
-  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);
-  const pageItems = useMemo(
-    () => sortedItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
-    [sortedItems, currentPage]
+  const typedItems = useMemo(
+    () => (typeFilter === 'all' ? searchedItems : searchedItems.filter(i => i.contentType === typeFilter)),
+    [searchedItems, typeFilter]
   );
 
-  const handleSort = useCallback((field: SortField) => {
-    if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDir('asc');
-    }
-  }, [sortField]);
-
-  const handleExportCSV = useCallback(() => {
-    if (!result) return;
-    const csv = generateCoverageCSV(sortedItems, !testsNotCollected(result), result.health.runScan);
-    downloadFile(csv, 'test-coverage.csv', 'text/csv');
-  }, [result, sortedItems]);
+  const filteredItems = useMemo(
+    () => typedItems.filter(i => matchesCoverage(i, coverageFilter)),
+    [typedItems, coverageFilter]
+  );
 
   const handleExportMarkdown = useCallback(() => {
     if (!result) return;
@@ -289,6 +372,84 @@ export const CoverageAnalysis: React.FC = () => {
   // Score links for decision rows: one modelPublish query for every flow,
   // only once a result lists decisions.
   const mas = useDecisionMasIndex(!!result && result.stats.byType.decision.total > 0);
+
+  const columns = useMemo(() => assetColumns({
+    noTests,
+    health,
+    expandedRows,
+    typeFilter: {
+      options: filterOptions(
+        searchedItems.filter(i => matchesCoverage(i, coverageFilter)),
+        i => i.contentType,
+      ).map(o => ({ ...o, label: getContentTypeLabel(o.value as ContentType) })),
+      value: typeFilter === 'all' ? null : typeFilter,
+      onChange: (v) => setTypeFilter((v ?? 'all') as FilterType),
+    },
+  }), [noTests, health, expandedRows, searchedItems, coverageFilter, typeFilter, setTypeFilter]);
+
+  // Sorting is keyed separately so toggling a column does not re-filter.
+  const sortedItems = useMemo(
+    () => sortRows(filteredItems, columns, sort),
+    [filteredItems, columns, sort]
+  );
+
+  // Clamp rather than only reset so a shrinking list never shows an empty page.
+  const pageCount = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageItems = useMemo(
+    () => sortedItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
+    [sortedItems, currentPage]
+  );
+
+  const handleExportCSV = useCallback(() => {
+    if (!result) return;
+    const csv = generateCoverageCSV(sortedItems, !testsNotCollected(result), result.health.runScan);
+    downloadFile(csv, 'test-coverage.csv', 'text/csv');
+  }, [result, sortedItems]);
+
+  const coverageChips: ListChip<CoverageFilter>[] = noTests
+    ? [{ value: 'all', label: 'All', count: typedItems.length }]
+    : COVERAGE_FILTERS.map(value => ({
+      value,
+      label: COVERAGE_CHIP_LABELS[value],
+      count: typedItems.filter(i => matchesCoverage(i, value)).length,
+    }));
+
+  /** Every link a row offers, in its ⋮ menu. */
+  const assetActions = (item: ContentItem): MenuItem[] => {
+    const items: MenuItem[] = [];
+    if (item.contentType === 'decision') {
+      // Only a module MAS was found to have (see findMasModulesForDecisions).
+      const module = mas.index?.[item.id]?.latest;
+      if (module) {
+        const checked = mas.index?.[item.id]?.verified !== false;
+        items.push({
+          id: 'score',
+          label: `Score in MAS module ${module.publishName}`,
+          description: checked ? undefined : 'From the publish history; MAS could not be checked',
+          onSelect: () => { window.location.hash = masModuleRoute(module.publishName); },
+        });
+      }
+      items.push({ id: 'flow', label: 'View flow diagram', onSelect: () => { window.location.hash = `/flows/${item.id}`; } });
+    }
+    if (item.contentType === 'segmentationTree') {
+      items.push({
+        id: 'tree',
+        label: 'Open in Segmentation Tree Explorer',
+        onSelect: () => { window.location.hash = `/segmentation-trees/${encodeURIComponent(item.id)}`; },
+      });
+    }
+    const deepLink = getDeepLink(baseUrl, item);
+    if (deepLink) {
+      items.push({
+        id: 'open',
+        label: deepLink.label,
+        description: 'Opens in a new window',
+        onSelect: () => { window.open(deepLink.url, '_blank', 'noopener,noreferrer'); },
+      });
+    }
+    return items;
+  };
 
   return (
     <div className="coverage-analysis">
@@ -424,53 +585,33 @@ export const CoverageAnalysis: React.FC = () => {
             </Alert>
           )}
 
-          {/* Summary Dashboard */}
-          <div className="coverage-dashboard">
-            {/* Overall coverage gauge */}
-            <Card className="coverage-gauge-card">
-              <CardBody>
-                <div className="coverage-gauge">
-                  <svg viewBox="0 0 120 120" className="coverage-gauge__ring">
-                    <circle cx="60" cy="60" r="52" className="coverage-gauge__track" />
-                    <circle
-                      cx="60" cy="60" r="52"
-                      className="coverage-gauge__fill"
-                      style={{
-                        strokeDasharray: `${2 * Math.PI * 52}`,
-                        strokeDashoffset: `${2 * Math.PI * 52 * (1 - (noTests ? 0 : result.stats.overall.coveragePercentage) / 100)}`,
-                      }}
-                    />
-                  </svg>
-                  <div className="coverage-gauge__value">
-                    {noTests ? 'n/a' : `${result.stats.overall.coveragePercentage}%`}
-                  </div>
-                  <div className="coverage-gauge__label">
-                    {noTests ? 'Overall Coverage (tests not collected)' : 'Overall Coverage'}
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-
-            {/* Stats cards — the shared .sas-stat-card tile */}
-            <div className="coverage-stats-grid">
-              <div className="sas-card sas-stat-card">
-                <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
-                <div className="sas-stat-label">Total Assets</div>
+          {/* Summary: five stat tiles in one row (Figma 11/13) */}
+          <div className="coverage-stats-grid">
+            <div className="sas-card sas-stat-card coverage-stat--overall">
+              <div className="sas-stat-value">
+                {noTests ? 'n/a' : `${result.stats.overall.coveragePercentage}%`}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--success">
-                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithTests}</div>
-                <div className="sas-stat-label">With Tests</div>
+              <div className="sas-stat-label">
+                {noTests ? 'Overall coverage (tests not collected)' : 'Overall coverage'}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--error">
-                <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithoutTests}</div>
-                <div className="sas-stat-label">Without Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card">
+              <div className="sas-stat-value">{result.stats.overall.totalItems}</div>
+              <div className="sas-stat-label">Total Assets</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--success">
+              <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithTests}</div>
+              <div className="sas-stat-label">With Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--error">
+              <div className="sas-stat-value">{noTests ? 'n/a' : result.stats.overall.itemsWithoutTests}</div>
+              <div className="sas-stat-label">Without Tests</div>
+            </div>
+            <div className="sas-card sas-stat-card coverage-stat--date">
+              <div className="sas-stat-value">
+                {new Date(result.collectionDate).toLocaleDateString()}
               </div>
-              <div className="sas-card sas-stat-card coverage-stat--date">
-                <div className="sas-stat-value">
-                  {new Date(result.collectionDate).toLocaleDateString()}
-                </div>
-                <div className="sas-stat-label">Collected</div>
-              </div>
+              <div className="sas-stat-label">Collected</div>
             </div>
           </div>
 
@@ -506,10 +647,9 @@ export const CoverageAnalysis: React.FC = () => {
                       hint={health.runScan === 'failed' ? 'the executions could not be read' : 'a run may exist further back'} />
                   )}
                   <li className="coverage-health__count coverage-health__count--changed">
-                    {CHANGED_ICON}
                     <span className="coverage-health__value">{health.changedSinceTests}</span>
                     <span className="coverage-health__label">
-                      Changed since tests
+                      <span className="coverage-health__name">{CHANGED_ICON}Changed since tests</span>
                       <span className="coverage-health__hint">every test predates the asset's current state</span>
                     </span>
                   </li>
@@ -618,281 +758,91 @@ export const CoverageAnalysis: React.FC = () => {
           </Card>
 
           {/* Detail Table */}
-          <Card className="coverage-detail-card">
-            <CardHeader
-              actions={
-                <div className="coverage-detail__filters">
-                  <SearchInput
-                    className="coverage-detail__search"
-                    aria-label="Search assets by name or author"
-                    placeholder="Search by name or author..."
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                  />
-                  <label className="coverage-detail__filter">
-                    <span className="coverage-detail__filter-label">Type:</span>
-                    <select
-                      className="coverage-detail__select"
-                      value={typeFilter}
-                      onChange={e => setTypeFilter(e.target.value as FilterType)}
-                    >
-                      <option value="all">All Types</option>
-                      <option value="decision">Decisions</option>
-                      <option value="businessRule">Business Rules</option>
-                      <option value="codeFile">Code Files</option>
-                      <option value="model">Models</option>
-                      <option value="treatment">Treatments</option>
-                      <option value="segmentationTree">Segmentation Trees</option>
-                    </select>
-                  </label>
-                  <label className="coverage-detail__filter">
-                    <span className="coverage-detail__filter-label">Coverage:</span>
-                    <select
-                      className="coverage-detail__select"
-                      value={coverageFilter}
-                      onChange={e => setCoverageFilter(e.target.value as CoverageFilter)}
-                    >
-                      <option value="all">All Coverage</option>
-                      <option value="covered">Covered</option>
-                      <option value="uncovered">Uncovered</option>
-                      <option value="at-risk">Covered, but failing or changed since tests</option>
-                    </select>
-                  </label>
-                </div>
-              }
-            >
-              <h3>All Assets ({sortedItems.length})</h3>
-            </CardHeader>
-            <CardBody>
-              <div className="sas-table__wrapper">
-                <table className="sas-table sas-table--striped sas-table--hoverable">
-                  <thead className="sas-table__head">
-                    <tr>
-                      <SortHeader field="name" label="Name" current={sortField} dir={sortDir} onSort={handleSort} />
-                      <SortHeader field="contentType" label="Type" current={sortField} dir={sortDir} onSort={handleSort} width="140px" />
-                      <th className="sas-table__th" style={{ width: '90px', textAlign: 'center' }}>Coverage</th>
-                      <SortHeader field="testScenarioCount" label="Tests" current={sortField} dir={sortDir} onSort={handleSort} width="80px" align="right" />
-                      <th className="sas-table__th" style={{ width: '170px' }}>Test health</th>
-                      <th className="sas-table__th" style={{ width: '120px' }}>Created By</th>
-                      <SortHeader field="modifiedTimestamp" label="Modified" current={sortField} dir={sortDir} onSort={handleSort} width="110px" />
-                      <th className="sas-table__th" style={{ width: '120px', textAlign: 'center' }}>Links</th>
-                    </tr>
-                  </thead>
-                  <tbody className="sas-table__body">
-                    {pageItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="sas-table__td coverage-detail__empty">
-                          No assets match the current filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      pageItems.map(item => {
-                        const deepLink = getDeepLink(baseUrl, item);
-                        const isExpanded = expandedRows.has(item.id);
-                        const hasTests = item.testScenarios.length > 0;
-                        return (
-                          <React.Fragment key={item.id}>
-                            <tr
-                              className={`sas-table__row coverage-row ${hasTests ? 'coverage-row--expandable' : ''} ${isExpanded ? 'coverage-row--expanded' : ''}`}
-                              onClick={hasTests ? () => toggleRow(item.id) : undefined}
-                            >
-                              <td className="sas-table__td">
-                                {hasTests ? (
-                                  // Same shape as DataTable's clickable rows: the row reacts to
-                                  // the mouse, and a real button in the first cell carries the
-                                  // toggle for the keyboard.
-                                  <button
-                                    type="button"
-                                    className="sas-table__row-button coverage-row__name"
-                                    aria-expanded={isExpanded}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      toggleRow(item.id);
-                                    }}
-                                  >
-                                    <span className={`coverage-row__chevron ${isExpanded ? 'coverage-row__chevron--open' : ''}`}>
-                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14" aria-hidden="true">
-                                        <polyline points="9 18 15 12 9 6" />
-                                      </svg>
-                                    </span>
-                                    <strong>{item.name}</strong>
-                                  </button>
-                                ) : (
-                                  <span className="coverage-row__name">
-                                    <strong>{item.name}</strong>
-                                  </span>
-                                )}
-                              </td>
-                              <td className="sas-table__td">
-                                <Badge variant={getTypeBadgeVariant(item.contentType)} size="small">
-                                  {getContentTypeLabel(item.contentType)}
-                                </Badge>
-                              </td>
-                              <td className="sas-table__td" style={{ textAlign: 'center' }}>
-                                {noTests ? (
-                                  <Badge variant="default" size="small">Unknown</Badge>
-                                ) : item.hasTestScenario ? (
-                                  <Badge variant="success" size="small">Covered</Badge>
-                                ) : (
-                                  <Badge variant="error" size="small">No tests</Badge>
-                                )}
-                              </td>
-                              <td className="sas-table__td" style={{ textAlign: 'right' }}>
-                                {item.testScenarioCount > 0 && (
-                                  <Badge variant="info" size="small">{item.testScenarioCount}</Badge>
-                                )}
-                              </td>
-                              <td className="sas-table__td">
-                                {!noTests && item.testHealth && (
-                                  <span className="coverage-health__cell">
-                                    <HealthBadge health={item.testHealth} runScan={health?.runScan} />
-                                    {item.changedSinceTests && (
-                                      <Badge variant="warning" size="small">
-                                        <span className="coverage-health__badge">
-                                          {CHANGED_ICON}
-                                          Changed since tests
-                                        </span>
-                                      </Badge>
-                                    )}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="sas-table__td">{item.createdBy}</td>
-                              <td className="sas-table__td">
-                                {item.modifiedTimestamp ? new Date(item.modifiedTimestamp).toLocaleDateString() : ''}
-                              </td>
-                              <td className="sas-table__td" style={{ textAlign: 'center' }}>
-                                <span className="coverage-detail__links">
-                                  {item.contentType === 'decision' && (() => {
-                                    // Only a module MAS was found to have (see findMasModulesForDecisions).
-                                    const module = mas.index?.[item.id]?.latest;
-                                    if (!module) return null;
-                                    const checked = mas.index?.[item.id]?.verified !== false;
-                                    return (
-                                      <a
-                                        href={`#${masModuleRoute(module.publishName)}`}
-                                        className="sas-deep-link"
-                                        title={`Score in MAS module ${module.publishName}${checked ? '' : ' (from the publish history; MAS could not be checked)'}`}
-                                        aria-label={`Score ${item.name} in MAS module ${module.publishName}`}
-                                        onClick={e => e.stopPropagation()}
-                                      >
-                                        <ScoreIcon className="sas-deep-link__icon" />
-                                      </a>
-                                    );
-                                  })()}
-                                  {item.contentType === 'segmentationTree' && (
-                                    <a
-                                      href={`#/segmentation-trees/${encodeURIComponent(item.id)}`}
-                                      className="sas-deep-link"
-                                      title="Open in Segmentation Tree Explorer"
-                                      aria-label={`Open ${item.name} in the Segmentation Tree Explorer`}
-                                      onClick={e => e.stopPropagation()}
-                                    >
-                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <rect x="9" y="2" width="6" height="5" rx="1" />
-                                        <rect x="2" y="17" width="6" height="5" rx="1" />
-                                        <rect x="16" y="17" width="6" height="5" rx="1" />
-                                        <path d="M12 7v5M5 17v-5h14v5" />
-                                      </svg>
-                                    </a>
-                                  )}
-                                  {item.contentType === 'decision' && (
-                                    <a
-                                      href={`#/flows/${item.id}`}
-                                      className="sas-deep-link"
-                                      title="View Flow Diagram"
-                                      aria-label={`View flow diagram for ${item.name}`}
-                                      onClick={e => e.stopPropagation()}
-                                    >
-                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <circle cx="12" cy="5" r="2" />
-                                        <circle cx="6" cy="19" r="2" />
-                                        <circle cx="18" cy="19" r="2" />
-                                        <path d="M12 7v4M12 11l-6 6M12 11l6 6" />
-                                      </svg>
-                                    </a>
-                                  )}
-                                  {deepLink && (
-                                    <a
-                                      href={deepLink.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="sas-deep-link"
-                                      title={deepLink.label}
-                                      aria-label={`${deepLink.label}: ${item.name}`}
-                                      onClick={e => e.stopPropagation()}
-                                    >
-                                      <svg className="sas-deep-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                        <polyline points="15 3 21 3 21 9" />
-                                        <line x1="10" y1="14" x2="21" y2="3" />
-                                      </svg>
-                                    </a>
-                                  )}
-                                </span>
-                              </td>
-                            </tr>
-                            {isExpanded && (
-                              <tr className="coverage-expand-row">
-                                <td colSpan={8} className="coverage-expand-cell">
-                                  <div className="coverage-scenarios">
-                                    <div className="coverage-scenarios__header">Test Scenarios</div>
-                                    <table className="coverage-scenarios__table sas-table sas-table--compact">
-                                      <thead className="sas-table__head">
-                                        <tr>
-                                          <th className="sas-table__th">Name</th>
-                                          <th className="sas-table__th" style={{ width: '120px' }}>Type</th>
-                                          <th className="sas-table__th" style={{ width: '190px' }}>Last run</th>
-                                          <th className="sas-table__th">Changed since test</th>
-                                          <th className="sas-table__th">Description</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="sas-table__body">
-                                        {item.testScenarios.map(ts => (
-                                          <tr key={ts.scoreDefinitionId} className="sas-table__row">
-                                            <td className="sas-table__td">{ts.name}</td>
-                                            <td className="sas-table__td">
-                                              <Badge variant={getScenarioTypeBadgeVariant(ts.scenarioType)} size="small">
-                                                {ts.scenarioType}
-                                              </Badge>
-                                            </td>
-                                            <td className="sas-table__td">
-                                              <LastRunCell test={ts} cap={health?.executionCap} />
-                                            </td>
-                                            <td className="sas-table__td coverage-scenarios__changes">
-                                              <ChangesCell test={ts} />
-                                            </td>
-                                            <td className="sas-table__td coverage-scenarios__desc">
-                                              {ts.description || <span className="coverage-scenarios__none">No description</span>}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+          <section className="coverage-assets list-page" aria-labelledby="coverage-assets-title">
+            <h2 className="coverage-assets__title" id="coverage-assets-title">
+              All assets <span className="sas-page-header__count">{sortedItems.length} shown</span>
+            </h2>
+            <ListToolbar
+              chips={coverageChips}
+              activeChip={coverageFilter}
+              onChipChange={setCoverageFilter}
+              chipsLabel="Filter by coverage"
+              search={{
+                value: searchTerm,
+                onChange: setSearchTerm,
+                placeholder: 'Search name or author',
+                ariaLabel: 'Search assets by name or author',
+              }}
+              activeFilters={activeColumnFilters(columns)}
+            />
 
-              {pageCount > 1 && (
-                <Pagination
-                  label="Asset pages"
-                  page={currentPage + 1}
-                  totalPages={pageCount}
-                  pageSize={PAGE_SIZE}
-                  totalItems={sortedItems.length}
-                  onPageChange={(p) => setPage(p - 1)}
-                />
-              )}
-            </CardBody>
-          </Card>
+            <ListTable
+              label="Assets"
+              storageKey="coverage-assets"
+              columns={columns}
+              rows={pageItems}
+              rowKey={(item) => item.id}
+              sort={sort}
+              onSortChange={setSort}
+              // A row with tests expands to list them; the first cell's button
+              // carries the toggle for the keyboard.
+              onRowClick={(item) => toggleRow(item.id)}
+              isRowClickable={(item) => item.testScenarios.length > 0}
+              rowButtonProps={(item) => ({ 'aria-expanded': expandedRows.has(item.id) })}
+              rowActions={assetActions}
+              rowActionsLabel={(item) => `Links for ${item.name}`}
+              rowClassName={(item) => (expandedRows.has(item.id) ? 'coverage-row coverage-row--expanded' : 'coverage-row')}
+              renderExpanded={(item) => expandedRows.has(item.id) && item.testScenarios.length > 0 ? (
+                <div className="coverage-scenarios">
+                  <div className="coverage-scenarios__header">Test Scenarios</div>
+                  <table className="coverage-scenarios__table sas-table sas-table--compact">
+                    <thead className="sas-table__head">
+                      <tr>
+                        <th className="sas-table__th">Name</th>
+                        <th className="sas-table__th" style={{ width: '120px' }}>Type</th>
+                        <th className="sas-table__th" style={{ width: '190px' }}>Last run</th>
+                        <th className="sas-table__th">Changed since test</th>
+                        <th className="sas-table__th">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="sas-table__body">
+                      {item.testScenarios.map(ts => (
+                        <tr key={ts.scoreDefinitionId} className="sas-table__row">
+                          <td className="sas-table__td">{ts.name}</td>
+                          <td className="sas-table__td">
+                            <Badge variant={getScenarioTypeBadgeVariant(ts.scenarioType)} size="small">
+                              {ts.scenarioType}
+                            </Badge>
+                          </td>
+                          <td className="sas-table__td">
+                            <LastRunCell test={ts} cap={health?.executionCap} />
+                          </td>
+                          <td className="sas-table__td coverage-scenarios__changes">
+                            <ChangesCell test={ts} />
+                          </td>
+                          <td className="sas-table__td coverage-scenarios__desc">
+                            {ts.description || <span className="coverage-scenarios__none">No description</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              emptyMessage="No assets match the current filters."
+            />
+
+            {pageCount > 1 && (
+              <Pagination
+                label="Asset pages"
+                page={currentPage + 1}
+                totalPages={pageCount}
+                pageSize={PAGE_SIZE}
+                totalItems={sortedItems.length}
+                onPageChange={(p) => setPage(p - 1)}
+              />
+            )}
+          </section>
         </>
       )}
     </div>
@@ -900,52 +850,6 @@ export const CoverageAnalysis: React.FC = () => {
 };
 
 // Helper components
-
-interface SortHeaderProps {
-  field: SortField;
-  label: string;
-  current: SortField;
-  dir: 'asc' | 'desc';
-  onSort: (field: SortField) => void;
-  width?: string;
-  align?: 'left' | 'center' | 'right';
-}
-
-// The shared .sas-table__sort-header: a real <button> filling the whole
-// header cell, with aria-sort on the cell. The button must stay a DIRECT
-// child of the <th>, and the <th> must not add padding of its own.
-const SortHeader: React.FC<SortHeaderProps> = ({ field, label, current, dir, onSort, width, align = 'left' }) => {
-  const isActive = current === field;
-  const ariaSort = isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none';
-  const classes = [
-    'sas-table__sort-header',
-    isActive ? 'sas-table__sort-header--active' : '',
-    // An inline text-align on the <th> no longer positions the button's flex
-    // content, so a trailing column asks for the modifier.
-    align === 'right' ? 'sas-table__sort-header--end' : '',
-  ].filter(Boolean).join(' ');
-  return (
-    <th className="sas-table__th" style={{ width, textAlign: align }} aria-sort={ariaSort}>
-      <button
-        type="button"
-        className={classes}
-        onClick={() => onSort(field)}
-      >
-        {label}
-        <span className="sas-table__sort-icon">
-          <svg
-            viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth={2}
-            opacity={isActive ? 1 : 0.3}
-            aria-hidden="true"
-          >
-            <path d={isActive && dir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-          </svg>
-        </span>
-      </button>
-    </th>
-  );
-};
 
 // Test health: state as text and icon, never the colour alone.
 
@@ -996,10 +900,9 @@ const HealthCount: React.FC<{ health: AssetTestHealth; count: number; runScan: R
   health, count, runScan, hint,
 }) => (
   <li className={`coverage-health__count coverage-health__count--${health}`}>
-    {HEALTH_ICON[health]}
     <span className="coverage-health__value">{count}</span>
     <span className="coverage-health__label">
-      {testHealthLabel(health, runScan)}
+      <span className="coverage-health__name">{HEALTH_ICON[health]}{testHealthLabel(health, runScan)}</span>
       <span className="coverage-health__hint">{hint}</span>
     </span>
   </li>

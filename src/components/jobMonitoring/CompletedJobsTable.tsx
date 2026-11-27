@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React from 'react';
-import { DataTable, Column } from '../common/DataTable';
+import { ListColumn, ListTable, ListToolbar } from '../common/ListTable';
 import { Pagination } from '../common/Pagination';
-import { SearchInput } from '../common/SearchInput';
 import { ExecutionJob } from '../../types/jobExecution';
 import { CompletedStateFilter } from '../../hooks/useJobMonitoring';
 import { JobStateBadge } from './JobStateBadge';
@@ -61,14 +60,16 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
   const currentPage = page + 1;
   const knownPages = hasMore ? currentPage + 1 : currentPage;
 
-  const columns: Column<ExecutionJob>[] = [
+  // The server pages the history newest first, so columns don't sort (a sort
+  // would only reorder the page on screen); they can still be hidden.
+  const columns: ListColumn<ExecutionJob>[] = [
     {
       key: 'name',
-      header: 'Job',
+      label: 'Job',
       render: (job) => {
         const name = job.jobRequest.jobDefinition?.name ?? job.jobRequest.name ?? job.id;
         const description = job.jobRequest.description ?? job.jobRequest.jobDefinition?.description;
-        // Inline wrapper: DataTable puts this inside the row's <button>.
+        // Inline wrapper: ListTable puts this inside the row's <button>.
         return (
           <span className="job-monitoring__cell-name job-monitoring__cell-name--link">
             <span className="job-monitoring__cell-name-main">{name}</span>
@@ -79,89 +80,66 @@ export const CompletedJobsTable: React.FC<CompletedJobsTableProps> = ({
     },
     {
       key: 'state',
-      header: 'State',
+      label: 'State',
       width: '110px',
       render: (job) => <JobStateBadge state={job.state} />,
     },
     {
       key: 'createdBy',
-      header: 'Created By',
+      label: 'Created by',
       width: '140px',
       render: (job) => job.createdBy ?? '—',
     },
     {
       key: 'type',
-      header: 'Type',
+      label: 'Type',
       width: '110px',
       render: (job) => job.jobRequest.jobDefinition?.type ?? '—',
     },
     {
       key: 'started',
-      header: 'Started',
+      label: 'Started',
       width: '170px',
-      render: (job) => formatTimestamp(job.creationTimeStamp),
+      render: (job) => <span className="list-nowrap">{formatTimestamp(job.creationTimeStamp)}</span>,
     },
     {
       key: 'elapsed',
-      header: 'Elapsed',
+      label: 'Elapsed',
       width: '100px',
       align: 'right',
       render: (job) => formatDuration(job.elapsedTime),
     },
-    {
-      key: '_chevron',
-      header: '',
-      width: '40px',
-      align: 'right',
-      render: () => (
-        <span className="job-monitoring__row-chevron" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </span>
-      ),
-    },
   ];
 
   return (
-    <div>
-      <div className="job-monitoring__toolbar">
-        <SearchInput
-          className="job-monitoring__search"
-          aria-label="Search completed jobs by name"
-          placeholder="Search by job name…"
-          value={search}
-          onChange={onSearchChange}
-        />
-        <div className="job-monitoring__chips" role="group" aria-label="Filter by state">
-          {STATE_CHIPS.map((chip) => (
-            <button
-              key={chip.value}
-              type="button"
-              aria-pressed={stateFilter === chip.value}
-              className={`job-monitoring__chip${stateFilter === chip.value ? ' job-monitoring__chip--active' : ''}`}
-              onClick={() => onStateFilterChange(chip.value)}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
-        <div className="job-monitoring__toolbar-spacer" />
-        <div className="job-monitoring__toolbar-hint">
-          Select a job to view details
-        </div>
-        <div className="job-monitoring__toolbar-count" aria-live="polite">
+    <div className="list-page">
+      <ListToolbar
+        chips={STATE_CHIPS}
+        activeChip={stateFilter}
+        onChipChange={onStateFilterChange}
+        chipsLabel="Filter by state"
+        search={{
+          value: search,
+          onChange: onSearchChange,
+          placeholder: 'Search by job name',
+          ariaLabel: 'Search completed jobs by name',
+        }}
+      >
+        <span className="job-monitoring__toolbar-count" aria-live="polite">
           {loading
             ? 'Loading…'
             : `Showing ${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()}${hasMore ? '+' : ''}`}
-        </div>
-      </div>
+        </span>
+      </ListToolbar>
 
-      <DataTable<ExecutionJob>
+      <ListTable<ExecutionJob>
+        label="Completed jobs"
+        storageKey="jobs"
         columns={columns}
-        data={jobs}
-        keyField="id"
-        loading={loading && jobs.length === 0}
+        rows={jobs}
+        rowKey={(job) => job.id}
+        loading={loading}
+        loadingMessage="Loading jobs..."
         onRowClick={(job) => onOpenJob(job.id)}
         emptyMessage={
           search || stateFilter !== 'all'

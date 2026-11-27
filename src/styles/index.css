@@ -5,10 +5,13 @@
 @import './variables.css';
 @import './base.css';
 @import './components.css';
+@import './listTable.css';
+@import './fileIntake.css';
 @import './layout.css';
 @import './modules.css';
 @import './scoring.css';
 @import './uiBuilder.css';
+@import './canvasBuilder.css';
 @import './uiRunner.css';
 @import './uiApps.css';
 @import './coverage.css';

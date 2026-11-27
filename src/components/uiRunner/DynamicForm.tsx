@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { UISection, UILayout, UIField, FieldErrors } from '../../types/uiBuilder';
+import { UISection, UILayout, UIField, FieldErrors, SubmitPosition } from '../../types/uiBuilder';
 import { StepParameter } from '../../types';
-import { findParameter } from '../../utils/uiDefaults';
+import { effectiveWidth, findParameter, lastInputSectionId, safeColor } from '../../utils/uiDefaults';
 import { WidgetRenderer } from './WidgetRenderer';
+import { conditionHolds } from '../../utils/showWhen';
 
 interface Props {
   layout: UILayout;
@@ -22,7 +23,21 @@ interface Props {
    * invalid field (after a blocked run).
    */
   focusErrorsRequest?: number;
+  /**
+   * The run button, drawn inside the form: at the top, or after the last
+   * section with inputs. (At the bottom the runner draws it under the form.)
+   */
+  submit?: { node: React.ReactNode; position: Exclude<SubmitPosition, 'bottom'> };
+  /** Tabs or steps (3.1): the index (among the shown sections) of the one on screen. */
+  active?: number;
+  onActiveChange?: (index: number) => void;
+  /** Steps (3.1): the Back / Next / run buttons under the current step. */
+  stepNav?: React.ReactNode;
 }
+
+/** The sections the runner shows: those with at least one visible field. */
+export const shownSections = (layout: UILayout): UISection[] =>
+  layout.sections.filter(s => s.fields.some(f => f.visible));
 
 // Build a case-insensitive lookup map: lowercased key -> actual value
 function buildCaseInsensitiveMap(values: Record<string, unknown>): Map<string, unknown> {
@@ -45,7 +60,7 @@ function lookupValue(
 }
 
 /** Widgets a <label for> can name (a button counts; a radio group does not). */
-const LABELABLE = new Set(['text', 'number', 'slider', 'dropdown', 'toggle', 'textarea']);
+const LABELABLE = new Set(['text', 'number', 'slider', 'dropdown', 'toggle', 'textarea', 'checkbox', 'date', 'datetime', 'file', 'percent', 'currency']);
 
 /** "Min 0 · Max 100" / "Up to 20 characters": the author's limits, stated up front. */
 function constraintHint(field: UIField): string | null {
@@ -71,6 +86,10 @@ export const DynamicForm: React.FC<Props> = ({
   inputParameters,
   fieldErrors,
   focusErrorsRequest,
+  submit,
+  active = 0,
+  onActiveChange,
+  stepNav,
 }) => {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const idPrefix = useId();
@@ -123,18 +142,22 @@ export const DynamicForm: React.FC<Props> = ({
     onInputChange({ ...inputValues, [parameterId]: value });
   };
 
-  const renderSection = (section: UISection, sIdx: number) => {
+  const renderSection = (section: UISection, sIdx: number, plain = false) => {
     const visibleFields = section.fields
-      .filter(f => f.visible)
+      .filter(f => f.visible && conditionHolds(f, { layout }, inputValues, outputValues))
       .sort((a, b) => a.order - b.order);
 
     if (visibleFields.length === 0) return null;
 
-    const isCollapsed = collapsedSections.has(section.id);
+    const isCollapsed = !plain && collapsedSections.has(section.id);
 
     return (
-      <div key={section.id} className="ui-runner__section">
-        {section.title && (
+      <div
+        key={section.id}
+        className={`ui-runner__section${safeColor(section.color) ? ' ui-runner__section--colored' : ''}`}
+        style={safeColor(section.color) ? ({ '--section-color': section.color } as React.CSSProperties) : undefined}
+      >
+        {section.title && !plain && (
           <button
             className="ui-runner__section-header"
             onClick={() => toggleSection(section.id)}
@@ -180,7 +203,7 @@ export const DynamicForm: React.FC<Props> = ({
               return (
                 <div
                   key={field.parameterId}
-                  className={`ui-runner__field ui-runner__field--${field.width}${error ? ' ui-runner__field--invalid' : ''}`}
+                  className={`ui-runner__field ui-runner__field--${effectiveWidth(field, layout.columns)}${error ? ' ui-runner__field--invalid' : ''}`}
                   data-invalid={error ? 'true' : undefined}
                 >
                   {field.widget !== 'hidden' && field.widget !== 'markdown' && (
@@ -230,9 +253,82 @@ export const DynamicForm: React.FC<Props> = ({
     );
   };
 
+  const display = layout.display ?? 'page';
+  const shown = shownSections(layout);
+  const current = Math.min(Math.max(active, 0), Math.max(shown.length - 1, 0));
+
+  if (display === 'tabs' && shown.length > 0) {
+    const onKey = (e: React.KeyboardEvent) => {
+      const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      let next = current;
+      if (delta) next = (current + delta + shown.length) % shown.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = shown.length - 1;
+      else return;
+      e.preventDefault();
+      onActiveChange?.(next);
+      rootRef.current?.querySelector<HTMLButtonElement>(`#${CSS.escape(`${idPrefix}-tab-${next}`)}`)?.focus();
+    };
+    return (
+      <div className="ui-runner__form ui-runner__form--tabs" ref={rootRef}>
+        {submit?.position === 'top' && <div className="ui-runner__submit">{submit.node}</div>}
+        <div className="ui-runner__tabs" role="tablist" aria-label="Sections" onKeyDown={onKey}>
+          {shown.map((s, i) => (
+            <button
+              key={s.id}
+              id={`${idPrefix}-tab-${i}`}
+              type="button"
+              role="tab"
+              aria-selected={i === current}
+              aria-controls={`${idPrefix}-panel`}
+              tabIndex={i === current ? 0 : -1}
+              className={`ui-runner__tab${i === current ? ' ui-runner__tab--on' : ''}`}
+              onClick={() => onActiveChange?.(i)}
+            >
+              {s.title || `Section ${i + 1}`}
+            </button>
+          ))}
+        </div>
+        <div id={`${idPrefix}-panel`} role="tabpanel" aria-labelledby={`${idPrefix}-tab-${current}`} tabIndex={0}>
+          {renderSection(shown[current], layout.sections.indexOf(shown[current]), true)}
+        </div>
+      </div>
+    );
+  }
+
+  if (display === 'steps' && shown.length > 0) {
+    const s = shown[current];
+    return (
+      <div className="ui-runner__form ui-runner__form--steps" ref={rootRef}>
+        <div className="ui-runner__steps-head">
+          <ol className="ui-runner__steps-track" aria-hidden="true">
+            {shown.map((x, i) => (
+              <li key={x.id} className={i < current ? 'ui-runner__step--done' : i === current ? 'ui-runner__step--on' : ''} />
+            ))}
+          </ol>
+          <h4 className="ui-runner__steps-title" aria-live="polite">
+            Step {current + 1} of {shown.length}{s.title ? `: ${s.title}` : ''}
+          </h4>
+        </div>
+        {renderSection(s, layout.sections.indexOf(s), true)}
+        {stepNav}
+      </div>
+    );
+  }
+
+  const submitAfter = submit?.position === 'afterInputs' ? lastInputSectionId(layout) : null;
+  const submitNode = submit && <div className="ui-runner__submit">{submit.node}</div>;
+
   return (
     <div className="ui-runner__form" ref={rootRef}>
-      {layout.sections.map(renderSection)}
+      {submit?.position === 'top' && submitNode}
+      {layout.sections.map((section, i) => (
+        <React.Fragment key={section.id}>
+          {renderSection(section, i)}
+          {submitAfter === section.id && submitNode}
+        </React.Fragment>
+      ))}
+      {submit?.position === 'afterInputs' && !submitAfter && submitNode}
     </div>
   );
 };

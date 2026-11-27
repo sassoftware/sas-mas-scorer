@@ -52,46 +52,6 @@
   max-width: 480px;
 }
 
-/* --- Upload / drop zone --- */
-
-/* Positioned so the .sr-only file input is clipped against the drop zone and
-   not against whatever positioned ancestor happens to be above it. */
-.rules-import__dropzone {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6);
-  border: 2px dashed var(--sas-gray-300);
-  border-radius: var(--radius-lg);
-  background: var(--sas-gray-50);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-
-.rules-import__dropzone--active {
-  border-color: var(--sas-blue-primary);
-  background: var(--sas-blue-lighter);
-}
-
-.rules-import__dropzone-hint {
-  color: var(--sas-gray-500);
-  font-size: var(--font-size-sm);
-}
-
-/* The visible half of the file picker: a <label> wearing the .sas-button
-   classes, so it only needs the pointer cursor the element rule gives a
-   real <button>, plus the ring its .sr-only input cannot show itself. */
-.rules-import__file-label {
-  cursor: pointer;
-  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
-  line-height: normal;
-}
-
-.rules-import__file-input:focus-visible + .rules-import__file-label {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-outline-offset);
-}
-
 .rules-import__file-summary {
   margin-top: var(--space-3);
   font-size: var(--font-size-base);

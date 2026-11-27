@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import {
-  ReactFlow, Controls, MiniMap, Background, BackgroundVariant, Panel,
+  ReactFlow, Controls, MiniMap, Background, BackgroundVariant,
   useNodesState, useEdgesState, type Edge, type Node, type NodeChange, type ReactFlowInstance, type XYPosition,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -316,9 +316,37 @@ export default function FlowDiagram({
 
   return (
     <div className="flow-diagram">
-      <div className="flow-diagram__toolbar">
-        <FlowNodeFinder entries={entries} onPick={handleFind} />
-        {toolbarExtra}
+      {/* 3.1 (Figma 11/13): Find node and the legend beside the diagram. */}
+      <div className="flow-diagram__side">
+        <div className="flow-diagram__toolbar">
+          <FlowNodeFinder entries={entries} onPick={handleFind} />
+          {toolbarExtra}
+        </div>
+        <div className="flow-diagram__legend">
+          <CollapsibleSection title="Legend">
+            <div className="flow-diagram__legend-items">
+              {([
+                ['decision', 'Sub-Decision'], ['custom', 'Custom Node'],
+                ['ruleset', 'Rule Set'], ['model', 'Model'],
+                ['code_file', 'Code File'], ['condition', 'Branch'],
+                ['assignment', 'Assignment'], ['abtest', 'A/B Test'],
+                ['parallel', 'Parallel Process'], ['record_contact', 'Record Contact'],
+                ['treatment_group', 'Treatment Group'], ['segmentation_tree', 'Segmentation Tree'],
+                ['rest_api', 'REST API'],
+              ] as const).map(([type, label]) => (
+                <div key={type} className="flow-diagram__legend-item">
+                  <div className="flow-diagram__legend-swatch"
+                    style={{ backgroundColor: NODE_COLORS[type].bg, borderColor: NODE_COLORS[type].border }} />
+                  {label}
+                </div>
+              ))}
+              <div className="flow-diagram__legend-item">
+                <div className="flow-diagram__legend-crosslink" />
+                Cross-link
+              </div>
+            </div>
+          </CollapsibleSection>
+        </div>
       </div>
       <div
         ref={canvasRef}
@@ -345,33 +373,6 @@ export default function FlowDiagram({
             <MiniMap nodeColor={miniMapNodeColor} />
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color={CANVAS_DOT_COLOR} />
             <GroupBoxes groupBoxes={groupBoxes} />
-            <Panel position="top-left">
-              <div className="flow-diagram__legend">
-                <CollapsibleSection title="Legend">
-                  <div className="flow-diagram__legend-items">
-                    {([
-                      ['decision', 'Sub-Decision'], ['custom', 'Custom Node'],
-                      ['ruleset', 'Rule Set'], ['model', 'Model'],
-                      ['code_file', 'Code File'], ['condition', 'Branch'],
-                      ['assignment', 'Assignment'], ['abtest', 'A/B Test'],
-                      ['parallel', 'Parallel Process'], ['record_contact', 'Record Contact'],
-                      ['treatment_group', 'Treatment Group'], ['segmentation_tree', 'Segmentation Tree'],
-                      ['rest_api', 'REST API'],
-                    ] as const).map(([type, label]) => (
-                      <div key={type} className="flow-diagram__legend-item">
-                        <div className="flow-diagram__legend-swatch"
-                          style={{ backgroundColor: NODE_COLORS[type].bg, borderColor: NODE_COLORS[type].border }} />
-                        {label}
-                      </div>
-                    ))}
-                    <div className="flow-diagram__legend-item">
-                      <div className="flow-diagram__legend-crosslink" />
-                      Cross-link
-                    </div>
-                  </div>
-                </CollapsibleSection>
-              </div>
-            </Panel>
           </ReactFlow>
         </FlowTraceContext.Provider>
       </div>

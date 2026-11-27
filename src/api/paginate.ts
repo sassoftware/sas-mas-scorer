@@ -128,6 +128,28 @@ interface ReadAhead<T> {
   controller: AbortController;
 }
 
+/** Thrown when a collection request is answered with something that is not a collection. */
+export class NotACollectionError extends Error {
+  constructor(url: string, what: string) {
+    super(`SAS Viya answered ${url} with ${what} instead of a list, so the list could not be read. The service may be starting or unavailable; retry in a moment.`);
+    this.name = 'NotACollectionError';
+  }
+}
+
+/** A collection page is an object whose `items`, when present, is an array; an empty one may omit it. */
+function assertCollectionPage<T>(data: unknown, url: string): asserts data is CollectionEnvelope<T> {
+  if (data === null || data === undefined || data === '') throw new NotACollectionError(url, 'an empty response');
+  if (typeof data === 'string') throw new NotACollectionError(url, 'text or a web page');
+  if (typeof data !== 'object' || Array.isArray(data)) throw new NotACollectionError(url, 'an unexpected value');
+  const page = data as Record<string, unknown>;
+  if ('items' in page && page.items !== undefined && !Array.isArray(page.items)) {
+    throw new NotACollectionError(url, 'an unexpected "items" value');
+  }
+  if (!('items' in page) && !['count', 'start', 'limit', 'links', 'version'].some((k) => k in page)) {
+    throw new NotACollectionError(url, 'an object that is not a list');
+  }
+}
+
 /**
  * Walk a collection page by page. Stops when a page is empty, when a page is
  * shorter than the limit the service echoed back, when the trusted `count` is
@@ -196,6 +218,10 @@ export async function paginateCollection<T>(
       if (readAhead) ahead.delete(start);
       const data = await (readAhead ? readAhead.data : requestPage(start));
 
+      // Anything that is not a collection (a gateway or maintenance page, an
+      // empty body) must fail the walk: read as "no items" it would end it as
+      // a complete, empty collection, e.g. a coverage run with no tests at all.
+      assertCollectionPage(data, url);
       const pageItems = data.items ?? [];
       if (accumulate) items.push(...pageItems);
       loaded += pageItems.length;

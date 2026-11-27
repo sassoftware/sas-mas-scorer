@@ -1,7 +1,7 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { PageHeader } from '../layout/Layout';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
@@ -89,6 +89,19 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
     refresh,
   } = usePublishingOverview({ enabled: isAuthenticated });
 
+  // The deployed items' Destination filter, also set from a destination's
+  // "Show its deployed items", which then moves to the table.
+  const [destinationFilter, setDestinationFilter] = useState<string | null>(null);
+  const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const showDestinationItems = useCallback((name: string) => {
+    setDestinationFilter(name);
+    const heading = itemsHeadingRef.current;
+    if (heading) {
+      heading.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      heading.focus({ preventScroll: true });
+    }
+  }, []);
+
   // Beside Refresh: how old the (session-cached) data is, or that a refresh
   // is under way. A polite status, so the outcome of Refresh is announced.
   const freshness = refreshing
@@ -172,13 +185,21 @@ export const PublishingOverview: React.FC<PublishingOverviewProps> = ({
               filters and page; the data is swapped in when it arrives. */}
           <section className="publishing__section" aria-label="Publishing destinations">
             <h2 className="publishing__section-title">Destinations</h2>
-            <DestinationsPanel destinations={destinations} counts={destinationCounts} />
+            <DestinationsPanel
+              destinations={destinations}
+              counts={destinationCounts}
+              onShowItems={showDestinationItems}
+            />
           </section>
 
           <section className="publishing__section" aria-label="Published models and decisions">
-            <h2 className="publishing__section-title">Deployed Models &amp; Decisions</h2>
+            <h2 className="publishing__section-title" ref={itemsHeadingRef} tabIndex={-1}>
+              Deployed Models &amp; Decisions
+            </h2>
             <PublishedItemsTable
               items={dedupedItems}
+              destinationFilter={destinationFilter}
+              onDestinationFilterChange={setDestinationFilter}
               onNavigateToModule={onNavigateToModule}
               onNavigateToFlow={onNavigateToFlow}
             />

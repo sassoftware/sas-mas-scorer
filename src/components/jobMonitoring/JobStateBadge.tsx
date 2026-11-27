@@ -26,11 +26,12 @@ const VARIANT_BY_STATE: Record<ExecutionJobState, BadgeVariant> = {
 export const JobStateBadge: React.FC<JobStateBadgeProps> = ({ state }) => {
   const variant = VARIANT_BY_STATE[state] ?? 'default';
   const isLive = state === 'running' || state === 'pending';
+  // A live job gets a pulsing dot beside its word; the word itself stays at
+  // full contrast (fading the whole badge dropped it below 4.5:1 mid-pulse).
   return (
-    <span className={isLive ? 'job-monitoring__pulse' : undefined}>
-      <Badge variant={variant} size="small">
-        {formatJobState(state)}
-      </Badge>
-    </span>
+    <Badge variant={variant} size="small">
+      {isLive && <span className="job-monitoring__live-dot job-monitoring__pulse" aria-hidden="true" />}
+      {formatJobState(state)}
+    </Badge>
   );
 };

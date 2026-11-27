@@ -87,3 +87,37 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 3.1: the list toolbar above the cards, and the card's ⋮ menu. */
+.ui-apps-list > .list-toolbar {
+  margin-bottom: var(--space-4);
+}
+
+.ui-app-card__actions .sas-menu-button {
+  margin-left: auto;
+}
+
+.ui-app-card__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.ui-app-card__more:hover,
+.ui-app-card__more[aria-expanded='true'] {
+  background: var(--sas-gray-100);
+  color: var(--sas-gray-900);
+}
+
+.ui-app-card__more:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 0;
+}

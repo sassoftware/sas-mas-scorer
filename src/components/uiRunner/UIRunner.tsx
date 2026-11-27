@@ -1,24 +1,38 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { UIDefinition } from '../../types/uiBuilder';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { prefillFromQuery } from '../../utils/prefill';
+import { FieldOption, UIDefinition, UILayout } from '../../types/uiBuilder';
 import { Card, CardHeader, CardBody, CardFooter } from '../common/Card';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { PageHeader } from '../layout/Layout';
-import { DynamicForm } from './DynamicForm';
+import { DynamicForm, shownSections } from './DynamicForm';
+import { ModelInfoPanel, modelIdOf } from './ModelInfoPanel';
+import { RunMessages } from './RunMessages';
+import { LastRun, ResultDownloads } from './ResultDownloads';
+import { BatchFromFile } from './BatchFromFile';
+import { SaveScenarioButton, decisionSourceOf } from './SaveScenarioButton';
+import { appendRunLog, RunLogRow } from '../../api/casRunLog';
+import { getCurrentUser } from '../../api/identities';
+import { readLookupOptions } from '../../api/casLookup';
+import { RunHistory } from '../scoring/RunHistory';
+import { RunRecord, useRunHistory } from '../scoring/scoringSession';
 import { useStepExecution, useStep } from '../../hooks';
 import { getModule } from '../../api/modules';
 import { Module, Step } from '../../types';
 import { inspectEndpoint, scoreForApp, scrStep, type ScrEndpointInfo } from '../../api/scr';
 import {
   buildRunValues,
+  findParameter,
   computeSignatureDrift,
   getInitialInputValues,
   hasSignatureDrift,
+  getSubmitPosition,
+  accentButtonStyle,
 } from '../../utils/uiDefaults';
 import { validateInputs } from './fieldValidation';
 
@@ -70,6 +84,45 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   );
 
   const [outputValues, setOutputValues] = useState<Record<string, unknown>>({});
+  // Inputs filled from the app link (?name=value), named in a note.
+  const location = useLocation();
+  const [prefilled, setPrefilled] = useState<string[] | null>(null);
+  // Run history (when the app turns it on): kept in this browser tab, per app.
+  const { runs: history, record: recordRun, clear: clearHistory } = useRunHistory(`uiapp:${definition.id}`);
+  // Run log: the first failure to write it is shown once; results are never held back.
+  const [logProblem, setLogProblem] = useState<string | null>(null);
+  const logFailedRef = useRef(false);
+  // Lookup dropdowns: options read from CAS when the app opens, by field.
+  const [lookups, setLookups] = useState<Record<string, FieldOption[]>>({});
+  const [lookupProblems, setLookupProblems] = useState<string[]>([]);
+  useEffect(() => {
+    const fields = definition.layout.sections.flatMap(s => s.fields)
+      .filter(f => f.direction === 'input' && f.validation?.lookup && (f.widget === 'dropdown' || f.widget === 'radio'));
+    if (fields.length === 0) return;
+    let live = true;
+    Promise.all(fields.map(f => readLookupOptions(f.validation!.lookup!)
+      .then(options => ({ id: f.parameterId, options, problem: null as string | null }))
+      .catch(err => ({ id: f.parameterId, options: null, problem: `${f.label}: ${err instanceof Error ? err.message : String(err)}` }))))
+      .then(results => {
+        if (!live) return;
+        setLookups(Object.fromEntries(results.filter(r => r.options).map(r => [r.id, r.options as FieldOption[]])));
+        setLookupProblems(results.flatMap(r => (r.problem ? [r.problem] : [])));
+      });
+    return () => { live = false; };
+  }, [definition.layout]);
+  const viewLayout = useMemo<UILayout>(() => (Object.keys(lookups).length === 0 ? definition.layout : {
+    ...definition.layout,
+    sections: definition.layout.sections.map(s => ({
+      ...s,
+      fields: s.fields.map(f => (lookups[f.parameterId] ? { ...f, validation: { ...f.validation, options: lookups[f.parameterId] } } : f)),
+    })),
+  }), [definition.layout, lookups]);
+  // What the last run sent, for the result downloads.
+  const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  // Tabs or steps: which shown section is on screen, and the step whose
+  // fields Next found problems in (only that step's errors show).
+  const [activeSection, setActiveSection] = useState(0);
+  const [stepCheck, setStepCheck] = useState<string | null>(null);
   const [module, setModule] = useState<Module | null>(null);
   const [moduleError, setModuleError] = useState<string | null>(null);
   // Pre-run check: off until the first blocked run, then live as the user
@@ -150,10 +203,12 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     [definition, step]
   );
 
-  const fieldErrors = useMemo(
-    () => (blockedRuns > 0 ? validateInputs(definition, step, inputValues) : {}),
-    [blockedRuns, definition, step, inputValues]
-  );
+  const fieldErrors = useMemo(() => {
+    if (blockedRuns > 0) return validateInputs(definition, step, inputValues);
+    if (!stepCheck) return {};
+    const ids = new Set(definition.layout.sections.find(s => s.id === stepCheck)?.fields.map(f => f.parameterId) ?? []);
+    return Object.fromEntries(Object.entries(validateInputs(definition, step, inputValues)).filter(([k]) => ids.has(k)));
+  }, [blockedRuns, stepCheck, definition, step, inputValues]);
   const invalidCount = Object.keys(fieldErrors).length;
 
   // Map outputs when execution completes
@@ -167,19 +222,73 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     }
   }, [output, definition.layout.sections]);
 
+  // Fill inputs from the link once the signature is known (for the types).
+  // Only fills the form: the app never runs on its own.
+  useEffect(() => {
+    if (preview || prefilled !== null || !step) return;
+    const types = Object.fromEntries((step.inputs ?? []).map(p => [p.name.toLowerCase(), p.type]));
+    const { values, names } = prefillFromQuery(definition, location.search, types);
+    setPrefilled(names);
+    if (names.length > 0) setInputValues(prev => ({ ...prev, ...values }));
+  }, [preview, prefilled, step, definition, location.search]);
+
+  // Tabs or steps: once results arrive, show the first section with results.
+  useEffect(() => {
+    const display = definition.layout.display ?? 'page';
+    if (display === 'page' || Object.keys(outputValues).length === 0) return;
+    const at = shownSections(definition.layout).findIndex(s => s.fields.some(f => f.direction === 'output'));
+    if (at >= 0) setActiveSection(at);
+  }, [outputValues, definition.layout]);
+
+  // Append the run to the app's CAS log table, when it has one (in the background).
+  const logRun = useCallback((entry: { inputs: Record<string, unknown>; outputs: { name: string; value: unknown }[] | null; latencyMs: number; error?: string }) => {
+    const target = definition.settings.runLog;
+    if (!target || preview) return;
+    void (async () => {
+      let user = '';
+      try { user = (await getCurrentUser()).id; } catch { /* logged without the user */ }
+      const row: RunLogRow = {
+        app_name: definition.name,
+        app_id: definition.id,
+        module: scrUrl ?? definition.moduleId,
+        step: definition.stepId,
+        ran_at: new Date().toISOString(),
+        user_id: user,
+        status: entry.error ? 'failed' : 'completed',
+        message: entry.error ?? '',
+        latency_ms: Math.round(entry.latencyMs),
+        inputs: JSON.stringify(entry.inputs),
+        outputs: JSON.stringify(Object.fromEntries((entry.outputs ?? []).map(o => [o.name, o.value]))),
+      };
+      try {
+        await appendRunLog(target, row);
+      } catch (err) {
+        if (logFailedRef.current) return;
+        logFailedRef.current = true;
+        setLogProblem(`Could not write this run to the CAS table ${target.caslib}.${target.table}: ${err instanceof Error ? err.message : String(err)} Your results are not affected. Later failures are not shown again.`);
+      }
+    })();
+  }, [definition, preview, scrUrl]);
+
   const handleExecute = useCallback(async () => {
     if (!step) return;
     const errors = validateInputs(definition, step, inputValues);
     if (Object.keys(errors).length > 0) {
       setBlockedRuns(n => n + 1);
+      // Tabs or steps: show the first section holding a problem.
+      const shown = shownSections(definition.layout);
+      const at = shown.findIndex(s => s.fields.some(f => f.parameterId in errors));
+      if (at >= 0) setActiveSection(at);
       return;
     }
     setBlockedRuns(0);
+    setStepCheck(null);
     try {
       // Converted by the signature's types; fields whose parameter the step
       // no longer lists are left out, and step inputs without a field go out
       // as null (buildStepInput fills every step input).
       const values = buildRunValues(definition, step, inputValues);
+      setLastRun({ inputs: values, at: new Date().toISOString() });
       if (scrUrl) {
         if (!scrInfo) return;
         // Every signature input goes out; one without a field as null.
@@ -188,24 +297,72 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         setScrRun({ executing: true, error: null, ms: null });
         setOutputValues({});
         try {
+          const started = performance.now();
           const result = await scoreForApp(scrInfo, data);
           setOutputValues(result.outputs);
+          const entry = {
+            inputs: data,
+            outputs: Object.entries(result.outputs).map(([name, value]) => ({ name, value })),
+            latencyMs: performance.now() - started,
+          };
+          recordRun({ at: Date.now(), ...entry });
+          logRun(entry);
           setScrRun({ executing: false, error: null, ms: result.elapsedMs });
         } catch (err) {
           setScrRun({ executing: false, error: err instanceof Error ? err.message : String(err), ms: null });
+          const failed = { inputs: data, outputs: null, latencyMs: 0, error: err instanceof Error ? err.message : String(err) };
+          recordRun({ at: Date.now(), ...failed });
+          logRun(failed);
         }
         return;
       }
-      await masExecute(step, values);
+      const started = performance.now();
+      try {
+        const result = await masExecute(step, values);
+        const entry = {
+          inputs: values,
+          outputs: (result.outputs ?? []).map(o => ({ name: o.name, value: o.value })),
+          latencyMs: performance.now() - started,
+        };
+        recordRun({ at: Date.now(), ...entry, executionState: result.executionState });
+        logRun(entry);
+      } catch (err) {
+        const failed = {
+          inputs: values,
+          outputs: null,
+          latencyMs: performance.now() - started,
+          error: err instanceof Error ? err.message : 'Execution failed',
+        };
+        recordRun({ at: Date.now(), ...failed });
+        logRun(failed);
+        throw err;
+      }
     } catch {
       // Error handled by hook
     }
-  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo]);
+  }, [step, definition, inputValues, masExecute, scrUrl, scrInfo, recordRun, logRun]);
+
+  // Put a past run's inputs back in the form (sent values are keyed by the step's input names).
+  const restoreRun = useCallback((run: RunRecord) => {
+    const params = step?.inputs ?? [];
+    const next: Record<string, unknown> = {};
+    for (const section of definition.layout.sections) {
+      for (const f of section.fields) {
+        if (f.direction !== 'input') continue;
+        const p = findParameter(params, f.parameterId);
+        if (p && p.name in run.inputs) next[f.parameterId] = run.inputs[p.name];
+      }
+    }
+    setInputValues(prev => ({ ...prev, ...next }));
+  }, [step, definition.layout.sections]);
 
   const handleReset = useCallback(() => {
     setInputValues(getInitialInputValues(definition));
     setOutputValues({});
+    setLastRun(null);
     setBlockedRuns(0);
+    setStepCheck(null);
+    setActiveSection(0);
     reset();
   }, [reset, definition]);
 
@@ -230,9 +387,31 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
   const title = definition.settings.title || definition.name;
   const submitLabel = definition.settings.submitLabel || 'Execute';
   const outputLayout = definition.settings.outputLayout || 'below';
+  const submitPosition = getSubmitPosition(definition.settings);
+  const modelInfo = !scrUrl && definition.settings.showModelInfo && module && modelIdOf(module)
+    ? <ModelInfoPanel module={module} />
+    : null;
+  const historyPanel = definition.settings.runHistory && step ? (
+    <RunHistory
+      runs={history}
+      inputParameters={step.inputs ?? []}
+      outputParameters={step.outputs ?? []}
+      onRestore={restoreRun}
+      onClear={clearHistory}
+      disabled={executing}
+    />
+  ) : null;
+  // Save as test case: MAS decision modules only, after a run that returned results.
+  const saveScenario = !scrUrl && definition.settings.saveScenario && module && step && lastRun
+    && decisionSourceOf(module) && output?.outputs?.length
+    ? <SaveScenarioButton module={module} step={step} inputs={lastRun.inputs} outputs={output.outputs} />
+    : null;
+  const batch = definition.settings.batchFromFile
+    ? <BatchFromFile definition={definition} step={step} scrInfo={scrUrl ? scrInfo : null} />
+    : null;
 
   // Unified layout for inline/below modes
-  const unifiedLayout = definition.layout;
+  const unifiedLayout = viewLayout;
 
   const fieldLabel = (parameterId: string) => {
     for (const s of definition.layout.sections) {
@@ -323,6 +502,24 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     </Alert>
   );
 
+  const prefillNote = prefilled && prefilled.length > 0 && (
+    <Alert variant="info" title="Filled from the link">
+      {nameList(prefilled)} {prefilled.length === 1 ? 'was' : 'were'} filled in from the link. Check the values, then run the app.
+    </Alert>
+  );
+
+  const lookupNote = lookupProblems.length > 0 && (
+    <Alert variant="warning" title="Some options could not be read from CAS">
+      {lookupProblems.join(' ')} The options set in the app are shown instead.
+    </Alert>
+  );
+
+  const logNote = logProblem && (
+    <Alert variant="warning" title="Run log not written" dismissible onClose={() => setLogProblem(null)}>
+      {logProblem}
+    </Alert>
+  );
+
   const validationSummary = invalidCount > 0 && (
     <Alert key={blockedRuns} variant="error" title="Not run: check the highlighted fields">
       {invalidCount === 1 ? '1 field needs' : `${invalidCount} fields need`} attention:{' '}
@@ -340,6 +537,7 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
       onClick={handleExecute}
       loading={executing}
       disabled={executing || !step}
+      style={accentButtonStyle(definition.settings)}
     >
       {executing ? 'Executing...' : submitLabel}
     </Button>
@@ -357,16 +555,16 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
     // Build separate input-only and output-only layouts; static fields go
     // into the input side.
     const inputLayout = {
-      ...definition.layout,
-      sections: definition.layout.sections.map(s => ({
+      ...viewLayout,
+      sections: viewLayout.sections.map(s => ({
         ...s,
         fields: s.fields.filter(f => f.direction === 'input' || f.direction === 'static'),
       })).filter(s => s.fields.length > 0),
     };
 
     const outputLayout_ = {
-      ...definition.layout,
-      sections: definition.layout.sections.map(s => ({
+      ...viewLayout,
+      sections: viewLayout.sections.map(s => ({
         ...s,
         fields: s.fields.filter(f => f.direction === 'output'),
       })).filter(s => s.fields.length > 0),
@@ -384,6 +582,9 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
         )}
 
         {driftNotice}
+        {prefillNote}
+        {lookupNote}
+        {logNote}
 
         <div className="ui-runner__content ui-runner__content--side-by-side">
           {/* Input side */}
@@ -399,11 +600,14 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   inputParameters={step?.inputs}
                   fieldErrors={fieldErrors}
                   focusErrorsRequest={blockedRuns}
+                  submit={submitPosition === 'top' ? { node: executeButton, position: 'top' } : undefined}
                 />
               </CardBody>
-              <CardFooter>
-                {executeButton}
-              </CardFooter>
+              {submitPosition !== 'top' && (
+                <CardFooter>
+                  {executeButton}
+                </CardFooter>
+              )}
             </Card>
           )}
 
@@ -418,6 +622,8 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
                   onInputChange={setInputValues}
                   disabled={true}
                 />
+                <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
+                {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} extra={saveScenario} />}
               </CardBody>
             </Card>
           )}
@@ -430,16 +636,58 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             {error}
           </Alert>
         )}
+
+        {historyPanel}
+        {batch}
+        {modelInfo}
       </div>
     );
   }
 
-  // Inline or below: single unified card
+  // Inline or below: single unified card. Tabs keep the run button under
+  // the panels (or at the top); steps put it on the last step with inputs.
+  const display = unifiedLayout.display ?? 'page';
+  const shown = shownSections(unifiedLayout);
+  const current = Math.min(activeSection, Math.max(shown.length - 1, 0));
+  let runStep = -1;
+  shown.forEach((s, i) => { if (s.fields.some(f => f.direction === 'input' && f.visible)) runStep = i; });
+  if (runStep < 0) runStep = shown.length - 1;
+  const formSubmit = display === 'steps'
+    ? undefined
+    : display === 'tabs'
+      ? (submitPosition === 'top' ? { node: executeButton, position: 'top' as const } : undefined)
+      : (submitPosition === 'bottom' ? undefined : { node: executeButton, position: submitPosition });
+  const footerButton = display === 'page' ? submitPosition === 'bottom' : display === 'tabs' ? submitPosition !== 'top' : false;
+  const goNext = () => {
+    const section = shown[current];
+    const ids = new Set(section.fields.map(f => f.parameterId));
+    const problems = Object.keys(validateInputs(definition, step, inputValues)).filter(k => ids.has(k));
+    if (problems.length > 0) {
+      setStepCheck(section.id);
+      return;
+    }
+    setStepCheck(null);
+    setActiveSection(current + 1);
+  };
+  const stepNav = display === 'steps' && shown.length > 0 ? (
+    <div className="ui-runner__steps-nav">
+      {current > 0 && (
+        <Button variant="secondary" onClick={() => { setStepCheck(null); setActiveSection(current - 1); }}>Back</Button>
+      )}
+      {current === runStep ? executeButton : current < shown.length - 1 && (
+        <Button variant="primary" onClick={goNext}>Next</Button>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="ui-runner">
       {renderHeader()}
 
       {driftNotice}
+        {prefillNote}
+        {lookupNote}
+        {logNote}
 
       <Card>
         <CardHeader
@@ -467,11 +715,19 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
             inputParameters={step?.inputs}
             fieldErrors={fieldErrors}
             focusErrorsRequest={blockedRuns}
+            submit={formSubmit}
+            active={current}
+            onActiveChange={setActiveSection}
+            stepNav={stepNav}
           />
+          <RunMessages rules={definition.settings.messageRules} outputs={outputValues} />
+          {!executing && <ResultDownloads definition={definition} run={lastRun} outputs={outputValues} extra={saveScenario} />}
         </CardBody>
-        <CardFooter>
-          {executeButton}
-        </CardFooter>
+        {footerButton && (
+          <CardFooter>
+            {executeButton}
+          </CardFooter>
+        )}
       </Card>
 
       {validationSummary}
@@ -481,6 +737,10 @@ export const UIRunner: React.FC<UIRunnerProps> = ({
           {error}
         </Alert>
       )}
+
+      {historyPanel}
+        {batch}
+      {modelInfo}
     </div>
   );
 };

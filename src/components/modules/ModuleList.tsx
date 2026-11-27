@@ -1,17 +1,17 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useCallback } from 'react';
+import React from 'react';
 import { Module, ModuleType, getModuleStepCount, getModuleType } from '../../types';
-import { DataTable, Column } from '../common/DataTable';
+import { ListColumn, ListSort, ListTable, ListToolbar } from '../common/ListTable';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
-import { SearchInput } from '../common/SearchInput';
 import { Pagination } from '../common/Pagination';
 import { PageHeader } from '../layout/Layout';
 import { useSasAuth } from '../../auth';
 import { useDebouncedUrlText } from '../../utils/listUrlState';
+import type { ModuleTypeCounts } from '../../hooks/useModules';
 
 interface ModuleListProps {
   modules: Module[];
@@ -19,6 +19,10 @@ interface ModuleListProps {
   error?: string | null;
   onSelectModule: (module: Module) => void;
   onRefresh: () => void;
+  /** Modules per type for the filter chips; null while they are counted. */
+  typeCounts?: ModuleTypeCounts | null;
+  /** Saved UI apps per module (lowercased module id). */
+  appCounts?: Record<string, number>;
   totalCount: number;
   filteredCount: number;
   currentPage: number;
@@ -36,6 +40,9 @@ interface ModuleListProps {
 
 type SortDirection = 'asc' | 'desc' | null;
 
+/** Chip order as in the design; a type with no modules is left out (except the active one). */
+const TYPE_CHIPS: (ModuleType | 'All')[] = ['All', 'Decision', 'Data', 'Model'];
+
 // Parse sortBy string like "name:ascending" into field and direction
 const parseSortBy = (sortBy: string): { field: string; direction: SortDirection } => {
   if (!sortBy) return { field: '', direction: null };
@@ -52,6 +59,8 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   error,
   onSelectModule,
   onRefresh,
+  typeCounts = null,
+  appCounts = {},
   totalCount,
   filteredCount,
   currentPage,
@@ -71,72 +80,42 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   // clears the box.
   const [searchText, setSearchText] = useDebouncedUrlText(searchTerm, onSearch);
 
-  // Parse current sort state
-  const currentSort = parseSortBy(sortBy);
+  const parsedSort = parseSortBy(sortBy);
+  const listSort: ListSort | null = parsedSort.field && parsedSort.direction
+    ? { key: parsedSort.field, dir: parsedSort.direction }
+    : null;
 
-  // Handle column header click for sorting
-  const handleSortClick = useCallback((field: string) => {
-    let newDirection: 'asc' | 'desc' = 'asc';
-    if (currentSort.field === field) {
-      // Toggle direction if same field
-      newDirection = currentSort.direction === 'asc' ? 'desc' : 'asc';
-    }
-    onSort(field, newDirection);
-  }, [currentSort, onSort]);
-
-  // Render sortable header
-  const renderSortableHeader = (label: string, field: string) => {
-    const isActive = currentSort.field === field;
-    const direction = isActive ? currentSort.direction : null;
-
-    return (
-      <button
-        className={`sas-table__sort-header ${isActive ? 'sas-table__sort-header--active' : ''}`}
-        onClick={() => handleSortClick(field)}
-        type="button"
-      >
-        {label}
-        <span className="sas-table__sort-icon">
-          {direction === 'asc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          )}
-          {direction === 'desc' && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
-          )}
-          {!direction && (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.3" aria-hidden="true">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
-          )}
-        </span>
-      </button>
-    );
-  };
-
-  const isFiltered = typeFilter !== 'All' || !!searchTerm;
   const displayCount = typeFilter !== 'All' ? filteredCount : totalCount;
 
-  const columns: Column<Module>[] = [
+  // MAS sorts on the server, by name and modified time only.
+  const columns: ListColumn<Module>[] = [
     {
       key: 'name',
-      header: renderSortableHeader('Module Name', 'name'),
-      width: '25%',
-      // Inline wrapper: DataTable puts the first column inside a <button>.
-      render: (module) => (
-        <span className="module-list__name-cell">
-          <span className="module-list__name-cell-name">{module.name}</span>
-          <span className="module-list__name-cell-id">{module.id}</span>
-        </span>
-      ),
+      label: 'Name',
+      width: '36%',
+      sortable: true,
+      // Inline wrapper: ListTable puts the first column inside a <button>.
+      render: (module) => {
+        const apps = appCounts[module.id.toLowerCase()] ?? 0;
+        return (
+          <span className="list-cell">
+            <span className="module-list__name-cell-line">
+              <span className="list-cell__main">{module.name}</span>
+              {apps > 0 && (
+                <span className="module-list__apps" title={`${apps} saved UI app${apps === 1 ? '' : 's'} use this module`}>
+                  {apps} {apps === 1 ? 'app' : 'apps'}
+                </span>
+              )}
+            </span>
+            <span className="list-cell__sub">{module.description || module.id}</span>
+          </span>
+        );
+      },
     },
     {
       key: 'type',
-      header: 'Type',
-      width: '10%',
+      label: 'Type',
+      width: '12%',
       render: (module) => {
         const moduleType = getModuleType(module);
         const variant = moduleType === 'Model' ? 'info' :
@@ -146,50 +125,30 @@ export const ModuleList: React.FC<ModuleListProps> = ({
       },
     },
     {
-      key: 'stepsIds',
-      header: 'Steps',
+      key: 'steps',
+      label: 'Steps',
       width: '10%',
       align: 'center',
       render: (module) => {
         const count = getModuleStepCount(module);
         // -1 means steps exist but count unknown
-        return <Badge variant="default">{count === -1 ? '...' : count}</Badge>;
+        return count === -1 ? '…' : count;
       },
     },
     {
       key: 'createdBy',
-      header: 'Created By',
-      width: '15%',
-      render: (module) => <span>{module.createdBy ?? ''}</span>,
+      label: 'Created by',
+      width: '16%',
+      render: (module) => module.createdBy ?? '',
     },
     {
       key: 'modifiedTimeStamp',
-      header: renderSortableHeader('Last Modified', 'modifiedTimeStamp'),
+      label: 'Modified',
       width: '20%',
+      sortable: true,
+      firstSortDir: 'desc',
       render: (module) => (
-        <span className="module-list__date">
-          {new Date(module.modifiedTimeStamp).toLocaleString()}
-        </span>
-      ),
-    },
-    {
-      key: 'actions',
-      header: 'Actions',
-      width: '15%',
-      align: 'center',
-      render: (module) => (
-        <div className="module-list__actions">
-          <Button
-            variant="tertiary"
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectModule(module);
-            }}
-          >
-            View
-          </Button>
-        </div>
+        <span className="list-nowrap">{new Date(module.modifiedTimeStamp).toLocaleString()}</span>
       ),
     },
   ];
@@ -201,7 +160,7 @@ export const ModuleList: React.FC<ModuleListProps> = ({
     return (
       <div className="module-list">
         <PageHeader
-          title="Modules"
+          title="All Modules"
           subtitle="Please log in to view modules"
         />
         <div className="module-list__login-prompt">
@@ -232,8 +191,8 @@ export const ModuleList: React.FC<ModuleListProps> = ({
   return (
     <div className="module-list">
       <PageHeader
-        title="Modules"
-        subtitle={isFiltered ? `Filtered to ${displayCount} / ${totalCount} modules` : `${totalCount} modules loaded`}
+        title="All Modules"
+        count={loading && modules.length === 0 ? undefined : `${displayCount} ${displayCount === 1 ? 'module' : 'modules'}`}
         actions={
           <Button variant="secondary" onClick={onRefresh}>
             Refresh
@@ -241,28 +200,18 @@ export const ModuleList: React.FC<ModuleListProps> = ({
         }
       />
 
-      <div className="module-list__toolbar">
-        <div className="module-list__type-filter">
-          <label htmlFor="type-filter" className="module-list__type-filter-label">Type:</label>
-          <select
-            id="type-filter"
-            className="module-list__type-filter-select"
-            value={typeFilter}
-            onChange={(e) => onTypeFilter(e.target.value as ModuleType | 'All')}
-          >
-            <option value="All">All</option>
-            <option value="Model">Model</option>
-            <option value="Decision">Decision</option>
-          </select>
-        </div>
-        <SearchInput
-          className="module-list__search"
-          aria-label="Search all modules by name"
-          placeholder="Search all modules by name..."
-          value={searchText}
-          onChange={setSearchText}
-        />
-      </div>
+      <ListToolbar
+        chips={TYPE_CHIPS.map(c => ({ value: c, label: c, count: typeCounts ? typeCounts[c] : null }))}
+        activeChip={typeFilter}
+        onChipChange={onTypeFilter}
+        chipsLabel="Filter by type"
+        search={{
+          value: searchText,
+          onChange: setSearchText,
+          placeholder: 'Search modules by name',
+          ariaLabel: 'Search all modules by name',
+        }}
+      />
 
       {error && (
         <Alert
@@ -278,13 +227,18 @@ export const ModuleList: React.FC<ModuleListProps> = ({
         </Alert>
       )}
 
-      <DataTable
+      <ListTable
+        label="Modules"
+        storageKey="modules"
         columns={columns}
-        data={modules}
-        keyField="id"
+        rows={modules}
+        rowKey={(m) => m.id}
+        sort={listSort}
+        onSortChange={(s) => onSort(s.key, s.dir)}
         onRowClick={onSelectModule}
         loading={loading}
-        emptyMessage={searchTerm ? `No modules found matching "${searchTerm}".` : "No modules found. Create a module to get started."}
+        loadingMessage="Loading modules..."
+        emptyMessage={searchTerm ? `No modules found matching "${searchTerm}".` : 'No modules found. Create a module to get started.'}
       />
 
       {totalPages > 1 && (

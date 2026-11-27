@@ -499,3 +499,649 @@
     flex-direction: column;
   }
 }
+
+/* Table widget (3.1): a DataGrid or array output as a table. */
+.ui-runner__table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ui-runner__table-wrap:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__table th,
+.ui-runner__table td {
+  padding: 6px var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--sas-gray-200);
+  white-space: nowrap;
+}
+
+.ui-runner__table th {
+  position: sticky;
+  top: 0;
+  background: var(--sas-gray-100);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-800);
+}
+
+.ui-runner__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ui-runner__table-more {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--sas-text-muted);
+}
+
+/* The run button inside the form (at the top, or after the inputs). */
+.ui-runner__submit {
+  display: flex;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+/* A section with a colour line (3.1): the line is decoration; the title
+   keeps its normal text colour, so contrast never depends on the colour. */
+.ui-runner__section--colored {
+  border-left: 4px solid var(--section-color);
+  padding-left: var(--space-3);
+}
+
+/* A run button in the app's own colour: darken on hover instead of the
+   standard blue hover colour. */
+.sas-button--primary[style]:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
+/* Date and datetime picker: the control, then the SAS value it sends. */
+.ui-runner__date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Checkbox input: a real checkbox with Yes / No beside it. */
+.ui-runner__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+}
+
+.ui-runner__checkbox input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sas-blue-primary);
+  cursor: pointer;
+}
+
+.ui-runner__checkbox input:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__checkbox-text {
+  color: var(--sas-gray-800);
+}
+
+/* Checkbox result: a ticked or empty box, always with Yes or No. */
+.ui-runner__checkbox-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--sas-gray-800);
+  font-weight: var(--font-weight-medium);
+}
+
+.ui-runner__checkbox-icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  color: var(--sas-gray-600);
+}
+
+.ui-runner__checkbox-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ui-runner__checkbox-result--yes .ui-runner__checkbox-icon {
+  color: var(--sas-success-dark);
+}
+
+/* File upload: preview, name and size, the encoded length against the limit. */
+.ui-runner__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px dashed var(--sas-gray-400);
+  border-radius: var(--radius-md);
+  background: var(--sas-white);
+}
+
+.ui-runner__file--over {
+  border-style: solid;
+  border-color: var(--sas-blue-primary);
+  background: var(--sas-blue-lighter);
+}
+
+.ui-runner__file--invalid {
+  border-color: var(--sas-error-dark);
+}
+
+.ui-runner__file-input {
+  max-width: 100%;
+  font: inherit;
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__file-input:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__file-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--sas-gray-200);
+}
+
+.ui-runner__file-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.ui-runner__file-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.ui-runner__file-hint {
+  color: var(--sas-text-muted);
+}
+
+.ui-runner__file-over {
+  color: var(--sas-error-dark);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Percent and currency: the number with its sign beside it. */
+.ui-runner__amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ui-runner__amount-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-runner__amount-symbol {
+  position: absolute;
+  left: var(--space-3);
+  color: var(--sas-gray-700);
+  pointer-events: none;
+}
+
+.ui-runner__amount-box .sas-input {
+  padding-left: calc(var(--space-3) + 2.2em);
+}
+
+.ui-runner__amount-box--suffix .ui-runner__amount-symbol {
+  left: auto;
+  right: var(--space-3);
+}
+
+.ui-runner__amount-box--suffix .sas-input {
+  padding-left: var(--space-3);
+  padding-right: calc(var(--space-3) + 1.2em);
+  text-align: right;
+}
+
+/* KPI tile: a large number, its unit, and the band's word with a colour stripe. */
+.ui-runner__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--sas-white);
+}
+
+.ui-runner__kpi--banded {
+  border-left: 6px solid var(--kpi-color);
+}
+
+.ui-runner__kpi-value {
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-runner__kpi-unit {
+  margin-left: 0.25em;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-gray-700);
+}
+
+.ui-runner__kpi-band {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-medium);
+  color: var(--sas-gray-800);
+}
+
+.ui-runner__kpi-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--kpi-color);
+}
+
+/* Model information panel (model modules). */
+.ui-runner__model-info {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--sas-white);
+}
+
+.ui-runner__model-info-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ui-runner__model-info-head h3 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.ui-runner__model-info-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+}
+
+.ui-runner__model-info-list dt {
+  font-size: var(--font-size-sm);
+  color: var(--sas-text-muted);
+}
+
+.ui-runner__model-info-list dd {
+  margin: 2px 0 0;
+  color: var(--sas-gray-900);
+  overflow-wrap: anywhere;
+}
+
+.ui-runner__model-info-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+/* The app author's messages after a run (message rules). */
+.ui-runner__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ui-runner__message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+  color: var(--sas-gray-900);
+}
+
+.ui-runner__message-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.ui-runner__message--info { background: var(--sas-info-light); border-color: var(--sas-info-dark); }
+.ui-runner__message--info .ui-runner__message-icon { color: var(--sas-info-dark); }
+.ui-runner__message--success { background: var(--sas-success-light); border-color: var(--sas-success-dark); }
+.ui-runner__message--success .ui-runner__message-icon { color: var(--sas-success-dark); }
+.ui-runner__message--warning { background: var(--sas-warning-light); border-color: var(--sas-warning-dark); }
+.ui-runner__message--warning .ui-runner__message-icon { color: var(--sas-warning-dark); }
+.ui-runner__message--error { background: var(--sas-error-light); border-color: var(--sas-error-dark); }
+.ui-runner__message--error .ui-runner__message-icon { color: var(--sas-error-dark); }
+
+/* Bar chart: label, bar, value written beside it; a table view on request. */
+.ui-runner__chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ui-runner__chart-toggle {
+  align-self: flex-end;
+  border: 0;
+  background: none;
+  padding: 2px var(--space-1);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--sas-blue-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ui-runner__chart-toggle:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.ui-runner__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ui-runner__bar-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sas-gray-800);
+}
+
+.ui-runner__bar-track {
+  height: 14px;
+  background: var(--sas-gray-100);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ui-runner__bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--sas-blue-primary);
+  border-radius: 0 4px 4px 0;
+}
+
+.ui-runner__bar--negative {
+  background: var(--sas-gray-600);
+}
+
+.ui-runner__bar-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--sas-gray-900);
+  min-width: 4ch;
+  text-align: right;
+}
+
+/* Result downloads after a run. */
+.ui-runner__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* Score a file (batch from a CSV file). */
+.ui-runner__batch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-lg);
+  background: var(--sas-white);
+}
+
+.ui-runner__batch h3 {
+  margin: 0;
+  font-size: var(--font-size-md);
+}
+
+.ui-runner__batch-hint,
+.ui-runner__batch-summary {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--sas-gray-800);
+}
+
+.ui-runner__batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ui-runner__batch-error {
+  margin: 0;
+  color: var(--sas-error-dark);
+  font-size: var(--font-size-sm);
+}
+
+/* Sections as tabs. */
+.ui-runner__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--sas-gray-300);
+  margin-bottom: var(--space-4);
+}
+
+.ui-runner__tab {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  color: var(--sas-gray-700);
+  cursor: pointer;
+}
+
+.ui-runner__tab:hover {
+  color: var(--sas-gray-900);
+  background: var(--sas-gray-100);
+}
+
+.ui-runner__tab--on {
+  color: var(--sas-blue-dark);
+  border-bottom-color: var(--sas-blue-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ui-runner__tab:focus-visible,
+.ui-runner__form--tabs [role='tabpanel']:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Sections as steps. */
+.ui-runner__steps-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.ui-runner__steps-track {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-runner__steps-track li {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--sas-gray-200);
+}
+
+.ui-runner__steps-track .ui-runner__step--done,
+.ui-runner__steps-track .ui-runner__step--on {
+  background: var(--sas-blue-primary);
+}
+
+.ui-runner__steps-title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  color: var(--sas-gray-900);
+}
+
+.ui-runner__steps-nav {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* A returned image. */
+.ui-runner__image {
+  margin: 0;
+}
+
+.ui-runner__image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ui-runner__image a:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+  display: inline-block;
+}
+
+/* DataGrid editor. */
+.ui-runner__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ui-runner__grid-table td {
+  padding: 2px 4px;
+}
+
+.ui-runner__grid-input {
+  min-width: 110px;
+  min-height: 32px;
+  padding: 2px 6px;
+}
+
+.ui-runner__grid-num {
+  width: 3ch;
+  color: var(--sas-text-muted);
+  text-align: right;
+}
+
+.ui-runner__grid-type {
+  font-weight: var(--font-weight-normal);
+  color: var(--sas-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ui-runner__grid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ui-runner__grid-file:focus-within {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.ui-runner__grid-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--sas-gray-200);
+  border-radius: var(--radius-md);
+}
+
+.ui-runner__grid-map legend {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__grid-map label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-sm);
+}
+
+.ui-runner__grid-map .ui-runner__grid-actions {
+  grid-column: 1 / -1;
+}
+
+.ui-runner__grid-input--invalid {
+  border-color: var(--sas-error-dark);
+  box-shadow: inset 0 0 0 1px var(--sas-error-dark);
+}
+
+.ui-runner__grid-problems {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--sas-error-dark);
+  font-size: var(--font-size-sm);
+}
+
+/* Checkbox group (list inputs). */
+.ui-runner__checkgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}

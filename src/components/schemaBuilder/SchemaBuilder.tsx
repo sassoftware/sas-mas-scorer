@@ -7,6 +7,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
 import { StepNav } from '../common/StepNav';
+import { FileIntake, FileIntakeMode } from '../common/FileIntake';
 import { VariableTable } from './VariableTable';
 import { CodeOutput } from './CodeOutput';
 import { DataGridOutputNotes } from './DataGridOutputNotes';
@@ -23,6 +24,10 @@ interface SchemaBuilderProps {
 
 export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
   const [inputText, setInputText] = useState('');
+  // The file the sample came from, when it was uploaded.
+  const [fileName, setFileName] = useState<string | null>(null);
+  // Upload file or Paste text; kept across the steps.
+  const [intakeMode, setIntakeMode] = useState<FileIntakeMode>('upload');
   const [inputVarName, setInputVarName] = useState('input_string');
   const [mappings, setMappings] = useState<VariableMapping[]>([]);
   const [format, setFormat] = useState<InputFormat>('unknown');
@@ -103,21 +108,24 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
     [mappings, inputVarName],
   );
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setInputText(reader.result);
-        doParse(reader.result);
-      }
-    };
-    reader.onerror = () => setError('Failed to read file');
-    reader.readAsText(file);
-    // Reset so the same file can be re-selected
-    e.target.value = '';
+  // A picked or dropped file is read and parsed at once; its text also fills
+  // Paste text, so it can be adjusted and parsed again.
+  const handleFile = useCallback(async (file: File) => {
+    try {
+      const text = await file.text();
+      setFileName(file.name);
+      setInputText(text);
+      doParse(text);
+    } catch {
+      setError('Failed to read file');
+    }
   }, [doParse]);
+
+  const handleClearFile = useCallback(() => {
+    setFileName(null);
+    setInputText('');
+    setError(null);
+  }, []);
 
   return (
     <div className="schema-builder">
@@ -172,38 +180,35 @@ export const SchemaBuilder: React.FC<SchemaBuilderProps> = () => {
                 </span>
               )}
             </div>
-            <div className="schema-builder__sample-buttons">
-              {/* Visually hidden but still focusable: [hidden]/display:none would
-                  drop the control out of the tab order and out of the a11y tree,
-                  so the ring is carried by the label instead (#94). */}
-              <input
-                id="sb-file-upload"
-                type="file"
-                accept=".json,.xml,.txt"
-                onChange={handleFileUpload}
-                className="sr-only schema-builder__file-input"
-              />
-              <label
-                htmlFor="sb-file-upload"
-                className="sas-button sas-button--secondary sas-button--small schema-builder__file-label"
-              >
-                Upload file
-              </label>
-            </div>
           </div>
-          <textarea
-            className="sas-textarea schema-builder__schema-input"
-            aria-label="Schema sample"
-            placeholder="Paste your XML or JSON sample here..."
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            spellCheck={false}
+          <FileIntake
+            accept=".json,.xml,.txt"
+            prompt="Drag and drop your XML or JSON file here, or"
+            acceptHint="Accepts .json, .xml and .txt files"
+            onFile={handleFile}
+            // Coming back to this step shows the sample the way it was given.
+            defaultMode={intakeMode}
+            onModeChange={setIntakeMode}
+            loaded={fileName ? {
+              name: fileName,
+              detail: format !== 'unknown' && mappings.length > 0 ? <Badge>{format.toUpperCase()}</Badge> : undefined,
+              onClear: handleClearFile,
+            } : null}
+            paste={{
+              value: inputText,
+              onChange: setInputText,
+              label: 'Schema sample',
+              placeholder: 'Paste your XML or JSON sample here...',
+            }}
           />
-          <div className="schema-builder__panel-actions">
-            <Button variant="primary" onClick={handleParse} disabled={!inputText.trim()}>
-              Parse &amp; extract variables
-            </Button>
-          </div>
+          {/* A file is parsed as soon as it is picked; pasted text when asked. */}
+          {intakeMode === 'paste' && (
+            <div className="schema-builder__panel-actions">
+              <Button variant="primary" onClick={handleParse} disabled={!inputText.trim()}>
+                Parse &amp; extract variables
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

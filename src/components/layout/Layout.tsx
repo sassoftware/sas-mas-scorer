@@ -16,26 +16,35 @@ interface LayoutProps {
   children: React.ReactNode;
   activeView: ViewType;
   onNavigate: (view: ViewType) => void;
-  selectedModule?: Module | null;
-  recentModules?: Module[];
-  onSelectModule?: (module: Module) => void;
+  /** The module open now, or the last one opened; unset until one is opened. */
+  lastModule?: Module | null;
+  /** Saved UI apps on that module (the "2 apps" tag). */
+  lastModuleApps?: number;
   onOpenSettings?: () => void;
   activeConnectionName?: string | null;
-  recentUIApps?: UIDefinitionSummary[];
-  onSelectUIApp?: (id: string) => void;
+  /** The saved UI app last run or edited; unset until one is. */
+  lastUIApp?: UIDefinitionSummary | null;
+  onRunUIApp?: (id: string) => void;
+  onEditUIApp?: (id: string) => void;
+  /**
+   * Full-window work view (the UI app builder): no navigation sidebar and no
+   * page padding, so the view can use the whole window under the header.
+   */
+  focus?: boolean;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
   children,
   activeView,
   onNavigate,
-  selectedModule,
-  recentModules,
-  onSelectModule,
+  lastModule,
+  lastModuleApps = 0,
   onOpenSettings,
   activeConnectionName,
-  recentUIApps,
-  onSelectUIApp,
+  lastUIApp,
+  onRunUIApp,
+  onEditUIApp,
+  focus = false,
 }) => {
   // Below the layout breakpoint (layout.css) the sidebar is an off-canvas
   // drawer behind the header's toggle; above it these have no visible effect.
@@ -105,33 +114,33 @@ export const Layout: React.FC<LayoutProps> = ({
     },
     [closeNav, onNavigate]
   );
-  const handleSelectModule = useCallback(
-    (module: Module) => {
-      closeNav();
-      onSelectModule?.(module);
-    },
-    [closeNav, onSelectModule]
-  );
-  const handleSelectUIApp = useCallback(
+  const handleRunUIApp = useCallback(
     (id: string) => {
       closeNav();
-      onSelectUIApp?.(id);
+      onRunUIApp?.(id);
     },
-    [closeNav, onSelectUIApp]
+    [closeNav, onRunUIApp]
+  );
+  const handleEditUIApp = useCallback(
+    (id: string) => {
+      closeNav();
+      onEditUIApp?.(id);
+    },
+    [closeNav, onEditUIApp]
   );
 
   return (
-    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}`}>
+    <div className={`sas-layout${navCollapsed ? ' sas-layout--nav-collapsed' : ''}${focus ? ' sas-layout--focus' : ''}`}>
       <Header
         onOpenSettings={onOpenSettings}
         activeConnectionName={activeConnectionName}
         navOpen={navOpen}
-        onToggleNav={toggleNav}
+        onToggleNav={focus ? undefined : toggleNav}
         navId={sidebarId}
         navToggleRef={navToggleRef}
       />
       <div className="sas-layout__container">
-        <Sidebar
+        {!focus && <Sidebar
           ref={sidebarRef}
           id={sidebarId}
           open={navOpen}
@@ -139,13 +148,13 @@ export const Layout: React.FC<LayoutProps> = ({
           onToggleCollapsed={toggleCollapsed}
           activeView={activeView}
           onNavigate={handleNavigate}
-          selectedModule={selectedModule}
-          recentModules={recentModules}
-          onSelectModule={handleSelectModule}
-          recentUIApps={recentUIApps}
-          onSelectUIApp={handleSelectUIApp}
-        />
-        {navOpen && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
+          lastModule={lastModule}
+          lastModuleApps={lastModuleApps}
+          lastUIApp={lastUIApp}
+          onRunUIApp={handleRunUIApp}
+          onEditUIApp={handleEditUIApp}
+        />}
+        {navOpen && !focus && <div className="sas-layout__scrim" onClick={closeNav} aria-hidden="true" />}
         <main className="sas-layout__main">
           <div className="sas-layout__content">{children}</div>
         </main>
@@ -156,16 +165,22 @@ export const Layout: React.FC<LayoutProps> = ({
 
 interface PageHeaderProps {
   title: string;
+  /** A muted count beside the title ("214 decisions"). */
+  count?: string;
   subtitle?: string;
   breadcrumbs?: { label: string; onClick?: () => void }[];
   actions?: React.ReactNode;
+  /** Beside the title, outside the heading: a state badge or chip (3.1). */
+  titleAddon?: React.ReactNode;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
   title,
+  count,
   subtitle,
   breadcrumbs,
   actions,
+  titleAddon,
 }) => {
   return (
     <div className="sas-page-header">
@@ -186,7 +201,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                   <span className="sas-breadcrumbs__current">{crumb.label}</span>
                 )}
                 {index < breadcrumbs.length - 1 && (
-                  <span className="sas-breadcrumbs__separator">/</span>
+                  <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
                 )}
               </li>
             ))}
@@ -195,7 +210,20 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       )}
       <div className="sas-page-header__main">
         <div className="sas-page-header__title-group">
-          <h1 className="sas-page-header__title">{title}</h1>
+          {(() => {
+            const heading = (
+              <h1 className="sas-page-header__title">
+                {title}
+                {count && <span className="sas-page-header__count">{count}</span>}
+              </h1>
+            );
+            return titleAddon ? (
+              <div className="sas-page-header__title-row">
+                {heading}
+                {titleAddon}
+              </div>
+            ) : heading;
+          })()}
           {subtitle && <p className="sas-page-header__subtitle">{subtitle}</p>}
         </div>
         {actions && <div className="sas-page-header__actions">{actions}</div>}

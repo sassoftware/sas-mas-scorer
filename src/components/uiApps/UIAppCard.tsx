@@ -6,6 +6,7 @@ import { UIDefinitionSummary } from '../../types/uiBuilder';
 import { Card, CardBody } from '../common/Card';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
+import { MenuButton } from '../common/MenuButton';
 
 interface Props {
   app: UIDefinitionSummary;
@@ -41,9 +42,19 @@ export const UIAppCard: React.FC<Props> = ({ app, onRun, onEdit, onDuplicate, on
         <div className="ui-app-card__actions">
           <Button variant="primary" size="small" onClick={() => onRun(app.id)}>Run</Button>
           <Button variant="secondary" size="small" onClick={() => onEdit(app.id)}>Edit</Button>
-          <Button variant="tertiary" size="small" onClick={() => onDuplicate(app.id)}>Duplicate</Button>
-          <Button variant="tertiary" size="small" onClick={() => onExport(app.id)}>Export</Button>
-          <Button variant="danger" size="small" onClick={() => onDelete(app.id)}>Delete</Button>
+          <MenuButton
+            label={<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="12" cy="19" r="1.8" /></svg>}
+            ariaLabel={`More actions for ${app.name}`}
+            triggerClassName="ui-app-card__more"
+            hideChevron
+            alignEnd
+            floating
+            items={[
+              { id: 'duplicate', label: 'Duplicate', onSelect: () => onDuplicate(app.id) },
+              { id: 'export', label: 'Export', onSelect: () => onExport(app.id) },
+              { id: 'delete', label: 'Delete', onSelect: () => onDelete(app.id) },
+            ]}
+          />
         </div>
       </CardBody>
     </Card>

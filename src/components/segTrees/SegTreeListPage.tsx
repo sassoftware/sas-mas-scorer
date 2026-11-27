@@ -2,20 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { listAllSegmentationTrees, type SegmentationTreeSummary } from '../../api/segmentationTrees';
-import { formatTimestamp, truncate } from '../../utils/formatters';
+import { formatTimestamp } from '../../utils/formatters';
 import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import { registerViewCache } from '../../utils/viewCaches';
-import { Alert, Button, Loading, Pagination, SearchInput } from '../common';
+import { Alert, Button, Pagination } from '../common';
+import {
+  ListChip, ListColumn, ListSort, ListTable, ListToolbar,
+  activeColumnFilters, filterOptions, formatSortParam, parseSortParam, sortRows, timeValue,
+} from '../common/ListTable';
+import { PageHeader } from '../layout/Layout';
+import { useCurrentUserId } from '../../hooks/useCurrentUser';
 
 const PAGE_SIZE = 20;
 
-type SortDir = 'asc' | 'desc';
+type TreeFilter = 'all' | 'mine' | 'recent';
 
-// Search, sort and page live in the URL (#/segmentation-trees?q=…&page=2), so
-// Back from a tree, a reload or a shared link shows the same view.
-const LIST_DEFAULTS = { q: '', sort: 'asc', page: '1' };
+/** "Changed recently" reaches back this far. */
+const RECENT_DAYS = 30;
+
+// Search, sort, filter and page live in the URL
+// (#/segmentation-trees?q=…&sort=modified:desc&show=mine&page=2), so Back
+// from a tree, a reload or a shared link shows the same view.
+const LIST_DEFAULTS = { q: '', sort: 'name:asc', show: 'all', by: '', page: '1' };
 
 // The collection from the last visit. Coming back from a tree shows it at
 // once (the trees endpoint can be slow); it is fetched again in the
@@ -28,11 +38,54 @@ registerViewCache('segTreeList', () => {
   cachedTrees = null;
 });
 
+const BASE_COLUMNS: ListColumn<SegmentationTreeSummary>[] = [
+  {
+    key: 'name',
+    label: 'Name',
+    width: '30%',
+    sortValue: (t) => t.name,
+    render: (t) => <span className="list-cell__main">{t.name}</span>,
+  },
+  {
+    key: 'description',
+    label: 'Description',
+    sortValue: (t) => t.description,
+    render: (t) => <span className="list-clamp">{t.description}</span>,
+  },
+  {
+    key: 'createdBy',
+    label: 'Created by',
+    width: '13%',
+    defaultHidden: true,
+    sortValue: (t) => t.createdBy,
+    render: (t) => t.createdBy,
+  },
+  {
+    key: 'modifiedBy',
+    label: 'Modified by',
+    width: '13%',
+    sortValue: (t) => t.modifiedBy,
+    render: (t) => t.modifiedBy,
+  },
+  {
+    key: 'modified',
+    label: 'Modified',
+    width: '18%',
+    firstSortDir: 'desc',
+    sortValue: (t) => timeValue(t.modifiedTimeStamp),
+    render: (t) => <span className="list-nowrap">{formatTimestamp(t.modifiedTimeStamp)}</span>,
+  },
+];
+
 export default function SegTreeListPage() {
   const navigate = useNavigate();
   const [allTrees, setAllTrees] = useState<SegmentationTreeSummary[]>(() => cachedTrees?.items ?? []);
   const [params, updateParams] = useListUrlParams('segtrees', LIST_DEFAULTS);
-  const sortDir: SortDir = params.sort === 'desc' ? 'desc' : 'asc';
+  const sort: ListSort = useMemo(
+    () => parseSortParam(params.sort, 'name') ?? { key: 'name', dir: 'asc' },
+    [params.sort]
+  );
+  const show: TreeFilter = params.show === 'mine' || params.show === 'recent' ? params.show : 'all';
   // 1-based, the page number <Pagination> speaks.
   const page = parsePageParam(params.page);
   // The box filters at once; the URL catches up when typing pauses.
@@ -45,10 +98,11 @@ export default function SegTreeListPage() {
   const setPage = (next: number) => updateParams({ page: String(next) });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Bumped by the alert's Retry button to re-run the load below.
+  // Bumped by Refresh and the alert's Retry button to re-run the load below.
   const [reloadToken, setReloadToken] = useState(0);
+  const me = useCurrentUserId();
 
-  // The whole collection is fetched once; search and sort run in memory.
+  // The whole collection is fetched once; search, filter and sort run in memory.
   useEffect(() => {
     const cached = cachedTrees;
     if (reloadToken === 0 && cached && Date.now() - cached.fetchedAt < CACHE_FRESH_MS) return;
@@ -66,7 +120,9 @@ export default function SegTreeListPage() {
     return () => { active = false; };
   }, [reloadToken]);
 
-  const filtered = useMemo(() => {
+  const modifiedBy = params.by || null;
+
+  const textMatched = useMemo(() => {
     if (!search.trim()) return allTrees;
     const term = search.trim().toLowerCase();
     return allTrees.filter((t) =>
@@ -75,11 +131,46 @@ export default function SegTreeListPage() {
     );
   }, [allTrees, search]);
 
-  // Copy before sorting: `filtered` is `allTrees` itself when the search box is empty.
-  const sorted = useMemo(() => {
-    const copy = [...filtered].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-    return sortDir === 'asc' ? copy : copy.reverse();
-  }, [filtered, sortDir]);
+  // The Modified by filter (in that column's menu) applies before the chips count.
+  const searched = useMemo(
+    () => (modifiedBy ? textMatched.filter(t => t.modifiedBy === modifiedBy) : textMatched),
+    [textMatched, modifiedBy]
+  );
+
+  const { mine, recent } = useMemo(() => {
+    const since = Date.now() - RECENT_DAYS * 86_400_000;
+    return {
+      mine: me ? searched.filter(t => t.createdBy === me) : [],
+      recent: searched.filter(t => (timeValue(t.modifiedTimeStamp) ?? 0) >= since),
+    };
+  }, [searched, me]);
+
+  const chips: ListChip<TreeFilter>[] = [
+    { value: 'all', label: 'All', count: searched.length },
+    // Offered once the signed-in user is known.
+    ...(me || show === 'mine' ? [{ value: 'mine' as const, label: 'Created by me', count: me ? mine.length : null }] : []),
+    { value: 'recent', label: `Changed in the last ${RECENT_DAYS} days`, count: recent.length },
+  ];
+
+  const filtered = show === 'mine' ? mine : show === 'recent' ? recent : searched;
+
+  const columns = useMemo<ListColumn<SegmentationTreeSummary>[]>(() => {
+    const since = Date.now() - RECENT_DAYS * 86_400_000;
+    const inChip = (t: SegmentationTreeSummary) =>
+      show === 'mine' ? !!me && t.createdBy === me
+        : show === 'recent' ? (timeValue(t.modifiedTimeStamp) ?? 0) >= since
+          : true;
+    return BASE_COLUMNS.map(c => c.key !== 'modifiedBy' ? c : {
+      ...c,
+      filter: {
+        options: filterOptions(textMatched.filter(inChip), t => t.modifiedBy),
+        value: modifiedBy,
+        onChange: (v: string | null) => updateParams({ by: v ?? '', page: '1' }),
+      },
+    });
+  }, [textMatched, show, me, modifiedBy, updateParams]);
+
+  const sorted = useMemo(() => sortRows(filtered, columns, sort), [filtered, columns, sort]);
 
   const total = sorted.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -89,98 +180,63 @@ export default function SegTreeListPage() {
     return sorted.slice(start, start + PAGE_SIZE);
   }, [sorted, page, totalPages]);
 
-  const toggleSort = () => {
-    updateParams({ sort: sortDir === 'asc' ? 'desc' : 'asc', page: '1' });
-  };
-
   return (
-    <div className="flow-list">
-      <div className="flow-list__header">
-        <h1 className="flow-list__title">Segmentation Trees</h1>
-        <div className="flow-list__count">{total} tree{total !== 1 ? 's' : ''}</div>
-      </div>
+    <div className="list-page">
+      <PageHeader
+        title="Segmentation Trees"
+        count={loading && allTrees.length === 0 ? undefined : `${total} tree${total !== 1 ? 's' : ''}`}
+        actions={
+          <Button variant="secondary" onClick={() => setReloadToken((t) => t + 1)}>
+            Refresh
+          </Button>
+        }
+      />
 
-      <SearchInput
-        aria-label="Search segmentation trees"
-        value={search}
-        onChange={setSearch}
-        placeholder="Search segmentation trees (case insensitive)..."
-        className="flow-list__search"
+      <ListToolbar
+        chips={chips}
+        activeChip={show}
+        onChipChange={(v) => updateParams({ show: v, page: '1' })}
+        chipsLabel="Filter segmentation trees"
+        activeFilters={activeColumnFilters(columns)}
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: 'Search name or description',
+          ariaLabel: 'Search segmentation trees by name or description',
+        }}
       />
 
       {error && (
-        <div className="flow-list__alert">
-          <Alert
-            variant="error"
-            actions={
-              <Button variant="secondary" size="small" onClick={() => setReloadToken((t) => t + 1)}>
-                Retry
-              </Button>
-            }
-          >
-            {error}
-          </Alert>
-        </div>
+        <Alert
+          variant="error"
+          actions={
+            <Button variant="secondary" size="small" onClick={() => setReloadToken((t) => t + 1)}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       )}
 
-      <div className="flow-list__table-wrap">
-        <table className="sas-table">
-          <thead className="sas-table__head">
-            <tr>
-              <th className="sas-table__th" aria-sort={sortDir === 'asc' ? 'ascending' : 'descending'}>
-                <button
-                  type="button"
-                  className="sas-table__sort-header sas-table__sort-header--active"
-                  onClick={toggleSort}
-                >
-                  Name
-                  <span className="sas-table__sort-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                      <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-                    </svg>
-                  </span>
-                </button>
-              </th>
-              <th className="sas-table__th">Description</th>
-              <th className="sas-table__th flow-list__col--modified">Modified</th>
-              <th className="sas-table__th flow-list__col--modified-by">Modified by</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr className="sas-table__row">
-                <td colSpan={4} className="sas-table__td flow-list__empty">
-                  <Loading size="small" message="Loading segmentation trees..." />
-                </td>
-              </tr>
-            )}
-            {!loading && displayTrees.length === 0 && (
-              <tr className="sas-table__row">
-                <td colSpan={4} className="sas-table__td flow-list__empty">
-                  {search ? 'No segmentation trees match your search' : 'No segmentation trees found'}
-                </td>
-              </tr>
-            )}
-            {!loading && displayTrees.map((t) => (
-              // The row is a mouse convenience; the name link is the keyboard path.
-              <tr
-                key={t.id}
-                className="sas-table__row sas-table__row--clickable"
-                onClick={() => navigate(`/segmentation-trees/${t.id}`)}
-              >
-                <td className="sas-table__td flow-list__col--name">
-                  <Link to={`/segmentation-trees/${t.id}`} className="flow-list__row-link" onClick={(e) => e.stopPropagation()}>
-                    {t.name}
-                  </Link>
-                </td>
-                <td className="sas-table__td flow-list__col--desc">{truncate(t.description ?? '', 60)}</td>
-                <td className="sas-table__td flow-list__col--modified">{formatTimestamp(t.modifiedTimeStamp)}</td>
-                <td className="sas-table__td flow-list__col--modified-by">{t.modifiedBy}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ListTable
+        label="Segmentation trees"
+        storageKey="segtrees"
+        columns={columns}
+        rows={displayTrees}
+        rowKey={(t) => t.id}
+        sort={sort}
+        onSortChange={(s) => updateParams({ sort: formatSortParam(s), page: '1' })}
+        onRowClick={(t) => navigate(`/segmentation-trees/${t.id}`)}
+        loading={loading}
+        loadingMessage="Loading segmentation trees..."
+        emptyMessage={
+          show === 'mine' && !me ? 'Looking up who is signed in…'
+            : search ? 'No segmentation trees match your search.'
+              : show !== 'all' || modifiedBy ? 'No segmentation trees match this filter.'
+                : 'No segmentation trees found.'
+        }
+      />
 
       {totalPages > 1 && (
         <Pagination

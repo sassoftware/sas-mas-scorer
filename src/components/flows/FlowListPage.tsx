@@ -5,20 +5,26 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listAllDecisions } from '../../api/decisions';
 import type { DecisionFlow } from '../../types/sid';
-import { formatTimestamp, truncate } from '../../utils/formatters';
+import { formatTimestamp } from '../../utils/formatters';
 import { parsePageParam, useDebouncedUrlText, useListUrlParams } from '../../utils/listUrlState';
 import { registerViewCache } from '../../utils/viewCaches';
-import { Alert, Badge, Button, Loading, Pagination, SearchInput } from '../common';
+import { Alert, Badge, Button, Pagination } from '../common';
+import {
+  ListChip, ListColumn, ListSort, ListTable, ListToolbar,
+  activeColumnFilters, filterOptions, formatSortParam, parseSortParam, sortRows, timeValue,
+} from '../common/ListTable';
+import { PageHeader } from '../layout/Layout';
 import { masModuleRoute, type DecisionMasModules } from '../../api/modelPublish';
 import { useDecisionMasIndex } from '../coverage/DecisionScoreAction';
 
 const PAGE_SIZE = 20;
 
-type SortDir = 'asc' | 'desc';
+type MasFilter = 'all' | 'published' | 'not' | 'removed';
 
-// Search, sort and page live in the URL (#/flows?q=…&sort=desc&page=2), so
-// Back from a flow, a reload or a shared link shows the same view.
-const LIST_DEFAULTS = { q: '', sort: 'asc', page: '1' };
+// Search, sort, filter and page live in the URL
+// (#/flows?q=…&sort=modified:desc&mas=published&by=jdoe&page=2), so Back from a flow,
+// a reload or a shared link shows the same view.
+const LIST_DEFAULTS = { q: '', sort: 'name:asc', mas: 'all', by: '', page: '1' };
 
 // The collection from the last visit. Coming back from a flow shows it at
 // once; it is fetched again (in the background, the list stays on screen)
@@ -30,11 +36,17 @@ registerViewCache('flowList', () => {
   cachedDecisions = null;
 });
 
+const MAS_ORDER: Record<Exclude<MasFilter, 'all'>, number> = { published: 0, removed: 1, not: 2 };
+
 export default function FlowListPage() {
   const navigate = useNavigate();
   const [allDecisions, setAllDecisions] = useState<DecisionFlow[]>(() => cachedDecisions?.items ?? []);
   const [params, updateParams] = useListUrlParams('flows', LIST_DEFAULTS);
-  const sortDir: SortDir = params.sort === 'desc' ? 'desc' : 'asc';
+  const sort: ListSort = useMemo(
+    () => parseSortParam(params.sort, 'name') ?? { key: 'name', dir: 'asc' },
+    [params.sort]
+  );
+  const masFilter: MasFilter = (['published', 'not', 'removed'] as const).find(v => v === params.mas) ?? 'all';
   // 1-based, the page number <Pagination> speaks.
   const page = parsePageParam(params.page);
   // The box filters at once; the URL catches up when typing pauses.
@@ -47,11 +59,11 @@ export default function FlowListPage() {
   const setPage = (next: number) => updateParams({ page: String(next) });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Bumped by the alert's Retry button to re-run the load below.
+  // Bumped by Refresh and the alert's Retry button to re-run the load below.
   const [reloadToken, setReloadToken] = useState(0);
 
   // The whole collection is fetched once (server order: name ascending);
-  // search and sort are applied to that in-memory list below.
+  // search, filter and sort are applied to that in-memory list below.
   useEffect(() => {
     const cached = cachedDecisions;
     if (reloadToken === 0 && cached && Date.now() - cached.fetchedAt < CACHE_FRESH_MS) return;
@@ -69,8 +81,20 @@ export default function FlowListPage() {
     return () => { active = false; };
   }, [reloadToken]);
 
-  // Client-side case-insensitive filter on name and description
-  const filtered = useMemo(() => {
+  // Published / Not published, from one modelPublish query for every flow
+  // (cached; it takes a few seconds, so the list never waits for it).
+  const mas = useDecisionMasIndex(allDecisions.length > 0);
+  const masKnown = !!mas.index && !mas.loading && !mas.error;
+  const masState = useCallback((d: DecisionFlow): Exclude<MasFilter, 'all'> => {
+    const m = mas.index?.[d.id];
+    if (!m) return 'not';
+    return m.latest ? 'published' : 'removed';
+  }, [mas.index]);
+
+  const modifiedBy = params.by || null;
+
+  // Client-side case-insensitive search on name and description
+  const textMatched = useMemo(() => {
     if (!search.trim()) return allDecisions;
     const term = search.trim().toLowerCase();
     return allDecisions.filter((d) =>
@@ -79,11 +103,79 @@ export default function FlowListPage() {
     );
   }, [allDecisions, search]);
 
-  // Copy before sorting: `filtered` is `allDecisions` itself when the search box is empty.
-  const sorted = useMemo(() => {
-    const copy = [...filtered].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-    return sortDir === 'asc' ? copy : copy.reverse();
-  }, [filtered, sortDir]);
+  // The Modified by filter (in that column's menu) applies before the chips count.
+  const searched = useMemo(
+    () => (modifiedBy ? textMatched.filter(d => d.modifiedBy === modifiedBy) : textMatched),
+    [textMatched, modifiedBy]
+  );
+
+  const chips: ListChip<MasFilter>[] = useMemo(() => {
+    const count = (state: Exclude<MasFilter, 'all'>) =>
+      masKnown ? searched.filter(d => masState(d) === state).length : null;
+    return [
+      { value: 'all', label: 'All', count: searched.length },
+      { value: 'published', label: 'Published', count: count('published') },
+      { value: 'not', label: 'Not published', count: count('not') },
+      { value: 'removed', label: 'Module removed', count: count('removed') },
+    ];
+  }, [searched, masKnown, masState]);
+
+  const filtered = useMemo(
+    () => (masFilter === 'all' ? searched : masKnown ? searched.filter(d => masState(d) === masFilter) : []),
+    [searched, masFilter, masKnown, masState]
+  );
+
+  const columns: ListColumn<DecisionFlow>[] = useMemo(() => [
+    {
+      key: 'name',
+      label: 'Name',
+      width: '26%',
+      sortValue: (d) => d.name,
+      render: (d) => <span className="list-cell__main">{d.name}</span>,
+    },
+    {
+      key: 'description',
+      label: 'Description',
+      sortValue: (d) => d.description,
+      render: (d) => (
+        <span className="list-clamp" title={d.description && d.description.length > 80 ? d.description : undefined}>
+          {d.description}
+        </span>
+      ),
+    },
+    {
+      key: 'mas',
+      label: 'MAS module',
+      width: '22%',
+      sortValue: (d) => (masKnown ? MAS_ORDER[masState(d)] : null),
+      render: (d) => <MasStatus flowName={d.name} modules={mas.index?.[d.id]} loading={mas.loading} failed={!!mas.error} />,
+    },
+    {
+      key: 'modifiedBy',
+      label: 'Modified by',
+      width: '13%',
+      sortValue: (d) => d.modifiedBy,
+      filter: {
+        options: filterOptions(
+          masFilter === 'all' || !masKnown ? textMatched : textMatched.filter(d => masState(d) === masFilter),
+          d => d.modifiedBy,
+        ),
+        value: modifiedBy,
+        onChange: (v) => updateParams({ by: v ?? '', page: '1' }),
+      },
+      render: (d) => d.modifiedBy,
+    },
+    {
+      key: 'modified',
+      label: 'Modified',
+      width: '17%',
+      firstSortDir: 'desc',
+      sortValue: (d) => timeValue(d.modifiedTimeStamp),
+      render: (d) => <span className="list-nowrap">{formatTimestamp(d.modifiedTimeStamp)}</span>,
+    },
+  ], [mas.index, mas.loading, mas.error, masKnown, masState, masFilter, textMatched, modifiedBy, updateParams]);
+
+  const sorted = useMemo(() => sortRows(filtered, columns, sort), [filtered, columns, sort]);
 
   const total = sorted.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -95,109 +187,62 @@ export default function FlowListPage() {
     return sorted.slice(start, start + PAGE_SIZE);
   }, [sorted, page, totalPages]);
 
-  // Published / Not published, from one modelPublish query for every flow
-  // (cached; it takes a few seconds, so the list never waits for it).
-  const mas = useDecisionMasIndex(allDecisions.length > 0);
-
-  const toggleSort = () => {
-    updateParams({ sort: sortDir === 'asc' ? 'desc' : 'asc', page: '1' });
-  };
+  const empty = masFilter !== 'all' && !masKnown
+    ? (mas.error ? 'The publish history could not be read, so flows cannot be filtered by MAS module.' : 'Checking which flows are published…')
+    : search ? 'No decisions match your search.' : masFilter !== 'all' || modifiedBy ? 'No decisions match this filter.' : 'No decisions found.';
 
   return (
-    <div className="flow-list">
-      <div className="flow-list__header">
-        <h1 className="flow-list__title">Decision Flows</h1>
-        <div className="flow-list__count">{total} decision{total !== 1 ? 's' : ''}</div>
-      </div>
+    <div className="list-page">
+      <PageHeader
+        title="Decision Flows"
+        count={loading && allDecisions.length === 0 ? undefined : `${total} decision${total !== 1 ? 's' : ''}`}
+        actions={
+          <Button variant="secondary" onClick={() => setReloadToken((t) => t + 1)}>
+            Refresh
+          </Button>
+        }
+      />
 
-      <SearchInput
-        aria-label="Search decisions"
-        value={search}
-        onChange={setSearch}
-        placeholder="Search decisions (case insensitive)..."
-        className="flow-list__search"
+      <ListToolbar
+        chips={chips}
+        activeChip={masFilter}
+        onChipChange={(v) => updateParams({ mas: v, page: '1' })}
+        chipsLabel="Filter by MAS module"
+        activeFilters={activeColumnFilters(columns)}
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: 'Search name or description',
+          ariaLabel: 'Search decisions by name or description',
+        }}
       />
 
       {error && (
-        <div className="flow-list__alert">
-          <Alert
-            variant="error"
-            actions={
-              <Button variant="secondary" size="small" onClick={() => setReloadToken((t) => t + 1)}>
-                Retry
-              </Button>
-            }
-          >
-            {error}
-          </Alert>
-        </div>
+        <Alert
+          variant="error"
+          actions={
+            <Button variant="secondary" size="small" onClick={() => setReloadToken((t) => t + 1)}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
       )}
 
-      <div className="flow-list__table-wrap">
-        <table className="sas-table">
-          <thead className="sas-table__head">
-            <tr>
-              {/* Name is the only sortable column, so its header button is
-                  always the active one. */}
-              <th className="sas-table__th" aria-sort={sortDir === 'asc' ? 'ascending' : 'descending'}>
-                <button
-                  type="button"
-                  className="sas-table__sort-header sas-table__sort-header--active"
-                  onClick={toggleSort}
-                >
-                  Name
-                  <span className="sas-table__sort-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                      <path d={sortDir === 'asc' ? 'M12 19V5M5 12l7-7 7 7' : 'M12 5v14M5 12l7 7 7-7'} />
-                    </svg>
-                  </span>
-                </button>
-              </th>
-              <th className="sas-table__th">Description</th>
-              <th className="sas-table__th flow-list__col--modified">Modified</th>
-              <th className="sas-table__th flow-list__col--modified-by">Modified by</th>
-              <th className="sas-table__th decision-mas__col">MAS module</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr className="sas-table__row">
-                <td colSpan={5} className="sas-table__td flow-list__empty">
-                  <Loading size="small" message="Loading decisions..." />
-                </td>
-              </tr>
-            )}
-            {!loading && displayDecisions.length === 0 && (
-              <tr className="sas-table__row">
-                <td colSpan={5} className="sas-table__td flow-list__empty">
-                  {search ? 'No decisions match your search' : 'No decisions found'}
-                </td>
-              </tr>
-            )}
-            {!loading && displayDecisions.map((d) => (
-              // The row is a mouse convenience; the name link is the keyboard
-              // path, and --clickable carries the shared hover/focus tint.
-              <tr
-                key={d.id}
-                className="sas-table__row sas-table__row--clickable"
-                onClick={() => navigate(`/flows/${d.id}`)}
-              >
-                <td className="sas-table__td flow-list__col--name">
-                  <Link to={`/flows/${d.id}`} className="flow-list__row-link" onClick={(e) => e.stopPropagation()}>
-                    {d.name}
-                  </Link>
-                </td>
-                <td className="sas-table__td flow-list__col--desc">{truncate(d.description ?? '', 60)}</td>
-                <td className="sas-table__td flow-list__col--modified">{formatTimestamp(d.modifiedTimeStamp)}</td>
-                <td className="sas-table__td flow-list__col--modified-by">{d.modifiedBy}</td>
-                <td className="sas-table__td decision-mas__col">
-                  <MasStatus flowName={d.name} modules={mas.index?.[d.id]} loading={mas.loading} failed={!!mas.error} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ListTable
+        label="Decision flows"
+        storageKey="flows"
+        columns={columns}
+        rows={displayDecisions}
+        rowKey={(d) => d.id}
+        sort={sort}
+        onSortChange={(s) => updateParams({ sort: formatSortParam(s), page: '1' })}
+        onRowClick={(d) => navigate(`/flows/${d.id}`)}
+        loading={loading}
+        loadingMessage="Loading decisions..."
+        emptyMessage={empty}
+      />
 
       {totalPages > 1 && (
         <Pagination

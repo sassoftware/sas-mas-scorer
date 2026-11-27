@@ -58,100 +58,31 @@
   font-style: italic;
 }
 
-/* ─── Dashboard Layout ─── */
-
-.coverage-dashboard {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: var(--space-6);
-}
-
-@media (max-width: 800px) {
-  .coverage-dashboard {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ─── Coverage Gauge ─── */
-
-.coverage-gauge-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.coverage-gauge {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: var(--space-4) 0;
-}
-
-.coverage-gauge__ring {
-  width: 140px;
-  height: 140px;
-  transform: rotate(-90deg);
-}
-
-.coverage-gauge__track {
-  fill: none;
-  stroke: var(--sas-gray-200);
-  stroke-width: 10;
-}
-
-.coverage-gauge__fill {
-  fill: none;
-  stroke: var(--sas-blue-primary);
-  stroke-width: 10;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s ease;
-}
-
-.coverage-gauge__value {
-  position: absolute;
-  top: calc(var(--space-4) + 46px);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--sas-gray-800);
-}
-
-.coverage-gauge__label {
-  font-size: var(--font-size-sm);
-  color: var(--sas-gray-600);
-  margin-top: var(--space-2);
-}
-
 /* ─── Stats Grid ─── */
 
-/* The tiles are the shared `.sas-card .sas-stat-card` (components.css); this
-   file keeps only the grid minimum and the two accent modifiers. */
+/* The tiles are the shared `.sas-card .sas-stat-card` (components.css), five
+   in one row (Figma 11/13); this file keeps only the grid and the accents. */
 .coverage-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
-.coverage-stat--success {
-  border-left-color: var(--sas-success);
+@media (max-width: 1100px) {
+  .coverage-stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
 }
 
-.coverage-stat--success .sas-stat-value {
-  color: var(--sas-success-dark);
-}
+.coverage-stat--overall { --sas-stat-accent: var(--sas-blue-primary); }
+.coverage-stat--success { --sas-stat-accent: var(--sas-success); }
+.coverage-stat--error { --sas-stat-accent: var(--sas-error); }
+.coverage-stat--date { --sas-stat-accent: var(--sas-gray-800); }
 
-.coverage-stat--error {
-  border-left-color: var(--sas-error);
-}
-
-.coverage-stat--error .sas-stat-value {
-  color: var(--sas-error-dark);
-}
-
-/* The last tile shows a formatted date, not a KPI numeral: at the 3xl
-   display size it wraps inside the tile. */
+/* A formatted date, not a KPI numeral: at the 3xl display size it wraps. */
 .coverage-stat--date .sas-stat-value {
   font-size: var(--font-size-xl);
+  min-height: calc(var(--font-size-3xl) * 1.1);
 }
 
 /* ─── Coverage by Type Bars ─── */
@@ -271,86 +202,21 @@
   color: var(--sas-text-muted);
 }
 
-/* ─── Detail Table ─── */
+/* ─── All assets: the shared list table (listTable.css) ─── */
 
-/* The filter block is passed as CardHeader actions; .sas-card__header now
-   wraps on its own, so this feature adds nothing there. */
-.coverage-detail__filters {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
+.coverage-assets {
+  margin-top: var(--space-6);
 }
 
-/* Wraps the shared <SearchInput>; the field itself is styled by .sas-search */
-.coverage-detail__search {
-  min-width: 200px;
-}
-
-.coverage-detail__filter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.coverage-detail__filter-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--sas-gray-700);
-  white-space: nowrap;
-}
-
-.coverage-detail__select {
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--sas-gray-300);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  background: var(--sas-white);
+.coverage-assets__title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
   color: var(--sas-gray-900);
-  cursor: pointer;
 }
 
-.coverage-detail__select:focus {
-  outline: none;
-  border-color: var(--sas-blue-primary);
-  box-shadow: var(--focus-ring);
-}
-
-.coverage-detail__empty {
-  text-align: center;
-  padding: var(--space-8) var(--space-4);
-  color: var(--sas-text-muted);
-}
-
-/* Paging is the shared <Pagination> and sortable headers are the shared
-   .sas-table__sort-header; both live in components.css, including their
-   own spacing. */
-
-/* ─── Deep Links ─── */
-
-/* The links themselves are .sas-deep-link (components.css). */
-.coverage-detail__links {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* ─── Expandable Rows ─── */
-
-/* Keyboard focus on the row's toggle or links highlights the row, the way
-   DataTable's clickable rows do. Scoped under the table modifier so it
-   outranks the --striped even-row tint. */
-.sas-table--hoverable .coverage-row:focus-within {
-  background-color: var(--sas-blue-light);
-}
-
-.coverage-row--expandable {
-  cursor: pointer;
-}
-
-/* Hover uses the shared .sas-table--hoverable tint; the chevron reinforces
-   that the row is clickable. */
-.coverage-row--expandable:hover .coverage-row__chevron {
+.coverage-row:hover .coverage-row__chevron,
+.coverage-row:focus-within .coverage-row__chevron {
   color: var(--sas-blue-primary);
 }
 
@@ -359,7 +225,7 @@
 }
 
 .coverage-row__name {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
 }
@@ -373,20 +239,15 @@
   color: var(--sas-gray-500);
 }
 
+.coverage-row__chevron--none {
+  width: 14px;
+}
+
 .coverage-row__chevron--open {
   transform: rotate(90deg);
 }
 
 /* ─── Expanded Scenario Details ─── */
-
-.coverage-expand-row td {
-  padding: 0 !important;
-}
-
-.coverage-expand-cell {
-  background: var(--sas-gray-50);
-  border-top: none;
-}
 
 .coverage-scenarios {
   padding: var(--space-3) var(--space-4) var(--space-4) 40px;
@@ -447,34 +308,59 @@
 }
 
 .coverage-health__count {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--space-2);
-  align-items: center;
-  padding: var(--space-3);
+  --sas-stat-accent: var(--sas-gray-500);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
   border: 1px solid var(--sas-gray-200);
-  border-left: 4px solid var(--sas-gray-400);
   border-radius: var(--radius-md);
-  color: var(--sas-gray-700);
+  color: var(--sas-gray-900);
 }
 
-.coverage-health__count--healthy { border-left-color: var(--sas-success); color: var(--sas-success-dark); }
-.coverage-health__count--failing { border-left-color: var(--sas-error); color: var(--sas-error-dark); }
-.coverage-health__count--changed { border-left-color: var(--sas-warning); color: var(--sas-warning-dark); }
-
-.coverage-health__count > .coverage-health__icon {
-  width: 18px;
-  height: 18px;
-}
+.coverage-health__count--healthy { --sas-stat-accent: var(--sas-success); }
+.coverage-health__count--failing { --sas-stat-accent: var(--sas-error); }
+.coverage-health__count--changed { --sas-stat-accent: var(--sas-warning); }
 
 .coverage-health__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
+.coverage-health__value::before {
+  content: '';
+  flex: 0 0 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--sas-stat-accent);
+}
+
+@media (forced-colors: active) {
+  .coverage-health__value::before { border-left: 4px solid CanvasText; }
+}
+
+.coverage-health__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.coverage-health__name > .coverage-health__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.coverage-health__count--healthy .coverage-health__name > .coverage-health__icon { color: var(--sas-success-dark); }
+.coverage-health__count--failing .coverage-health__name > .coverage-health__icon { color: var(--sas-error-dark); }
+.coverage-health__count--changed .coverage-health__name > .coverage-health__icon { color: var(--sas-warning-dark); }
+
 .coverage-health__label {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   font-size: var(--font-size-sm);

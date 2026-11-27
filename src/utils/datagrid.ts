@@ -92,3 +92,58 @@ export const coerceDatagridValue = (value: unknown): unknown[] | null => {
   }
   return null;
 };
+
+/** An edited cell's text as the typed value the DataGrid wire format takes. */
+export const toTypedCell = (raw: string, dataType: string): unknown => {
+  if (raw === '') return null;
+  const t = dataType.toLowerCase();
+  if (t === 'integer' || t === 'int' || t === 'bigint') {
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  }
+  if (t === 'decimal' || t === 'double' || t === 'number') {
+    const n = Number(raw);
+    return Number.isNaN(n) ? null : n;
+  }
+  if (t === 'boolean') return raw === 'true';
+  // datetime-local inputs omit seconds; SID expects them
+  if (t === 'datetime' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return `${raw}:00`;
+  return raw;
+};
+
+const isIntType = (t: string) => ['integer', 'int', 'bigint'].includes(t.toLowerCase());
+const isNumType = (t: string) => ['decimal', 'double', 'number'].includes(t.toLowerCase());
+
+/**
+ * A cell's typed value for an editor that must not change what was entered:
+ * text that does not fit a number column is kept as text (and reported by
+ * gridCellProblem) instead of becoming 0 or missing.
+ */
+export const typedCellKeepingText = (raw: string, dataType: string): unknown => {
+  const t = raw.trim();
+  if (t !== '' && isIntType(dataType) && !/^-?\d+$/.test(t)) return raw;
+  if (t !== '' && isNumType(dataType) && Number.isNaN(Number(t))) return raw;
+  return toTypedCell(raw, dataType);
+};
+
+/** Why a cell does not fit its column's type, or null. */
+export const gridCellProblem = (cell: unknown, dataType: string): string | null => {
+  if (cell === null || cell === undefined || cell === '') return null;
+  if (isIntType(dataType) && !(typeof cell === 'number' && Number.isInteger(cell))) return `${String(cell)} is not a whole number`;
+  if (isNumType(dataType) && typeof cell !== 'number') return `${String(cell)} is not a number`;
+  return null;
+};
+
+/** The first problem cells of a DataGrid value, as "Row 4, testNumber: 0.55 is not a whole number". */
+export const gridProblems = (value: unknown, limit = 5): string[] => {
+  const grid = coerceDatagridValue(value);
+  if (!grid) return [];
+  const cols = parseDatagridColumns(grid);
+  const { rows } = parseDatagrid(grid);
+  const out: string[] = [];
+  rows.forEach((r, ri) => cols.forEach((c, ci) => {
+    const p = Array.isArray(r) ? gridCellProblem(r[ci], c.dataType) : null;
+    if (p && out.length < limit) out.push(`Row ${ri + 1}, ${c.name}: ${p}`);
+  }));
+  return out;
+};

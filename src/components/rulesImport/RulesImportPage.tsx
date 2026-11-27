@@ -18,6 +18,7 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Alert } from '../common/Alert';
 import { StepNav } from '../common/StepNav';
+import { FileIntake, FileIntakeMode } from '../common/FileIntake';
 import { useSasAuth } from '../../auth';
 import { RulesGrid } from './RulesGrid';
 import { ImportConfirmDialog, ConfirmEntry } from './ImportConfirmDialog';
@@ -67,7 +68,9 @@ export const RulesImportPage: React.FC = () => {
   const [editedRows, setEditedRows] = useState<Set<number>>(new Set());
   const [page, setPage] = useState(0);
   const [onlyIssueRows, setOnlyIssueRows] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
+  // CSV pasted into Paste text, read by Validate & Continue.
+  const [pastedCsv, setPastedCsv] = useState('');
+  const [intakeMode, setIntakeMode] = useState<FileIntakeMode>('upload');
   // Cell targeted by "Next error" — highlighted, scrolled into view (both
   // axes), and given keyboard focus. The nonce re-triggers the scroll even
   // when the same target is hit again.
@@ -233,12 +236,14 @@ export const RulesImportPage: React.FC = () => {
     lastErrorJumpRef.current = -1;
   }, []);
 
-  const handleFile = useCallback(async (file: File) => {
+  // A file and pasted text take the same path; pasted text is named
+  // "Pasted text" wherever the file name would show.
+  const handleCsvText = useCallback((raw: string, name: string) => {
     try {
-      const text = stripBom(await file.text());
+      const text = stripBom(raw);
       const parsed = parseCsv(text);
       resetForNewFile();
-      setFileName(file.name);
+      setFileName(name);
       if (parsed.length === 0) {
         setHeaderMap(null);
         setRows([]);
@@ -271,24 +276,13 @@ export const RulesImportPage: React.FC = () => {
     }
   }, [resetForNewFile]);
 
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
-      e.target.value = '';
-    },
-    [handleFile]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
+  const handleFile = useCallback(async (file: File) => {
+    try {
+      handleCsvText(await file.text(), file.name);
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : 'Failed to read the file.');
+    }
+  }, [handleCsvText]);
 
   const handleStartOver = () => {
     resetForNewFile();
@@ -578,33 +572,30 @@ export const RulesImportPage: React.FC = () => {
       {/* 1 · Upload */}
       {activeStep === 'upload' && (
         <div className="rules-import__panel">
-          <div
-            className={`rules-import__dropzone${dragOver ? ' rules-import__dropzone--active' : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
+          <FileIntake
+            accept=".csv"
+            prompt="Drag and drop your CSV file here, or"
+            acceptHint="Accepts .csv files only"
+            onFile={handleFile}
+            defaultMode={intakeMode}
+            onModeChange={setIntakeMode}
+            paste={{
+              value: pastedCsv,
+              onChange: setPastedCsv,
+              label: 'Rule set CSV',
+              placeholder: 'Paste the rule set CSV here, header row first...',
             }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-          >
-            {/* Visually hidden but still focusable: [hidden]/display:none would
-                drop the control out of the tab order and out of the a11y tree,
-                so the ring is carried by the label instead (#94). */}
-            <input
-              id="rules-import-file"
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              className="sr-only rules-import__file-input"
-            />
-            <label
-              htmlFor="rules-import-file"
-              className="sas-button sas-button--primary sas-button--medium rules-import__file-label"
+          />
+          {/* A file is read as soon as it is picked; pasted text when asked. */}
+          {intakeMode === 'paste' && <div className="rules-import__panel-actions">
+            <Button
+              variant="primary"
+              onClick={() => handleCsvText(pastedCsv, 'Pasted text')}
+              disabled={!pastedCsv.trim()}
             >
-              Choose a CSV file
-            </label>
-            <span className="rules-import__dropzone-hint">or drag &amp; drop it here</span>
-          </div>
+              Validate &amp; Continue
+            </Button>
+          </div>}
           {fileName && (
             <div className="rules-import__file-summary">
               <strong>{fileName}</strong>

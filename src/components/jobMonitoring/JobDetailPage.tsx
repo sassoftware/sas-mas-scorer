@@ -18,6 +18,7 @@ import { cancelJob, deleteJob, getRerunEligibility } from '../../api/jobs';
 import { ExecutionJob, isTerminalState } from '../../types/jobExecution';
 import { JobStateBadge } from './JobStateBadge';
 import { JobLogViewer } from './JobLogViewer';
+import { MenuButton } from '../common/MenuButton';
 import { JobCodePanel } from './JobCodePanel';
 import { JobParametersPanel } from './JobParametersPanel';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -41,6 +42,21 @@ const TABS: { value: Tab; label: string }[] = [
 ];
 
 const BREADCRUMB_ROOT = 'Job Monitoring';
+
+const MoreIcon = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+    <circle cx="12" cy="5" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="19" r="2" />
+  </svg>
+);
+
+const InfoIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
+);
 
 export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) => {
   const { isAuthenticated } = useSasAuth();
@@ -220,6 +236,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
             error={detail.logError}
             isLive={!isTerminal}
             onRefresh={() => detail.refreshOutput('log')}
+            emptyMessage={isTerminal ? 'This job wrote no log.' : 'No output yet.'}
             downloadFilename={logFilename}
             startAtFirstError={failedJob}
           />
@@ -263,31 +280,36 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
         <PageHeader
           title={name}
           subtitle={description}
+          titleAddon={<JobStateBadge state={job.state} />}
           breadcrumbs={[{ label: BREADCRUMB_ROOT, onClick: onBack }, { label: name }]}
           actions={
             <div className="job-detail__header-actions">
-              <JobStateBadge state={job.state} />
               <Button variant="secondary" size="small" onClick={detail.refresh}>
                 Refresh
               </Button>
-              {isTerminal && rerun?.allowed && (
-                <>
-                  <Button variant="secondary" size="small" onClick={() => setPendingAction('rerun')}>
-                    Rerun
-                  </Button>
-                  <Button variant="secondary" size="small" onClick={() => setPendingAction('rerunWithChanges')}>
-                    Rerun with changes…
-                  </Button>
-                </>
-              )}
               {isTerminal ? (
-                <Button
-                  variant="danger"
-                  size="small"
-                  onClick={() => setPendingAction('delete')}
-                >
-                  Delete Job
-                </Button>
+                <>
+                  {rerun?.allowed && (
+                    <Button variant="primary" size="small" onClick={() => setPendingAction('rerun')}>
+                      Rerun
+                    </Button>
+                  )}
+                  {/* The rarer actions, as on list rows: in the ⋮ menu. */}
+                  <MenuButton
+                    label={<MoreIcon />}
+                    ariaLabel={`More actions for ${name}`}
+                    triggerClassName="job-detail__more"
+                    hideChevron
+                    alignEnd
+                    floating
+                    items={[
+                      ...(rerun?.allowed
+                        ? [{ id: 'rerun-changes', label: 'Rerun with changes…', onSelect: () => setPendingAction('rerunWithChanges') }]
+                        : []),
+                      { id: 'delete', label: 'Delete job…', description: 'Removes the job and its output', onSelect: () => setPendingAction('delete') },
+                    ]}
+                  />
+                </>
               ) : (
                 <Button
                   variant="danger"
@@ -300,32 +322,58 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({ jobId, onBack }) =
             </div>
           }
         />
-        <div className="job-detail__meta">
-          <span><strong>By:</strong> {job.createdBy ?? '—'}</span>
-          {type && <span><strong>Type:</strong> {type}</span>}
-          <span><strong>Started:</strong> {formatTimestamp(job.creationTimeStamp)}</span>
-          <span><strong>Elapsed:</strong> {formatDuration(elapsedMs)}</span>
-          {job.endTimeStamp && (
-            <span><strong>Ended:</strong> {formatTimestamp(job.endTimeStamp)}</span>
+        <section className="sas-card job-detail__summary" aria-label="Job details">
+          <dl className="job-detail__facts">
+            <div>
+              <dt>Created by</dt>
+              <dd>{job.createdBy ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Type</dt>
+              <dd>{type ?? '—'}</dd>
+            </div>
+            <div>
+              <dt>Started</dt>
+              <dd>{formatTimestamp(job.creationTimeStamp)}</dd>
+            </div>
+            <div>
+              <dt>Elapsed</dt>
+              <dd className="job-detail__elapsed">{formatDuration(elapsedMs)}</dd>
+            </div>
+            {job.endTimeStamp && (
+              <div>
+                <dt>Ended</dt>
+                <dd>{formatTimestamp(job.endTimeStamp)}</dd>
+              </div>
+            )}
+            {rerun?.application && (
+              <div>
+                <dt>Application</dt>
+                <dd>{rerun.application}</dd>
+              </div>
+            )}
+            <div className="job-detail__fact--wide">
+              <dt>ID</dt>
+              <dd className="job-detail__id">{job.id}</dd>
+            </div>
+          </dl>
+          {isTerminal && rerun && !rerun.allowed && (
+            <p className="job-detail__rerun-note">
+              <InfoIcon />
+              <span><strong>Rerun is not offered:</strong> {rerun.reason}</span>
+            </p>
           )}
-          <span><strong>ID:</strong> {job.id}</span>
-          {rerun?.application && (
-            <span><strong>Application:</strong> {rerun.application}</span>
+          {failureReason && (
+            <p className="job-detail__failure">
+              <strong>
+                First error (line {(failureReason.index + 1).toLocaleString()}):
+              </strong>{' '}
+              <span className="job-detail__failure-text" title={failureReason.text}>
+                {failureReason.text}
+              </span>
+            </p>
           )}
-        </div>
-        {isTerminal && rerun && !rerun.allowed && (
-          <p className="job-detail__rerun-note">Rerun is not offered: {rerun.reason}</p>
-        )}
-        {failureReason && (
-          <p className="job-detail__failure">
-            <strong>
-              First error (line {(failureReason.index + 1).toLocaleString()}):
-            </strong>{' '}
-            <span className="job-detail__failure-text" title={failureReason.text}>
-              {failureReason.text}
-            </span>
-          </p>
-        )}
+        </section>
       </div>
 
       <div

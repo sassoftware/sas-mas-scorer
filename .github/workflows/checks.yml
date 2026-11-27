@@ -50,3 +50,11 @@ jobs:
 
       - name: Unit tests (desktop main process)
         run: npm run test:electron
+
+      # Fails on a known high or critical vulnerability in the packages the
+      # app ships (dependencies, not devDependencies). Build and lint tools are
+      # left to `npm ci`'s summary above. Once is enough: the tree is the same
+      # on both systems.
+      - name: Audit shipped dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: npm audit --omit=dev --audit-level=high

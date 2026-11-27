@@ -428,15 +428,17 @@ export default function FlowDetailPage({ flowId: id }: FlowDetailPageProps) {
 
   return (
     <div className={`flow-detail${panelOpen ? ' flow-detail--panel-open' : ''}`}>
-      <Button
-        variant="tertiary"
-        size="small"
-        icon={BACK_ICON}
-        className="flow-detail__back"
-        onClick={() => navigate('/flows')}
-      >
-        Back to list
-      </Button>
+      <nav className="flow-detail__crumbs" aria-label="Breadcrumb">
+        <ol className="sas-breadcrumbs">
+          <li className="sas-breadcrumbs__item">
+            <button type="button" className="sas-breadcrumbs__link" onClick={() => navigate('/flows')}>Decision flows</button>
+            <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
+          </li>
+          <li className="sas-breadcrumbs__item">
+            <span className="sas-breadcrumbs__current" aria-current="page">{flow.name}</span>
+          </li>
+        </ol>
+      </nav>
 
       <FlowHeader
         flow={flow}

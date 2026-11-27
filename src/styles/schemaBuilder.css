@@ -46,27 +46,6 @@
 
 /* Positioned so the .sr-only file input is clipped against this toolbar and
    not against whatever positioned ancestor happens to be above it. */
-.schema-builder__sample-buttons {
-  position: relative;
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-/* The visible half of the file picker: a <label> wearing the .sas-button
-   classes, so it only needs the pointer cursor the element rule gives a
-   real <button>, plus the ring its .sr-only input cannot show itself. */
-.schema-builder__file-label {
-  cursor: pointer;
-  /* A <label> inherits body's 1.5; a real <button> keeps the UA's `normal`. */
-  line-height: normal;
-}
-
-.schema-builder__file-input:focus-visible + .schema-builder__file-label {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-outline-offset);
-}
-
 .schema-builder__panel-actions {
   display: flex;
   justify-content: flex-end;
@@ -116,15 +95,6 @@
 .schema-builder__hint {
   font-size: var(--font-size-xs);
   color: var(--sas-gray-500);
-}
-
-.schema-builder__schema-input {
-  min-height: min(320px, 40vh);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  white-space: pre;
-  overflow: auto;
 }
 
 /* Variable table */

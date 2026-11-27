@@ -9,9 +9,15 @@ import {
   getCompatibleWidgets,
   getDefaultToggleValues,
   getDefaultWidget,
+  isDatagridType,
   isNumericType,
 } from '../../utils/uiDefaults';
 import { widgetLabels } from './widgetMap';
+import { isoFromSasDate, isoFromSasDatetime, sasDateFromIso, sasDatetimeFromIso } from '../../utils/sasDate';
+import { CURRENCIES, currencyOf } from '../../utils/numberFormat';
+import { KPI_TONES } from '../uiRunner/widgets/KpiWidget';
+import { LookupSettings } from './canvas/LookupSettings';
+import { KpiBand } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
 
@@ -38,6 +44,16 @@ interface Props {
   onChange: (field: UIField) => void;
   onMoveToSection: (targetSectionId: string) => void;
   onClose: () => void;
+  /**
+   * 'inspector': the canvas-first builder's right panel, which shows the
+   * widget choice and the placement itself, so this leaves out its own
+   * header, the Widget Type select and the Placement section.
+   */
+  variant?: 'panel' | 'inspector';
+  /** The app's column count: 1/3 is offered only with three columns. */
+  columns?: 1 | 2 | 3;
+  /** DataGrid editor: the columns and row limit the decision declares, when known. */
+  gridSchema?: { columns: { name: string; dataType: string }[]; maxRows: number | null };
 }
 
 export const FieldConfigPanel: React.FC<Props> = ({
@@ -50,7 +66,11 @@ export const FieldConfigPanel: React.FC<Props> = ({
   onChange,
   onMoveToSection,
   onClose,
+  variant = 'panel',
+  columns = 3,
+  gridSchema,
 }) => {
+  const inInspector = variant === 'inspector';
   const uid = useId();
   const fid = (name: string) => `${uid}-${name}`;
 
@@ -176,15 +196,15 @@ export const FieldConfigPanel: React.FC<Props> = ({
   };
 
   const isInput = field.direction === 'input';
-  const showOptions = field.widget === 'dropdown' || field.widget === 'radio';
+  const showOptions = field.widget === 'dropdown' || field.widget === 'radio' || field.widget === 'checkboxgroup';
   const showMinMax = field.widget === 'slider' || field.widget === 'number';
   const showStep = field.widget === 'slider' || field.widget === 'number';
   const showRequired = isInput && field.widget !== 'hidden' && field.widget !== 'readonly';
   // Text limits apply to string parameters (or a field whose parameter is gone).
   const showMaxLength = isInput
-    && (field.widget === 'text' || field.widget === 'textarea')
+    && (field.widget === 'text' || field.widget === 'textarea' || field.widget === 'file')
     && (!parameter || parameter.type === 'string');
-  const showToggleValues = isInput && field.widget === 'toggle';
+  const showToggleValues = isInput && (field.widget === 'toggle' || field.widget === 'checkbox');
   const toggleDefaults = getDefaultToggleValues(parameter?.type);
 
   const setValidation = (patch: Partial<NonNullable<UIField['validation']>>) => {
@@ -195,13 +215,15 @@ export const FieldConfigPanel: React.FC<Props> = ({
   const showValueMappings = field.direction === 'output' && (field.widget === 'badge' || field.widget === 'readonly');
 
   return (
-    <div className="ui-builder__config-panel">
-      <div className="ui-builder__config-header">
-        <h4>Configure: {field.label}</h4>
-        <IconButton size="medium" onClick={onClose} title="Close" aria-label="Close configuration panel">
-          <CloseIcon />
-        </IconButton>
-      </div>
+    <div className={inInspector ? 'ui-builder__config-panel ui-builder__config-panel--inspector' : 'ui-builder__config-panel'}>
+      {!inInspector && (
+        <div className="ui-builder__config-header">
+          <h4>Configure: {field.label}</h4>
+          <IconButton size="medium" onClick={onClose} title="Close" aria-label="Close configuration panel">
+            <CloseIcon />
+          </IconButton>
+        </div>
+      )}
 
       <div className="ui-builder__config-body">
         {field.direction === 'static' ? (
@@ -274,7 +296,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
         )}
 
         {/* === Placement Section === */}
-        {sections.length > 1 && (
+        {!inInspector && sections.length > 1 && (
           <>
             <div className="ui-builder__config-section-title">Placement</div>
 
@@ -321,7 +343,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
           />
         </div>
 
-        {field.direction !== 'static' && (
+        {!inInspector && field.direction !== 'static' && (
           <div className="ui-builder__config-field">
             <label htmlFor={fid('widget')}>Widget Type</label>
             <select
@@ -337,19 +359,25 @@ export const FieldConfigPanel: React.FC<Props> = ({
           </div>
         )}
 
-        <div className="ui-builder__config-field">
-          <label htmlFor={fid('width')}>Width</label>
-          <select
-            id={fid('width')}
-            className="sas-input"
-            value={field.width}
-            onChange={(e) => handleChange('width', e.target.value as UIField['width'])}
-          >
-            <option value="third">1/3</option>
-            <option value="half">1/2</option>
-            <option value="full">Full</option>
-          </select>
-        </div>
+        {field.widget === 'table' || field.widget === 'barchart' || columns === 1 ? (
+          <p className="ui-builder__config-type-hint">
+            {field.widget === 'table' || field.widget === 'barchart' ? 'Tables and charts always use the full width.' : 'With one column every field uses the full width.'}
+          </p>
+        ) : (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('width')}>Width</label>
+            <select
+              id={fid('width')}
+              className="sas-input"
+              value={field.width === 'third' && columns < 3 ? 'half' : field.width}
+              onChange={(e) => handleChange('width', e.target.value as UIField['width'])}
+            >
+              {columns === 3 && <option value="third">1/3</option>}
+              <option value="half">1/2</option>
+              <option value="full">Full</option>
+            </select>
+          </div>
+        )}
 
         <div className="ui-builder__config-field">
           <label>
@@ -377,6 +405,8 @@ export const FieldConfigPanel: React.FC<Props> = ({
           <>
             <div className="ui-builder__config-section-title">Input Settings</div>
 
+            {/* A file upload has no placeholder or default: the user always picks the file. */}
+            {field.widget !== 'file' && (
             <div className="ui-builder__config-field">
               <label htmlFor={fid('placeholder')}>Placeholder</label>
               <input
@@ -387,7 +417,31 @@ export const FieldConfigPanel: React.FC<Props> = ({
                 onChange={(e) => handleChange('placeholder', e.target.value || undefined)}
               />
             </div>
+            )}
 
+            {field.widget === 'file' ? null : (field.widget === 'date' || field.widget === 'datetime') ? (
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('default')}>Default Value</label>
+                <input
+                  id={fid('default')}
+                  type={field.widget === 'date' ? 'date' : 'datetime-local'}
+                  step={field.widget === 'datetime' ? 1 : undefined}
+                  className="sas-input"
+                  aria-describedby={fid('default-hint')}
+                  value={field.widget === 'date' ? isoFromSasDate(field.defaultValue) : isoFromSasDatetime(field.defaultValue)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const sas = !raw ? null : field.widget === 'date' ? sasDateFromIso(raw) : sasDatetimeFromIso(raw);
+                    handleChange('defaultValue', sas === null ? undefined : sas);
+                  }}
+                />
+                <span className="ui-builder__config-type-hint" id={fid('default-hint')}>
+                  {field.defaultValue !== undefined && field.defaultValue !== null
+                    ? `Stored as the SAS ${field.widget === 'date' ? 'date' : 'datetime'} value ${String(field.defaultValue)}.`
+                    : `Stored as a SAS ${field.widget === 'date' ? 'date' : 'datetime'} value.`}
+                </span>
+              </div>
+            ) : (
             <div className="ui-builder__config-field">
               <label htmlFor={fid('default')}>Default Value</label>
               <input
@@ -413,6 +467,7 @@ export const FieldConfigPanel: React.FC<Props> = ({
                   : 'Converted by the parameter type when the app runs.'}
               </span>
             </div>
+            )}
 
             {showRequired && (
               <div className="ui-builder__config-field">
@@ -463,6 +518,277 @@ export const FieldConfigPanel: React.FC<Props> = ({
         {/* === Validation === */}
         {(showMinMax || showOptions || showMaxLength) && (
           <div className="ui-builder__config-section-title">Validation</div>
+        )}
+
+        {isInput && field.widget === 'checkboxgroup' && (
+          <div className="ui-builder__config-row">
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('minchk')}>Tick at least</label>
+              <input id={fid('minchk')} type="number" min="0" className="sas-input" placeholder="Any"
+                value={field.validation?.minChecked ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ minChecked: e.target.value === '' || n < 0 ? undefined : Math.floor(n) }); }} />
+            </div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('maxchk')}>Tick at most</label>
+              <input id={fid('maxchk')} type="number" min="1" className="sas-input" placeholder="Any"
+                value={field.validation?.maxChecked ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ maxChecked: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+            </div>
+          </div>
+        )}
+
+        {isInput && field.widget === 'datagrid' && (
+          <>
+            <div className="ui-builder__config-section-title">DataGrid Columns</div>
+            {gridSchema && (
+              <div className="ui-builder__config-field">
+                <Button variant="secondary" size="small"
+                  onClick={() => setValidation({ gridColumns: gridSchema.columns, maxRows: gridSchema.maxRows ?? field.validation?.maxRows })}>
+                  Use the decision's {gridSchema.columns.length} columns
+                </Button>
+              </div>
+            )}
+            <div role="group" aria-label="Grid columns">
+              {(field.validation?.gridColumns ?? []).map((c, i, all) => (
+                <div key={i} className="ui-builder__option-row">
+                  <input className="sas-input" aria-label={`Column ${i + 1} name`} value={c.name}
+                    onChange={(e) => setValidation({ gridColumns: all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+                  <select className="sas-input" aria-label={`Column ${i + 1} type`} value={c.dataType}
+                    onChange={(e) => setValidation({ gridColumns: all.map((x, j) => (j === i ? { ...x, dataType: e.target.value } : x)) })}>
+                    {['string', 'decimal', 'integer', 'date', 'datetime', 'boolean'].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <IconButton size="small" variant="danger" title="Remove column" aria-label={`Remove column ${i + 1}`}
+                    onClick={() => setValidation({ gridColumns: all.filter((_x, j) => j !== i) })}>
+                    <CloseIcon />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+            <Button variant="tertiary" size="small"
+              onClick={() => setValidation({ gridColumns: [...(field.validation?.gridColumns ?? []), { name: `column${(field.validation?.gridColumns?.length ?? 0) + 1}`, dataType: 'string' }] })}>
+              Add column
+            </Button>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('maxrows')}>Most rows</label>
+              <input id={fid('maxrows')} type="number" min="1" className="sas-input" placeholder="1000"
+                value={field.validation?.maxRows ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ maxRows: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+              <span className="ui-builder__config-type-hint">Empty allows 1,000 rows{gridSchema?.maxRows ? `; the decision allows ${gridSchema.maxRows}` : ''}.</span>
+            </div>
+          </>
+        )}
+
+        {field.widget === 'image' && (
+          <>
+            <div className="ui-builder__config-section-title">Image</div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('imgalt')}>Alternative text</label>
+              <input id={fid('imgalt')} className="sas-input" placeholder={field.label}
+                aria-describedby={fid('imgalt-hint')}
+                value={field.validation?.imageAlt ?? ''}
+                onChange={(e) => setValidation({ imageAlt: e.target.value || undefined })} />
+              <span className="ui-builder__config-type-hint" id={fid('imgalt-hint')}>What a screen reader says for the image. Empty uses the label.</span>
+            </div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('imgh')}>Largest height (pixels)</label>
+              <input id={fid('imgh')} type="number" min="40" className="sas-input" placeholder="As large as it fits"
+                value={field.validation?.imageMaxHeight ?? ''}
+                onChange={(e) => { const n = Number(e.target.value); setValidation({ imageMaxHeight: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+            </div>
+          </>
+        )}
+
+        {field.widget === 'barchart' && (
+          <>
+            <div className="ui-builder__config-section-title">Bar Chart</div>
+            {parameter && isDatagridType(parameter.type) && (
+              <div className="ui-builder__config-row">
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('chartlabel')}>Label column</label>
+                  <input id={fid('chartlabel')} className="sas-input" placeholder="First text column"
+                    value={field.validation?.chartLabelColumn ?? ''}
+                    onChange={(e) => setValidation({ chartLabelColumn: e.target.value || undefined })} />
+                </div>
+                <div className="ui-builder__config-field">
+                  <label htmlFor={fid('chartvalue')}>Value column</label>
+                  <input id={fid('chartvalue')} className="sas-input" placeholder="First number column"
+                    value={field.validation?.chartValueColumn ?? ''}
+                    onChange={(e) => setValidation({ chartValueColumn: e.target.value || undefined })} />
+                </div>
+              </div>
+            )}
+            <div className="ui-builder__config-row">
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('chartsort')}>Order</label>
+                <select id={fid('chartsort')} className="sas-input" value={field.validation?.chartSort ?? ''}
+                  onChange={(e) => setValidation({ chartSort: (e.target.value || undefined) as 'desc' | 'asc' | undefined })}>
+                  <option value="">As returned</option>
+                  <option value="desc">Largest first</option>
+                  <option value="asc">Smallest first</option>
+                </select>
+              </div>
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('charttop')}>Show at most</label>
+                <input id={fid('charttop')} type="number" min="1" className="sas-input" placeholder="50 bars"
+                  value={field.validation?.chartTop ?? ''}
+                  onChange={(e) => { const n = Number(e.target.value); setValidation({ chartTop: e.target.value === '' || !(n > 0) ? undefined : Math.floor(n) }); }} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {field.widget === 'kpi' && (
+          <>
+            <div className="ui-builder__config-section-title">KPI Tile</div>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('unit')}>Unit</label>
+              <input
+                id={fid('unit')}
+                className="sas-input"
+                value={field.validation?.unit ?? ''}
+                placeholder="For example ms, points, %"
+                onChange={(e) => setValidation({ unit: e.target.value || undefined })}
+              />
+            </div>
+            <div className="ui-builder__config-field">
+              <span className="cb-inspector__label" id={fid('bands')}>Bands</span>
+              <span className="ui-builder__config-type-hint" style={{ display: 'block', marginBottom: '6px' }}>
+                Checked in order: the first band the value is below wins. Leave the last band's limit empty for everything above.
+              </span>
+              <div role="group" aria-labelledby={fid('bands')}>
+                {(field.validation?.kpiBands ?? []).map((band, i, all) => {
+                  const update = (patch: Partial<KpiBand>) =>
+                    setValidation({ kpiBands: all.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+                  return (
+                    <div key={i} className="ui-builder__option-row">
+                      <input
+                        type="number"
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: below`}
+                        placeholder="Below (empty: any)"
+                        value={band.below ?? ''}
+                        onChange={(e) => update({ below: e.target.value === '' ? undefined : Number(e.target.value) })}
+                      />
+                      <input
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: word shown`}
+                        placeholder="Word, e.g. High"
+                        value={band.label}
+                        onChange={(e) => update({ label: e.target.value })}
+                      />
+                      <select
+                        className="sas-input"
+                        aria-label={`Band ${i + 1}: colour`}
+                        value={band.tone}
+                        onChange={(e) => update({ tone: e.target.value as KpiBand['tone'] })}
+                      >
+                        {(Object.keys(KPI_TONES) as KpiBand['tone'][]).map(t => (
+                          <option key={t} value={t}>{KPI_TONES[t].name}</option>
+                        ))}
+                      </select>
+                      <IconButton
+                        size="small"
+                        variant="danger"
+                        onClick={() => setValidation({ kpiBands: all.filter((_b, j) => j !== i) })}
+                        title="Remove band"
+                        aria-label={`Remove band ${i + 1}`}
+                      >
+                        <CloseIcon />
+                      </IconButton>
+                    </div>
+                  );
+                })}
+              </div>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => setValidation({ kpiBands: [...(field.validation?.kpiBands ?? []), { label: '', tone: 'neutral' }] })}
+              >
+                Add band
+              </Button>
+            </div>
+          </>
+        )}
+
+        {field.widget === 'percent' && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('pscale')}>{isInput ? 'Send 12.5 % as' : 'The module returns 12.5 % as'}</label>
+            <select
+              id={fid('pscale')}
+              className="sas-input"
+              value={field.validation?.percentScale ?? 'fraction'}
+              onChange={(e) => setValidation({ percentScale: e.target.value === 'points' ? 'points' : undefined })}
+            >
+              <option value="fraction">0.125 (a fraction)</option>
+              <option value="points">12.5 (percentage points)</option>
+            </select>
+          </div>
+        )}
+
+        {field.widget === 'currency' && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('currency')}>Currency</label>
+            <select
+              id={fid('currency')}
+              className="sas-input"
+              value={currencyOf(field)}
+              onChange={(e) => setValidation({ currency: e.target.value })}
+            >
+              {(CURRENCIES.includes(currencyOf(field)) ? CURRENCIES : [currencyOf(field), ...CURRENCIES]).map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <span className="ui-builder__config-type-hint">Only shown with the amount; the module gets the plain number.</span>
+          </div>
+        )}
+
+        {isInput && field.widget === 'file' && (
+          <>
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('accept')}>File types</label>
+              <select
+                id={fid('accept')}
+                className="sas-input"
+                value={['', 'image/*', 'image/png,image/jpeg', 'application/pdf', '.csv,.txt,.json'].includes(field.validation?.fileAccept ?? '') ? (field.validation?.fileAccept ?? '') : 'custom'}
+                onChange={(e) => setValidation({ fileAccept: e.target.value === 'custom' ? (field.validation?.fileAccept || '.') : e.target.value || undefined })}
+              >
+                <option value="">Any file</option>
+                <option value="image/*">Images</option>
+                <option value="image/png,image/jpeg">PNG and JPEG images</option>
+                <option value="application/pdf">PDF documents</option>
+                <option value=".csv,.txt,.json">Text files (CSV, TXT, JSON)</option>
+                <option value="custom">Other (list them)</option>
+              </select>
+            </div>
+            {!['', 'image/*', 'image/png,image/jpeg', 'application/pdf', '.csv,.txt,.json'].includes(field.validation?.fileAccept ?? '') && (
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('accept-list')}>Accepted extensions or types</label>
+                <input
+                  id={fid('accept-list')}
+                  className="sas-input"
+                  aria-describedby={fid('accept-hint')}
+                  value={field.validation?.fileAccept ?? ''}
+                  placeholder=".dcm,.tif"
+                  onChange={(e) => setValidation({ fileAccept: e.target.value || undefined })}
+                />
+                <span className="ui-builder__config-type-hint" id={fid('accept-hint')}>Comma-separated, for example .dcm,.tif or image/webp.</span>
+              </div>
+            )}
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('fformat')}>Send the file as</label>
+              <select
+                id={fid('fformat')}
+                className="sas-input"
+                aria-describedby={fid('fformat-hint')}
+                value={field.validation?.fileFormat ?? 'base64'}
+                onChange={(e) => setValidation({ fileFormat: e.target.value === 'dataUrl' ? 'dataUrl' : undefined })}
+              >
+                <option value="base64">Base64 text only</option>
+                <option value="dataUrl">Data URL (with the data:…;base64, prefix)</option>
+              </select>
+              <span className="ui-builder__config-type-hint" id={fid('fformat-hint')}>Choose what the module's code expects. Base64 is about a third larger than the file.</span>
+            </div>
+          </>
         )}
 
         {showMaxLength && (
@@ -546,6 +872,10 @@ export const FieldConfigPanel: React.FC<Props> = ({
               </div>
             )}
           </>
+        )}
+
+        {isInput && (field.widget === 'dropdown' || field.widget === 'radio') && (
+          <LookupSettings validation={field.validation} onChange={(lookup) => setValidation({ lookup })} />
         )}
 
         {showOptions && (

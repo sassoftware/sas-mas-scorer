@@ -6,6 +6,7 @@ import { UIDefinition } from '../../types/uiBuilder';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { encodeUIDefinition } from '../../utils/shareLink';
+import { prefillableFields, prefillQuery } from '../../utils/prefill';
 
 interface Props {
   definition: UIDefinition;
@@ -17,13 +18,16 @@ type Mode = 'standalone' | 'embedded';
 export const ShareDialog: React.FC<Props> = ({ definition, onClose }) => {
   const [mode, setMode] = useState<Mode>('standalone');
   const [copied, setCopied] = useState<'link' | 'suffix' | null>(null);
+  // Optional input values the link fills in (the app still waits for the run button).
+  const [prefill, setPrefill] = useState<Record<string, string>>({});
+  const fields = useMemo(() => prefillableFields(definition), [definition]);
 
   const standalone = mode === 'standalone';
   // Encoding stringifies and base64-encodes the whole definition; do it once
   // per definition, not on every mode toggle / "Copied!" re-render. The two
   // strings below are composed exactly as buildShareHash / buildShareLink do.
   const token = useMemo(() => encodeUIDefinition(definition), [definition]);
-  const suffix = `#/ui-apps/${encodeURIComponent(definition.id)}?def=${token}${standalone ? '&standalone=true' : ''}`;
+  const suffix = `#/ui-apps/${encodeURIComponent(definition.id)}?def=${token}${standalone ? '&standalone=true' : ''}${prefillQuery(prefill)}`;
   const fullLink = `${window.location.origin}${window.location.pathname}${suffix}`;
 
   const copy = async (text: string, which: 'link' | 'suffix') => {
@@ -80,6 +84,30 @@ export const ShareDialog: React.FC<Props> = ({ definition, onClose }) => {
             </label>
           </div>
         </div>
+
+        {fields.length > 0 && (
+          <details className="share-dialog__field share-dialog__prefill">
+            <summary className="share-dialog__label">Fill in values (optional)</summary>
+            <span className="share-dialog__hint">
+              Values entered here go into the link and fill those inputs when it opens; the app still waits for the run button.
+              A link can also be written by hand: add <code>&amp;name=value</code> for an input, dates as 2026-11-24, checkboxes as true or false.
+              Values in a link are visible in browser history, so don't put personal data in them.
+            </span>
+            <div className="share-dialog__prefill-grid">
+              {fields.slice(0, 20).map(f => (
+                <label key={f.parameterId}>
+                  <span>{f.label} <code>{f.parameterId}</code></span>
+                  <input
+                    className="sas-input"
+                    value={prefill[f.parameterId] ?? ''}
+                    placeholder={f.widget === 'date' ? '2026-11-24' : f.widget === 'checkbox' || f.widget === 'toggle' ? 'true or false' : ''}
+                    onChange={(e) => setPrefill(p => ({ ...p, [f.parameterId]: e.target.value }))}
+                  />
+                </label>
+              ))}
+            </div>
+          </details>
+        )}
 
         <div className="share-dialog__field">
           <label className="share-dialog__label" htmlFor="share-dialog-full-link">

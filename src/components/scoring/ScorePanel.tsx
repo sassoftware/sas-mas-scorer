@@ -1455,9 +1455,8 @@ title;`;
     <div className="score-panel">
       <PageHeader
         title={`Execute: ${step.id}`}
-        subtitle={`Module: ${module.name}`}
         breadcrumbs={[
-          { label: 'Modules', onClick: onBack },
+          { label: 'All Modules', onClick: onBack },
           { label: module.name, onClick: onSelectAnotherStep },
           { label: step.id },
         ]}
@@ -1476,8 +1475,8 @@ title;`;
             >
               {showApiCall ? 'Hide API Call' : 'View API Call'}
             </Button>
-            <Button variant="tertiary" onClick={onSelectAnotherStep}>
-              Select Different Step
+            <Button variant="secondary" onClick={onSelectAnotherStep}>
+              Select Step
             </Button>
           </div>
         }
@@ -1581,24 +1580,45 @@ title;`;
         </Card>
       )}
 
-      {/* Mode Toggle */}
-      <div className="score-panel__mode-toggle" role="group" aria-label="Execution mode">
+      {/* Mode tabs (WAI-ARIA tabs: arrow keys, Home and End move between them) */}
+      <div
+        className="score-panel__tabs"
+        role="tablist"
+        aria-label="Execution mode"
+        onKeyDown={(e) => {
+          const i = EXECUTION_MODES.findIndex(m => m.mode === executionMode);
+          let next = i;
+          if (e.key === 'ArrowRight') next = (i + 1) % EXECUTION_MODES.length;
+          else if (e.key === 'ArrowLeft') next = (i - 1 + EXECUTION_MODES.length) % EXECUTION_MODES.length;
+          else if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = EXECUTION_MODES.length - 1;
+          else return;
+          e.preventDefault();
+          handleModeChange(EXECUTION_MODES[next].mode);
+          document.getElementById(`score-tab-${EXECUTION_MODES[next].mode}`)?.focus();
+        }}
+      >
         {EXECUTION_MODES.map(({ mode, label }) => (
-          <Button
+          <button
             key={mode}
-            variant={executionMode === mode ? 'primary' : 'tertiary'}
-            aria-pressed={executionMode === mode}
+            id={`score-tab-${mode}`}
+            type="button"
+            role="tab"
+            aria-selected={executionMode === mode}
+            aria-controls={`score-panel-${mode}`}
+            tabIndex={executionMode === mode ? 0 : -1}
+            className={`score-panel__tab${executionMode === mode ? ' score-panel__tab--on' : ''}`}
             onClick={() => handleModeChange(mode)}
           >
             {label}
-          </Button>
+          </button>
         ))}
       </div>
 
       <div className="score-panel__content">
         {/* Single Execution Mode. Every mode stays mounted once opened and is
             hidden while another is shown, so nothing is lost by switching. */}
-        <div className="score-panel__mode-body" hidden={executionMode !== 'single'}>
+        <div className="score-panel__mode-body" id="score-panel-single" role="tabpanel" aria-labelledby="score-tab-single" hidden={executionMode !== 'single'}>
           <Card className="score-panel__input-card">
             <CardHeader
               actions={
@@ -1751,7 +1771,7 @@ title;`;
 
         {/* Batch Execution Mode */}
         {visitedModes.has('batch') && (
-          <div className="score-panel__mode-body" hidden={executionMode !== 'batch'}>
+          <div className="score-panel__mode-body" id="score-panel-batch" role="tabpanel" aria-labelledby="score-tab-batch" hidden={executionMode !== 'batch'}>
             <FileUpload
               parameters={step.inputs ?? []}
               outputParameters={step.outputs ?? []}
@@ -1790,7 +1810,7 @@ title;`;
 
         {/* CAS Table Execution Mode */}
         {visitedModes.has('casTable') && (
-          <div className="score-panel__mode-body" hidden={executionMode !== 'casTable'}>
+          <div className="score-panel__mode-body" id="score-panel-casTable" role="tabpanel" aria-labelledby="score-tab-casTable" hidden={executionMode !== 'casTable'}>
             <CasTableScore
               parameters={step.inputs ?? []}
               outputParameters={step.outputs ?? []}

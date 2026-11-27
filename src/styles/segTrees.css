@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 /* Segmentation Tree Explorer.
-   The list page reuses .flow-list (flows.css); buttons, alerts, tables and
+   The list page is the shared list table (listTable.css); buttons, alerts, tables and
    dialogs come from components.css. This file styles the explorer itself and
    the shared menu button. */
 
@@ -83,6 +83,37 @@
 .sas-menu-button__item-desc {
   font-size: var(--font-size-xs);
   color: var(--sas-text-muted);
+}
+
+/* Choices inside a mixed menu (a column's filter values): every choice keeps
+   a tick-wide gutter so the labels line up. */
+.sas-menu-button__item--choice .sas-menu-button__item-label::before {
+  content: '';
+  display: inline-block;
+  width: 1.2em;
+}
+
+.sas-menu-button__item--choice.sas-menu-button__item--checked .sas-menu-button__item-label::before {
+  content: '✓';
+}
+
+.sas-menu-button__item--choice .sas-menu-button__item-desc {
+  padding-left: 1.2em;
+}
+
+.sas-menu-button__separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--sas-gray-200);
+}
+
+.sas-menu-button__heading {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--sas-gray-600);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
 }
 
 /* ─── Page ─── */
@@ -1950,4 +1981,14 @@
 
 .segtree-tests__confirm p {
   margin: 0 0 var(--space-2);
+}
+
+/* 3.1 (Figma 11/13): the SAS Intelligent Decisioning link at the right of
+   the title row; the view tabs sit above the find bar. */
+.segtree__heading {
+  justify-content: space-between;
+}
+
+.segtree__centre > .segtree-tabs {
+  margin-bottom: var(--space-3);
 }

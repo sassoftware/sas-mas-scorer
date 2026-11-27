@@ -50,10 +50,11 @@ type TreeTab = 'outline' | 'diagram';
 /** Rows each tree view opens to on load before it starts leaving subtrees collapsed. */
 const DEFAULT_OPEN: Record<TreeTab, number> = { outline: 150, diagram: 40 };
 const CENTRE_VIEWS: { id: CentreView; label: string }[] = [
-  { id: 'split', label: 'Split' },
-  { id: 'outline', label: 'Outline' },
+  // 3.1 (Figma 11/13) order; the view a person last used still opens first.
   { id: 'diagram', label: 'Diagram' },
+  { id: 'outline', label: 'Outline' },
   { id: 'icicle', label: 'Icicle' },
+  { id: 'split', label: 'Split' },
 ];
 
 const BACK_ICON = (
@@ -267,9 +268,17 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
 
   return (
     <div className="segtree">
-      <Button variant="tertiary" size="small" icon={BACK_ICON} className="flow-detail__back" onClick={() => navigate('/segmentation-trees')}>
-        Back to list
-      </Button>
+      <nav className="flow-detail__crumbs" aria-label="Breadcrumb">
+        <ol className="sas-breadcrumbs">
+          <li className="sas-breadcrumbs__item">
+            <button type="button" className="sas-breadcrumbs__link" onClick={() => navigate('/segmentation-trees')}>Segmentation Trees</button>
+            <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
+          </li>
+          <li className="sas-breadcrumbs__item">
+            <span className="sas-breadcrumbs__current" aria-current="page">{tree.name}</span>
+          </li>
+        </ol>
+      </nav>
 
       <header className="segtree__header">
         <div className="segtree__heading">
@@ -285,7 +294,7 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           <div><dt>Modified</dt><dd>{formatTimestamp(tree.modifiedTimeStamp)}</dd></div>
         </dl>
         <div className="segtree__actions">
-          <Button variant="secondary" size="small" disabled={index.leafIds.length === 0} onClick={() => setTestScope({ title: 'Whole tree', leafIds: index.leafIds })}>
+          <Button variant="primary" size="small" disabled={index.leafIds.length === 0} onClick={() => setTestScope({ title: 'Whole tree', leafIds: index.leafIds })}>
             Test whole tree…
           </Button>
           <Button variant="secondary" size="small" onClick={() => setTestsOpen(true)}>
@@ -357,19 +366,6 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
           onTest={(title, leafIds) => setTestScope({ title, leafIds })}
         />
         <div className="segtree__centre">
-          <SegTreeFindBar
-            index={index}
-            focusId={focusId}
-            query={findQuery}
-            onQueryChange={setFindQuery}
-            find={find}
-            mode={effectiveMode}
-            onModeChange={setStepMode}
-            shadowedPrefix={shadowedPrefix}
-            failPrefix={resultPrefixes?.fail ?? null}
-            results={shownRun?.results.byPath ?? null}
-            onNavigate={goTo}
-          />
           <div className="segtree-tabs" role="tablist" aria-label="Tree view">
             {CENTRE_VIEWS.map((v) => (
               <button
@@ -394,6 +390,19 @@ export default function SegTreeExplorerPage({ treeId }: SegTreeExplorerPageProps
               </button>
             ))}
           </div>
+          <SegTreeFindBar
+            index={index}
+            focusId={focusId}
+            query={findQuery}
+            onQueryChange={setFindQuery}
+            find={find}
+            mode={effectiveMode}
+            onModeChange={setStepMode}
+            shadowedPrefix={shadowedPrefix}
+            failPrefix={resultPrefixes?.fail ?? null}
+            results={shownRun?.results.byPath ?? null}
+            onNavigate={goTo}
+          />
 
           <div id="segtree-centre-panel" role="tabpanel" aria-labelledby={`segtree-tab-${centre}`}>
             {(centre === 'outline' || centre === 'diagram') && splitId && (

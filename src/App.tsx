@@ -13,7 +13,7 @@ import { Button } from './components/common/Button';
 import { EmptyState } from './components/common/EmptyState';
 import { CopyFailureDetails } from './components/common/Alert';
 import { ChunkErrorBoundary } from './components/common/ChunkErrorBoundary';
-import { useModules, useSteps, useSubmodules } from './hooks';
+import { useModules, useModuleTypeCounts, useSteps, useSubmodules } from './hooks';
 import { useSasAuth } from './auth';
 import { deleteModule, getModule } from './api/modules';
 import { getUIDefinition, listUIDefinitions, importUIDefinition } from './storage/uiStorage';
@@ -168,12 +168,22 @@ function App() {
   // Selected module/step state (kept in sync with URL)
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [selectedStep, setSelectedStep] = useState<Step | null>(null);
-  const [recentModules, setRecentModules] = useState<Module[]>([]);
+  // The module the sidebar keeps: the one open now, or the last one opened in
+  // this session. Unset until the user opens a module.
+  const [lastModule, setLastModule] = useState<Module | null>(null);
+  const lastModuleRef = useRef<Module | null>(null);
+  lastModuleRef.current = lastModule;
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleError, setModuleError] = useState<string | null>(null);
 
-  // UI Apps state
-  const [recentUIApps, setRecentUIApps] = useState<UIDefinitionSummary[]>([]);
+  // UI Apps state: the saved apps (for names and per-module counts), and the
+  // app the user last ran or edited in this session, which the sidebar keeps.
+  const [uiAppList, setUIAppList] = useState<UIDefinitionSummary[]>([]);
+  const [lastUIAppId, setLastUIAppId] = useState<string | null>(null);
+  // Saved MAS UI apps per module (lowercased id), for the module list's app tags.
+  const [appCountByModule, setAppCountByModule] = useState<Record<string, number>>({});
+  // Bumped by the module list's Refresh, so its type counts are read again.
+  const [moduleCountsKey, setModuleCountsKey] = useState(0);
   const [activeUIDefinition, setActiveUIDefinition] = useState<UIDefinition | null>(null);
   const [uiLoading, setUILoading] = useState(false);
 
@@ -278,6 +288,15 @@ function App() {
     typeFilter: toModuleTypeFilter(moduleListParams.type),
     page: parsePageParam(moduleListParams.page) - 1,
   });
+  const moduleTypeCounts = useModuleTypeCounts(
+    escapedModuleSearch ? `contains(name,'${escapedModuleSearch}')` : '',
+    isAuthenticated && moduleListShownRef.current,
+    moduleCountsKey
+  );
+  const refreshModuleList = useCallback(() => {
+    setModuleCountsKey((k) => k + 1);
+    return refreshModules();
+  }, [refreshModules]);
 
   // Write a change to the module list's query. Replaces the history entry, so
   // Back leaves the list instead of stepping through its filters.
@@ -300,7 +319,14 @@ function App() {
   const loadRecentUIApps = useCallback(async () => {
     try {
       const list = await listUIDefinitions();
-      setRecentUIApps(list.slice(0, 5));
+      setUIAppList(list);
+      const counts: Record<string, number> = {};
+      for (const app of list) {
+        if (app.scrUrl) continue;
+        const key = app.moduleId.toLowerCase();
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      setAppCountByModule(counts);
     } catch {
       // Silent — not critical
     }
@@ -329,6 +355,14 @@ function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // A saved app the user runs or edits becomes the sidebar's last UI app. A
+  // shared link (its definition in the URL) is not in the saved list, so it
+  // never shows there.
+  useEffect(() => {
+    const id = uiAppEditId ?? uiAppId;
+    if (id && !uiAppDef) setLastUIAppId(id);
+  }, [uiAppId, uiAppEditId, uiAppDef]);
+
   // Use a ref to check selectedModule inside the effect without it being a dependency.
   const selectedModuleRef = useRef<Module | null>(null);
   selectedModuleRef.current = selectedModule;
@@ -342,10 +376,7 @@ function App() {
         getModule(moduleId)
           .then((module) => {
             setSelectedModule(module);
-            setRecentModules((prev) => {
-              const filtered = prev.filter((m) => m.id !== module.id);
-              return [module, ...filtered].slice(0, 5);
-            });
+            setLastModule(module);
           })
           .catch((err) => {
             setModuleError(err instanceof Error ? err.message : 'Failed to load module');
@@ -458,7 +489,8 @@ function App() {
       // The sidebar's Current Module section: Details opens the module,
       // Execute Score the step last scored in it. With no step yet, Execute
       // Score opens the module with focus on its Steps card to pick one.
-      const current = selectedModuleRef.current;
+      // The sidebar keeps the last module after the user has left it.
+      const current = selectedModuleRef.current ?? lastModuleRef.current;
       if (!current) return;
       const modulePath = `/modules/${encodeURIComponent(current.id)}`;
       const scoreStepId = view === 'score' ? lastStepIdsRef.current.get(current.id) : undefined;
@@ -485,10 +517,7 @@ function App() {
   const handleSelectModule = useCallback((module: Module) => {
     setSelectedModule(module);
     setSelectedStep(null);
-    setRecentModules((prev) => {
-      const filtered = prev.filter((m) => m.id !== module.id);
-      return [module, ...filtered].slice(0, 5);
-    });
+    setLastModule(module);
     navigate(`/modules/${encodeURIComponent(module.id)}`);
   }, [navigate]);
 
@@ -517,7 +546,7 @@ function App() {
     await deleteModule(moduleIdToDelete);
     setSelectedModule(null);
     setSelectedStep(null);
-    setRecentModules((prev) => prev.filter((m) => m.id !== moduleIdToDelete));
+    setLastModule((prev) => (prev?.id === moduleIdToDelete ? null : prev));
     refreshModules();
     navigate({ pathname: '/', search: moduleListSearchRef.current });
   }, [refreshModules, navigate]);
@@ -606,7 +635,8 @@ function App() {
     clearCasCatalog();
     setSelectedModule(null);
     setSelectedStep(null);
-    setRecentModules([]);
+    setLastModule(null);
+    setLastUIAppId(null);
     navigate('/');
     await loadActiveConnection();
     await initViyaUrl();
@@ -747,6 +777,7 @@ function App() {
       }
       return (
         <UIBuilder
+          key={`edit:${activeUIDefinition.id}`}
           definition={activeUIDefinition}
           onBack={handleBackToUIApps}
           onSaved={handleUIAppSaved}
@@ -759,6 +790,7 @@ function App() {
     if (activeView === 'ui-app-new' && uiAppNewModuleId) {
       return (
         <UIBuilder
+          key={`new:${uiAppNewModuleId}`}
           definition={null}
           moduleId={uiAppNewModuleId}
           onBack={handleBackToUIApps}
@@ -782,6 +814,7 @@ function App() {
       }
       return (
         <UIBuilder
+          key={`scr:${endpoint.url}`}
           definition={null}
           scrUrl={endpoint.url}
           scrLabel={endpoint.label}
@@ -800,7 +833,9 @@ function App() {
           loading={loadingModules}
           error={modulesError}
           onSelectModule={handleSelectModule}
-          onRefresh={refreshModules}
+          onRefresh={refreshModuleList}
+          typeCounts={moduleTypeCounts}
+          appCounts={appCountByModule}
           totalCount={totalCount}
           filteredCount={filteredCount}
           currentPage={currentPage}
@@ -854,6 +889,8 @@ function App() {
           onDelete={handleDeleteModule}
           onBuildUI={handleBuildUI}
           onViewFlow={handleViewFlow}
+          onOpenUIApp={handleRunUIApp}
+          onViewAllUIApps={() => handleNavigate('ui-apps')}
           focusStepsRequest={
             (location.state as { focusSteps?: boolean } | null)?.focusSteps ? location.key : undefined
           }
@@ -945,13 +982,17 @@ function App() {
         activeView={getActiveView()}
         // Sidebar exits ask first while the UI Builder has unsaved changes.
         onNavigate={(view) => runWithLeaveGuard(() => handleNavigate(view))}
-        selectedModule={selectedModule}
-        recentModules={recentModules}
-        onSelectModule={(module) => runWithLeaveGuard(() => handleSelectModule(module))}
+        lastModule={selectedModule ?? lastModule}
+        lastModuleApps={(() => {
+          const shown = selectedModule ?? lastModule;
+          return shown ? appCountByModule[shown.id.toLowerCase()] ?? 0 : 0;
+        })()}
         onOpenSettings={isElectron ? () => setShowSettings(true) : undefined}
         activeConnectionName={activeConnectionName}
-        recentUIApps={recentUIApps}
-        onSelectUIApp={(id) => runWithLeaveGuard(() => handleRunUIApp(id))}
+        lastUIApp={lastUIAppId ? uiAppList.find((a) => a.id === lastUIAppId) ?? null : null}
+        onRunUIApp={(id) => runWithLeaveGuard(() => handleRunUIApp(id))}
+        onEditUIApp={(id) => runWithLeaveGuard(() => handleEditUIApp(id))}
+        focus={getActiveView() === 'ui-app-new' || getActiveView() === 'ui-app-edit'}
       >
         {renderContent()}
       </Layout>

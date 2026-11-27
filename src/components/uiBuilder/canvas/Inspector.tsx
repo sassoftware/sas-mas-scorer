@@ -1,0 +1,469 @@
+// Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+import React, { useId } from 'react';
+import { SubmitPosition, UIDefinition, UIField, UISettings, WidgetType } from '../../../types/uiBuilder';
+import { Step } from '../../../types';
+import { compatibleWidgetsFor, findParameter, getSubmitPosition } from '../../../utils/uiDefaults';
+import { FieldConfigPanel } from '../FieldConfigPanel';
+import { widgetLabels } from '../widgetMap';
+import { Button } from '../../common/Button';
+import { widgetIcons, widgetShortLabels } from './widgetIcons';
+import { canNudge, findField } from './canvasOps';
+import { Selection } from './FormCanvas';
+import { startDrag } from './dnd';
+import { ColorChoice } from './ColorChoice';
+import { MessageRulesEditor } from './MessageRulesEditor';
+import { RunLogSettings } from './RunLogSettings';
+
+interface Props {
+  definition: UIDefinition;
+  step: Step | null;
+  dateKinds: Record<string, 'date' | 'datetime' | 'checkbox'>;
+  /** The module was published from SAS Model Manager (offers the model information panel). */
+  isModelModule?: boolean;
+  /** The module was published from a SAS Intelligent Decisioning decision (offers Save as test case). */
+  isDecisionModule?: boolean;
+  gridSchemas?: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>;
+  selection: Selection;
+  onSelect: (selection: Selection) => void;
+  onFieldChange: (parameterId: string, field: UIField) => void;
+  onWidgetChange: (parameterId: string, widget: WidgetType) => void;
+  /** A widget tile is being dragged onto the canvas. */
+  onDragStateChange: (dragging: boolean) => void;
+  onMoveFieldToSection: (parameterId: string, sectionId: string) => void;
+  onNudgeField: (parameterId: string, delta: -1 | 1) => void;
+  onRemoveField: (parameterId: string) => void;
+  onNameChange: (name: string) => void;
+  onDescriptionChange: (description: string) => void;
+  onSettingsChange: (settings: UISettings) => void;
+  onColumnsChange: (columns: 1 | 2 | 3) => void;
+  onDisplayChange: (display: 'page' | 'tabs' | 'steps') => void;
+  onSectionTitleChange: (sectionId: string, title: string) => void;
+  onSectionColorChange: (sectionId: string, color: string | undefined) => void;
+  onMoveSection: (sectionId: string, delta: -1 | 1) => void;
+  onRemoveSection: (sectionId: string) => void;
+  onAddSection: () => void;
+}
+
+const directionText = (f: UIField) => (f.direction === 'input' ? 'Input' : f.direction === 'output' ? 'Output' : 'Text block');
+
+export const Inspector: React.FC<Props> = (props) => {
+  const { definition, step, selection } = props;
+  const uid = useId();
+  const fid = (name: string) => `${uid}-${name}`;
+  const params = step ? [...(step.inputs ?? []), ...(step.outputs ?? [])] : [];
+
+  if (selection?.kind === 'app') {
+    const s = definition.settings;
+    return (
+      <aside className="cb-inspector" aria-label="App settings">
+        <div className="cb-inspector__head">
+          <span className="cb-inspector__eyebrow">Selected · app</span>
+          <h2 className="cb-inspector__title">App settings</h2>
+        </div>
+        <div className="cb-inspector__body">
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('name')}>Name</label>
+            <input id={fid('name')} className="sas-input" value={definition.name} onChange={(e) => props.onNameChange(e.target.value)} />
+          </div>
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('desc')}>Description (optional)</label>
+            <textarea
+              id={fid('desc')}
+              className="sas-input"
+              rows={2}
+              value={definition.description ?? ''}
+              placeholder="A short description shown above the form"
+              onChange={(e) => props.onDescriptionChange(e.target.value)}
+            />
+          </div>
+          <div className="ui-builder__config-field">
+            <span className="cb-inspector__label" id={fid('cols')}>Columns</span>
+            <div className="cb-segmented" role="group" aria-labelledby={fid('cols')}>
+              {[1, 2, 3].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={definition.layout.columns === n}
+                  className={definition.layout.columns === n ? 'cb-segmented__on' : ''}
+                  onClick={() => props.onColumnsChange(n as 1 | 2 | 3)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('display')}>Show sections as</label>
+            <select
+              id={fid('display')}
+              className="sas-input"
+              aria-describedby={fid('display-hint')}
+              value={definition.layout.display ?? 'page'}
+              onChange={(e) => props.onDisplayChange(e.target.value as 'page' | 'tabs' | 'steps')}
+            >
+              <option value="page">One page</option>
+              <option value="tabs">Tabs</option>
+              <option value="steps">Steps (Back and Next)</option>
+            </select>
+            <span className="ui-builder__config-type-hint" id={fid('display-hint')}>
+              {(definition.layout.display ?? 'page') === 'steps'
+                ? "Each section is a step. Next checks that step's fields; the run button is on the last step with inputs, and the results step follows."
+                : (definition.layout.display ?? 'page') === 'tabs'
+                  ? 'Each section is a tab. After a run the first tab with results opens.'
+                  : 'Every section on one page.'}
+              {(s.outputLayout ?? 'below') === 'side-by-side' && (definition.layout.display ?? 'page') !== 'page'
+                ? ' Tabs and steps apply when the results are below the inputs or inline.'
+                : ''}
+            </span>
+          </div>
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('out')}>Results position</label>
+            <select
+              id={fid('out')}
+              className="sas-input"
+              value={s.outputLayout || 'below'}
+              onChange={(e) => props.onSettingsChange({ ...s, outputLayout: e.target.value as UISettings['outputLayout'] })}
+            >
+              <option value="below">Below the inputs</option>
+              <option value="side-by-side">Side by side</option>
+              <option value="inline">Inline</option>
+            </select>
+          </div>
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('pos')}>Run button position</label>
+            <select
+              id={fid('pos')}
+              className="sas-input"
+              value={getSubmitPosition(s)}
+              onChange={(e) => props.onSettingsChange({ ...s, submitPosition: e.target.value as SubmitPosition })}
+            >
+              <option value="top">At the top</option>
+              <option value="afterInputs">After the inputs</option>
+              <option value="bottom">At the bottom</option>
+            </select>
+            <p className="ui-builder__config-type-hint">You can also drag the button on the canvas.</p>
+          </div>
+          {props.isDecisionModule && (
+            <div className="ui-builder__config-field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!s.saveScenario}
+                  onChange={(e) => props.onSettingsChange({ ...s, saveScenario: e.target.checked || undefined })}
+                  aria-describedby={fid('scenario-hint')}
+                />
+                {' '}Save as test case
+              </label>
+              <span className="ui-builder__config-type-hint" id={fid('scenario-hint')}>
+                After a run, app users can save the inputs and results as a scenario of the decision in SAS Intelligent Decisioning. They need write access to the folder they choose.
+              </span>
+            </div>
+          )}
+          {props.isModelModule && (
+            <div className="ui-builder__config-field">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={!!s.showModelInfo}
+                  onChange={(e) => props.onSettingsChange({ ...s, showModelInfo: e.target.checked || undefined })}
+                  aria-describedby={fid('modelinfo-hint')}
+                />
+                {' '}Show model information
+              </label>
+              <span className="ui-builder__config-type-hint" id={fid('modelinfo-hint')}>
+                The model's name, project, version, role and algorithm from SAS Model Manager, read when the app opens. App users need read access to the model's project.
+              </span>
+            </div>
+          )}
+          <ColorChoice
+            label="Run button colour"
+            kind="button"
+            value={s.accentColor}
+            onChange={(color) => props.onSettingsChange({ ...s, accentColor: color })}
+            hint="The button's text turns white or black, whichever is easier to read."
+          />
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('btn')}>Button label</label>
+            <input
+              id={fid('btn')}
+              className="sas-input"
+              value={s.submitLabel ?? 'Execute'}
+              onChange={(e) => props.onSettingsChange({ ...s, submitLabel: e.target.value })}
+            />
+          </div>
+          <Button variant="secondary" size="small" onClick={props.onAddSection}>Add section</Button>
+
+          <div className="ui-builder__config-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!s.batchFromFile}
+                onChange={(e) => props.onSettingsChange({ ...s, batchFromFile: e.target.checked || undefined })}
+                aria-describedby={fid('batch-hint')}
+              />
+              {' '}Score a file
+            </label>
+            <span className="ui-builder__config-type-hint" id={fid('batch-hint')}>
+              Adds a section where app users upload a CSV file and score every row, with progress, Cancel and a results download.
+            </span>
+          </div>
+          <div className="ui-builder__config-field">
+            <label>
+              <input
+                type="checkbox"
+                checked={!!s.runHistory}
+                onChange={(e) => props.onSettingsChange({ ...s, runHistory: e.target.checked || undefined })}
+                aria-describedby={fid('history-hint')}
+              />
+              {' '}Run history
+            </label>
+            <span className="ui-builder__config-type-hint" id={fid('history-hint')}>
+              The last 20 runs under the form: put a run's inputs back, or compare two runs. Kept only in the app user's browser tab.
+            </span>
+          </div>
+          <RunLogSettings settings={s} onChange={props.onSettingsChange} />
+          <fieldset className="cb-inspector__checks">
+            <legend className="cb-inspector__label">Downloads after a run</legend>
+            {(['csv', 'json'] as const).map(kind => (
+              <label key={kind}>
+                <input
+                  type="checkbox"
+                  checked={(s.downloads ?? []).includes(kind)}
+                  onChange={(e) => {
+                    const next = new Set(s.downloads ?? []);
+                    if (e.target.checked) next.add(kind); else next.delete(kind);
+                    const list = (['csv', 'json'] as const).filter(k => next.has(k));
+                    props.onSettingsChange({ ...s, downloads: list.length ? list : undefined });
+                  }}
+                />
+                {' '}Offer the inputs and results as {kind === 'csv' ? 'a CSV file' : 'a JSON file'}
+              </label>
+            ))}
+          </fieldset>
+
+          <h3 className="cb-inspector__step">Messages after a run</h3>
+          <p className="cb-inspector__hint">
+            Show your own text when a result meets a condition, for example "Refer to underwriting" when the probability is above 0.7. Every matching message is shown, in this order. The app only compares what MAS returned with your value.
+          </p>
+          <MessageRulesEditor
+            rules={s.messageRules ?? []}
+            outputs={step?.outputs ?? []}
+            onChange={(rules) => props.onSettingsChange({ ...s, messageRules: rules.length ? rules : undefined })}
+          />
+        </div>
+      </aside>
+    );
+  }
+
+  if (selection?.kind === 'section') {
+    const index = definition.layout.sections.findIndex(s => s.id === selection.id);
+    const section = definition.layout.sections[index];
+    if (section) {
+      return (
+        <aside className="cb-inspector" aria-label="Section settings">
+          <div className="cb-inspector__head">
+            <span className="cb-inspector__eyebrow">Selected · section</span>
+            <h2 className="cb-inspector__title">{section.title || 'Untitled section'}</h2>
+            <span className="cb-inspector__sub">{section.fields.length} field{section.fields.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="cb-inspector__body">
+            <div className="ui-builder__config-field">
+              <label htmlFor={fid('stitle')}>Title</label>
+              <input
+                id={fid('stitle')}
+                className="sas-input"
+                value={section.title ?? ''}
+                onChange={(e) => props.onSectionTitleChange(section.id, e.target.value)}
+              />
+            </div>
+            <ColorChoice
+              label="Colour line"
+              kind="line"
+              value={section.color}
+              onChange={(color) => props.onSectionColorChange(section.id, color)}
+              hint="A coloured line beside the section, to group or highlight it."
+            />
+            <div className="cb-inspector__row">
+              <Button variant="secondary" size="small" disabled={index === 0} onClick={() => props.onMoveSection(section.id, -1)}>Move up</Button>
+              <Button variant="secondary" size="small" disabled={index === definition.layout.sections.length - 1} onClick={() => props.onMoveSection(section.id, 1)}>Move down</Button>
+            </div>
+            <div className="cb-inspector__row">
+              <Button variant="secondary" size="small" onClick={props.onAddSection}>Add section</Button>
+              <Button variant="danger" size="small" onClick={() => props.onRemoveSection(section.id)}>Remove section</Button>
+            </div>
+            <p className="ui-builder__config-type-hint">Removing a section removes its fields too. Undo brings them back.</p>
+          </div>
+        </aside>
+      );
+    }
+  }
+
+  const location = selection?.kind === 'field' ? findField(definition, selection.id) : null;
+  if (!location) {
+    return (
+      <aside className="cb-inspector cb-inspector--empty" aria-label="Inspector">
+        <div className="cb-inspector__none">
+          <span className="cb-inspector__none-icon" aria-hidden="true" />
+          <h2 className="cb-inspector__title">No field selected</h2>
+          <p>Click a field on the canvas or in the structure on the left to choose its widget and settings here.</p>
+          <Button variant="tertiary" size="small" onClick={() => props.onSelect({ kind: 'app' })}>App settings</Button>
+        </div>
+      </aside>
+    );
+  }
+
+  const field = location.field;
+  const param = field.direction === 'static' ? null : findParameter(params, field.parameterId) ?? null;
+  const compatible: WidgetType[] = field.direction === 'static'
+    ? ['markdown']
+    : param
+      ? compatibleWidgetsFor(param, field.direction, props.dateKinds[param.name.toLowerCase()])
+      : (Object.keys(widgetLabels) as WidgetType[]);
+  if (!compatible.includes(field.widget)) compatible.push(field.widget);
+  const usedParameterIds = new Set(definition.layout.sections.flatMap(s => s.fields.map(f => f.parameterId)));
+
+  return (
+    <aside className="cb-inspector" aria-label={`Settings for ${field.label}`}>
+      <div className="cb-inspector__head">
+        <span className="cb-inspector__eyebrow">Selected · {field.direction === 'static' ? 'text block' : field.parameterId}</span>
+        <h2 className="cb-inspector__title">{field.label}</h2>
+        <span className="cb-inspector__sub">{directionText(field)} · {widgetLabels[field.widget]} widget</span>
+      </div>
+      <div className="cb-inspector__body">
+        {field.direction !== 'static' && (
+          <>
+            <h3 className="cb-inspector__step" id={fid('step1')}>Step 1 · Choose a widget</h3>
+            <p className="cb-inspector__hint">
+              {param && props.dateKinds[param.name.toLowerCase()]
+                ? `The decision declares this ${field.direction} as a ${props.dateKinds[param.name.toLowerCase()]}. `
+                : ''}
+              Widgets this {param ? param.type : ''} {field.direction} can use. Click one, or drag it onto another field on the canvas to use it there.
+            </p>
+            <div className="cb-widgets" role="radiogroup" aria-labelledby={fid('step1')}>
+              {compatible.map(w => (
+                <button
+                  key={w}
+                  type="button"
+                  role="radio"
+                  aria-checked={field.widget === w}
+                  className={`cb-widgets__tile${field.widget === w ? ' cb-widgets__tile--on' : ''}`}
+                  draggable
+                  onDragStart={(e) => {
+                    startDrag(e, { kind: 'widget', widget: w });
+                    props.onDragStateChange(true);
+                  }}
+                  onDragEnd={() => props.onDragStateChange(false)}
+                  onClick={() => props.onWidgetChange(field.parameterId, w)}
+                >
+                  <span className="cb-widgets__icon">{widgetIcons[w]}</span>
+                  <span className="cb-widgets__label">{widgetShortLabels[w]}</span>
+                </button>
+              ))}
+            </div>
+            <h3 className="cb-inspector__step">Step 2 · Fine-tune</h3>
+          </>
+        )}
+
+        <FieldConfigPanel
+          variant="inspector"
+          field={field}
+          parameter={param}
+          allParameters={params}
+          usedParameterIds={usedParameterIds}
+          sections={definition.layout.sections}
+          currentSectionId={location.sectionId}
+          columns={definition.layout.columns}
+          gridSchema={param ? props.gridSchemas?.[param.name.toLowerCase()] : undefined}
+          onChange={(f) => props.onFieldChange(field.parameterId, f)}
+          onMoveToSection={(id) => props.onMoveFieldToSection(field.parameterId, id)}
+          onClose={() => props.onSelect(null)}
+        />
+
+        <div className="ui-builder__config-section-title">Show only when</div>
+        {(() => {
+          const others = definition.layout.sections.flatMap(s => s.fields).filter(f =>
+            f.parameterId !== field.parameterId
+            && f.direction !== 'static'
+            && (field.direction === 'input' ? f.direction === 'input' : true));
+          const c = field.showWhen;
+          const setCond = (next: UIField['showWhen']) => props.onFieldChange(field.parameterId, { ...field, showWhen: next });
+          return (
+            <>
+              <div className="ui-builder__config-field">
+                <label htmlFor={fid('sw-field')}>Field</label>
+                <select
+                  id={fid('sw-field')}
+                  className="sas-input"
+                  value={c?.field ?? ''}
+                  onChange={(e) => setCond(e.target.value ? { op: c?.op ?? 'eq', value: c?.value, value2: c?.value2, field: e.target.value } : undefined)}
+                >
+                  <option value="">Always shown</option>
+                  {others.map(f => <option key={f.parameterId} value={f.parameterId}>{f.label} ({f.direction === 'input' ? 'input' : 'result'})</option>)}
+                </select>
+              </div>
+              {c && (
+                <div className="ui-builder__config-row">
+                  <div className="ui-builder__config-field">
+                    <label htmlFor={fid('sw-op')}>Condition</label>
+                    <select id={fid('sw-op')} className="sas-input" value={c.op}
+                      onChange={(e) => setCond({ ...c, op: e.target.value as NonNullable<UIField['showWhen']>['op'] })}>
+                      <option value="eq">is</option>
+                      <option value="ne">is not</option>
+                      <option value="gt">is above</option>
+                      <option value="lt">is below</option>
+                      <option value="between">is between</option>
+                      <option value="present">has a value</option>
+                      <option value="missing">is missing</option>
+                    </select>
+                  </div>
+                  {c.op !== 'missing' && c.op !== 'present' && (
+                    <div className="ui-builder__config-field">
+                      <label htmlFor={fid('sw-val')}>{c.op === 'between' ? 'From' : 'Value'}</label>
+                      <input id={fid('sw-val')} className="sas-input" value={c.value ?? ''} onChange={(e) => setCond({ ...c, value: e.target.value })} />
+                    </div>
+                  )}
+                  {c.op === 'between' && (
+                    <div className="ui-builder__config-field">
+                      <label htmlFor={fid('sw-val2')}>To</label>
+                      <input id={fid('sw-val2')} className="sas-input" value={c.value2 ?? ''} onChange={(e) => setCond({ ...c, value2: e.target.value })} />
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="ui-builder__config-type-hint">
+                {field.direction === 'input'
+                  ? 'While hidden, this input is not checked and sends its default value, or missing without one. A checkbox or toggle compares its sent value (1 or 0, Y or N).'
+                  : 'Compares the value entered, or the value MAS returned. Results and text blocks can depend on inputs or on other results.'}
+              </p>
+            </>
+          );
+        })()}
+
+        <div className="ui-builder__config-section-title">Placement</div>
+        {definition.layout.sections.length > 1 && (
+          <div className="ui-builder__config-field">
+            <label htmlFor={fid('section')}>Section</label>
+            <select
+              id={fid('section')}
+              className="sas-input"
+              value={location.sectionId}
+              onChange={(e) => props.onMoveFieldToSection(field.parameterId, e.target.value)}
+            >
+              {definition.layout.sections.map(s => (
+                <option key={s.id} value={s.id}>{s.title || '(untitled)'}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="cb-inspector__row">
+          <Button variant="secondary" size="small" disabled={!canNudge(definition, field.parameterId, -1)} onClick={() => props.onNudgeField(field.parameterId, -1)}>Move up</Button>
+          <Button variant="secondary" size="small" disabled={!canNudge(definition, field.parameterId, 1)} onClick={() => props.onNudgeField(field.parameterId, 1)}>Move down</Button>
+          <Button variant="danger" size="small" onClick={() => props.onRemoveField(field.parameterId)}>Remove</Button>
+        </div>
+        <p className="ui-builder__config-type-hint">Fields can also be dragged on the canvas. Delete removes the selected field; Undo brings it back.</p>
+      </div>
+    </aside>
+  );
+};

@@ -1,10 +1,14 @@
 // Copyright © 2026, SAS Institute Inc., Cary, NC, USA.  All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+import type React from 'react';
 import { Step, StepParameter, StepParameterType } from '../types';
+import { conditionHolds } from './showWhen';
 import {
+  SubmitPosition,
   UIDefinition,
   UIField,
+  UILayout,
   UISection,
   UISettings,
   WidgetType,
@@ -18,13 +22,19 @@ function generateId(): string {
 /**
  * Map a step parameter type to its default widget.
  */
+/** A decision DataGrid parameter (MAS's type "datagrid", not in StepParameterType). */
+export const isDatagridType = (type: string): boolean => type.toLowerCase() === 'datagrid';
+
 export function getDefaultWidget(type: StepParameterType, direction: 'input' | 'output'): WidgetType {
   if (direction === 'output') {
     if (type === 'decimal') return 'gauge';
     if (type === 'string') return 'badge';
+    // MAS reports a decision DataGrid as type "datagrid", outside the declared union.
+    if (isDatagridType(type)) return 'table';
     return 'readonly';
   }
 
+  if (isDatagridType(type)) return 'datagrid';
   switch (type) {
     case 'decimal':
     case 'integer':
@@ -50,28 +60,36 @@ export function getDefaultWidget(type: StepParameterType, direction: 'input' | '
 export function getCompatibleWidgets(type: StepParameterType, direction: 'input' | 'output'): WidgetType[] {
   if (direction === 'output') {
     if (type === 'decimal' || type === 'integer' || type === 'bigint') {
-      return ['readonly', 'gauge', 'badge', 'hidden'];
+      return ['readonly', 'kpi', 'gauge', 'badge', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'hidden'];
     }
     if (type === 'string') {
-      return ['readonly', 'badge', 'hidden'];
+      return ['readonly', 'badge', 'checkbox', 'image', 'hidden'];
+    }
+    if (isDatagridType(type)) {
+      return ['table', 'barchart', 'readonly', 'hidden'];
+    }
+    if (type.endsWith('Array')) {
+      return ['readonly', 'table', 'barchart', 'hidden'];
     }
     return ['readonly', 'hidden'];
   }
 
   switch (type) {
     case 'decimal':
-      return ['number', 'slider', 'dropdown', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'integer':
     case 'bigint':
       // Toggle sends 1/0 by default; a decimal flag is rare enough to leave out.
-      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'text', 'readonly', 'hidden'];
+      return ['number', 'slider', 'dropdown', 'radio', 'toggle', 'percent', 'currency', 'checkbox', 'date', 'datetime', 'text', 'readonly', 'hidden'];
     case 'string':
       // Toggle sends configurable on/off codes ("Y"/"N" by default).
-      return ['text', 'dropdown', 'radio', 'toggle', 'textarea', 'readonly', 'hidden'];
+      return ['text', 'dropdown', 'radio', 'toggle', 'checkbox', 'textarea', 'file', 'readonly', 'hidden'];
     case 'binary':
       return ['textarea', 'readonly', 'hidden'];
     default:
+      if (isDatagridType(type)) return ['datagrid', 'textarea', 'hidden'];
       // Array types
+      if (type.endsWith('Array')) return ['textarea', 'checkboxgroup', 'readonly', 'hidden'];
       return ['textarea', 'readonly', 'hidden'];
   }
 }
@@ -131,6 +149,7 @@ export function generateDefaultUI(
     showExecutionTime: true,
     theme: 'default',
     outputLayout: 'below',
+    submitPosition: 'afterInputs',
   };
 
   const now = new Date().toISOString();
@@ -293,6 +312,124 @@ export function getToggleValues(field: UIField, type: string | undefined): { on:
   };
 }
 
+/**
+ * The width a field is drawn at: a table always takes the full width, and
+ * 1/3 means 1/2 below three columns (the grid has no thirds then).
+ */
+export function effectiveWidth(field: UIField, columns: number): UIField['width'] {
+  if (field.widget === 'table' || field.widget === 'barchart' || field.widget === 'datagrid') return 'full';
+  if (field.width === 'third' && columns < 3) return 'half';
+  return field.width;
+}
+
+/** Where the run button sits; apps saved before 3.1 show it at the bottom. */
+export function getSubmitPosition(settings: UISettings): SubmitPosition {
+  return settings.submitPosition ?? 'bottom';
+}
+
+/**
+ * The section the run button follows when it sits after the inputs: the
+ * last one with a visible input field. Null when no section has one (the
+ * button then sits at the bottom).
+ */
+export function lastInputSectionId(layout: UILayout, visibleOnly = true): string | null {
+  for (let i = layout.sections.length - 1; i >= 0; i--) {
+    const s = layout.sections[i];
+    if (s.fields.some(f => f.direction === 'input' && (!visibleOnly || f.visible))) return s.id;
+  }
+  return null;
+}
+
+// --- App colours (3.1) ---------------------------------------------------
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+/** A colour the app can use: #rrggbb only (anything else is ignored). */
+export function safeColor(value: string | undefined): string | undefined {
+  return value && HEX.test(value) ? value : undefined;
+}
+
+function luminance(hex: string): number {
+  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * Text colour for a button of this colour: white or black, whichever
+ * contrasts more (one of them always reaches at least 4.58:1, above the
+ * 4.5:1 WCAG AA needs).
+ */
+export function readableTextOn(background: string): string {
+  return contrastRatio(background, '#ffffff') >= contrastRatio(background, '#000000') ? '#ffffff' : '#000000';
+}
+
+/** Inline style for a run button in the app's colour; none for the default. */
+export function accentButtonStyle(settings: UISettings): React.CSSProperties | undefined {
+  const color = safeColor(settings.accentColor);
+  if (!color) return undefined;
+  return { backgroundColor: color, borderColor: color, color: readableTextOn(color) };
+}
+
+/**
+ * Widgets for a parameter, narrowed by what its decision declares: a date
+ * offers the date picker only, a datetime the date-and-time picker only.
+ */
+export function compatibleWidgetsFor(
+  param: StepParameter,
+  direction: 'input' | 'output',
+  dateKind?: 'date' | 'datetime' | 'checkbox'
+): WidgetType[] {
+  const all = getCompatibleWidgets(param.type, direction);
+  if (dateKind === 'date') return all.filter(w => w !== 'datetime');
+  if (dateKind === 'datetime') return all.filter(w => w !== 'date');
+  return all;
+}
+
+/** Gives each DataGrid input with the DataGrid Editor the columns and row limit its decision declares. */
+export function applyGridSchemas(
+  def: UIDefinition,
+  schemas: Record<string, { columns: { name: string; dataType: string }[]; maxRows: number | null }>
+): UIDefinition {
+  if (Object.keys(schemas).length === 0) return def;
+  return {
+    ...def,
+    layout: {
+      ...def.layout,
+      sections: def.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.map(f => {
+          const g = f.direction === 'input' && f.widget === 'datagrid' ? schemas[f.parameterId.toLowerCase()] : undefined;
+          return g ? { ...f, validation: { ...f.validation, gridColumns: g.columns, ...(g.maxRows ? { maxRows: g.maxRows } : {}) } } : f;
+        }),
+      })),
+    },
+  };
+}
+
+/** Shows each date, datetime and boolean parameter with its widget (picker, readable date, checkbox). */
+export function applyDateKinds(def: UIDefinition, kinds: Record<string, 'date' | 'datetime' | 'checkbox'>): UIDefinition {
+  if (Object.keys(kinds).length === 0) return def;
+  return {
+    ...def,
+    layout: {
+      ...def.layout,
+      sections: def.layout.sections.map(s => ({
+        ...s,
+        fields: s.fields.map(f => {
+          const kind = f.direction === 'static' ? undefined : kinds[f.parameterId.toLowerCase()];
+          return kind ? { ...f, widget: kind } : f;
+        }),
+      })),
+    },
+  };
+}
+
 /** The step parameter a field is bound to: exact name first, then any case. */
 export function findParameter(params: StepParameter[], name: string): StepParameter | undefined {
   return params.find((p) => p.name === name)
@@ -344,7 +481,7 @@ export function resolveInputValue(
   if (field.parameterId in values) return values[field.parameterId];
   if (field.defaultValue !== undefined) return field.defaultValue;
   if (field.widget === 'slider') return field.validation?.min ?? 0;
-  if (field.widget === 'toggle') return getToggleValues(field, param?.type).off;
+  if (field.widget === 'toggle' || field.widget === 'checkbox') return getToggleValues(field, param?.type).off;
   return undefined;
 }
 
@@ -365,6 +502,11 @@ export function buildRunValues(
       if (field.direction !== 'input') continue;
       const param = findParameter(inputs, field.parameterId);
       if (!param) continue;
+      // Hidden by its "Show only when" condition: the default, or missing.
+      if (!conditionHolds(field, definition, values)) {
+        run[param.name] = convertValueForType(field.defaultValue ?? null, param.type);
+        continue;
+      }
       run[param.name] = convertValueForType(resolveInputValue(field, param, values), param.type);
     }
   }

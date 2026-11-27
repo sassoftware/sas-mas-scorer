@@ -9,7 +9,10 @@ import { Button } from '../common/Button';
 import { Alert } from '../common/Alert';
 import { Badge } from '../common/Badge';
 import { EmptyState } from '../common/EmptyState';
-import { inspectEndpoint, normalizeScoreUrl, reachableFromHere, RUNTIME_LABELS } from '../../api/scr';
+import { inspectEndpoint, normalizeScoreUrl, reachableFromHere, RUNTIME_LABELS, type ScrRuntime } from '../../api/scr';
+import {
+  ListChip, ListColumn, ListSort, ListTable, ListToolbar, activeColumnFilters, filterOptions, sortRows,
+} from '../common/ListTable';
 import {
   addScrEndpoint,
   listScrEndpoints,
@@ -28,6 +31,10 @@ const isElectron = !!window.electronAPI;
 const LocalContainersPanel =
   __BUILD_MODE__ === 'electron' ? lazy(() => import('../containers/LocalContainersPanel')) : null;
 const showLocalContainers = !!LocalContainersPanel && !!window.electronAPI?.containers;
+
+type RuntimeFilter = 'all' | ScrRuntime;
+
+const modeLabel = (mode: string): string => (mode === 'batch' ? 'Batch' : 'Single record');
 
 const endpointName = (endpoint: SavedScrEndpoint): string =>
   endpoint.label || decodeURIComponent(endpoint.url.slice(endpoint.url.lastIndexOf('/') + 1));
@@ -72,6 +79,70 @@ export const ScrEndpointsPage: React.FC = () => {
       setBusy(false);
     }
   };
+
+  // The saved list: runtime chips, a Mode filter in its column menu, search.
+  const [runtime, setRuntime] = useState<RuntimeFilter>('all');
+  const [mode, setMode] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<ListSort | null>({ key: 'name', dir: 'asc' });
+  const term = search.trim().toLowerCase();
+  const searched = endpoints.filter(e =>
+    !term || endpointName(e).toLowerCase().includes(term) || e.url.toLowerCase().includes(term)
+  );
+  const runtimeOf = (e: SavedScrEndpoint): RuntimeFilter => e.lastSeen?.runtime ?? 'unknown';
+  const modeOf = (e: SavedScrEndpoint): string | null => (e.lastSeen ? modeLabel(e.lastSeen.mode) : null);
+  const runtimeChips: ListChip<RuntimeFilter>[] = [
+    { value: 'all', label: 'All', count: searched.filter(e => !mode || modeOf(e) === mode).length },
+    ...(['scr', 'python', 'python-legacy', 'unknown'] as const).map(r => ({
+      value: r,
+      label: RUNTIME_LABELS[r],
+      count: searched.filter(e => runtimeOf(e) === r && (!mode || modeOf(e) === mode)).length,
+    })),
+  ];
+  const columns: ListColumn<SavedScrEndpoint>[] = [
+    {
+      key: 'name',
+      label: 'Name',
+      width: '28%',
+      sortValue: endpointName,
+      render: (e) => <span className="list-cell__main">{endpointName(e)}</span>,
+    },
+    {
+      key: 'runtime',
+      label: 'Runtime',
+      width: '16%',
+      sortValue: (e) => (e.lastSeen ? RUNTIME_LABELS[e.lastSeen.runtime] : null),
+      render: (e) => (e.lastSeen ? RUNTIME_LABELS[e.lastSeen.runtime] : '—'),
+    },
+    {
+      key: 'mode',
+      label: 'Mode',
+      width: '14%',
+      sortValue: modeOf,
+      filter: {
+        options: filterOptions(searched.filter(e => runtime === 'all' || runtimeOf(e) === runtime), modeOf),
+        value: mode,
+        onChange: setMode,
+      },
+      render: (e) => e.lastSeen ? (
+        <Badge variant={e.lastSeen.mode === 'batch' ? 'info' : 'default'} size="small">
+          {modeLabel(e.lastSeen.mode)}
+        </Badge>
+      ) : '—',
+    },
+    {
+      key: 'url',
+      label: 'URL',
+      sortValue: (e) => e.url,
+      className: 'scr-url',
+      render: (e) => e.url,
+    },
+  ];
+  const sorted = sortRows(
+    searched.filter(e => (runtime === 'all' || runtimeOf(e) === runtime) && (!mode || modeOf(e) === mode)),
+    columns,
+    sort,
+  );
 
   const handleRemove = (id: string) => {
     removeScrEndpoint(id);
@@ -152,64 +223,47 @@ export const ScrEndpointsPage: React.FC = () => {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader>Saved endpoints</CardHeader>
-        <CardBody>
-          {endpoints.length === 0 ? (
-            <EmptyState
-              title="No endpoints yet"
-              hint={isElectron ? 'Add one above.' : 'Add one above. The list is kept in this browser only.'}
+      <section className="list-page scr-saved" aria-labelledby="scr-saved-title">
+        <h2 className="scr-saved__title" id="scr-saved-title">
+          Saved endpoints
+          {endpoints.length > 0 && <span className="sas-page-header__count">{endpoints.length}</span>}
+        </h2>
+        {endpoints.length === 0 ? (
+          <EmptyState
+            title="No endpoints yet"
+            hint={isElectron ? 'Add one above.' : 'Add one above. The list is kept in this browser only.'}
+          />
+        ) : (
+          <>
+            <ListToolbar
+              chips={runtimeChips}
+              activeChip={runtime}
+              onChipChange={setRuntime}
+              chipsLabel="Filter by runtime"
+              activeFilters={activeColumnFilters(columns)}
+              search={endpoints.length > 8 ? {
+                value: search,
+                onChange: setSearch,
+                placeholder: 'Search name or URL',
+                ariaLabel: 'Search saved endpoints by name or URL',
+              } : undefined}
             />
-          ) : (
-            <div className="sas-table__wrapper">
-              <table className="sas-table sas-table--compact">
-                <thead className="sas-table__head">
-                  <tr>
-                    <th scope="col" className="sas-table__th">Name</th>
-                    <th scope="col" className="sas-table__th">Runtime</th>
-                    <th scope="col" className="sas-table__th">Mode</th>
-                    <th scope="col" className="sas-table__th">URL</th>
-                    <th scope="col" className="sas-table__th"><span className="sr-only">Actions</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {endpoints.map((endpoint) => (
-                    <tr key={endpoint.id} className="sas-table__row">
-                      <td className="sas-table__td">
-                        <button
-                          type="button"
-                          className="scr-link"
-                          onClick={() => navigate(scrEndpointRoute(endpoint.id))}
-                        >
-                          {endpointName(endpoint)}
-                        </button>
-                      </td>
-                      <td className="sas-table__td">
-                        {endpoint.lastSeen ? RUNTIME_LABELS[endpoint.lastSeen.runtime] : '—'}
-                      </td>
-                      <td className="sas-table__td">
-                        {endpoint.lastSeen ? (
-                          <Badge variant={endpoint.lastSeen.mode === 'batch' ? 'info' : 'default'} size="small">
-                            {endpoint.lastSeen.mode === 'batch' ? 'Batch' : 'Single record'}
-                          </Badge>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="sas-table__td scr-url">{endpoint.url}</td>
-                      <td className="sas-table__td scr-actions">
-                        <Button variant="tertiary" size="small" onClick={() => handleRemove(endpoint.id)}>
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardBody>
-      </Card>
+            <ListTable
+              label="Saved endpoints"
+              storageKey="scr-endpoints"
+              columns={columns}
+              rows={sorted}
+              rowKey={(e) => e.id}
+              sort={sort}
+              onSortChange={setSort}
+              onRowClick={(e) => navigate(scrEndpointRoute(e.id))}
+              rowActions={(e) => [{ id: 'remove', label: 'Remove from the list', onSelect: () => handleRemove(e.id) }]}
+              rowActionsLabel={(e) => `More actions for ${endpointName(e)}`}
+              emptyMessage="No saved endpoints match."
+            />
+          </>
+        )}
+      </section>
 
       {showLocalContainers && LocalContainersPanel && (
         <Suspense fallback={null}>

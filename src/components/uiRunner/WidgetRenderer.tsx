@@ -15,6 +15,16 @@ import { ReadonlyWidget } from './widgets/ReadonlyWidget';
 import { GaugeWidget } from './widgets/GaugeWidget';
 import { BadgeWidget } from './widgets/BadgeWidget';
 import { MarkdownWidget } from './widgets/MarkdownWidget';
+import { TableWidget } from './widgets/TableWidget';
+import { DateInputWidget, DateOutputWidget } from './widgets/DateWidget';
+import { CheckboxInputWidget, CheckboxOutputWidget } from './widgets/CheckboxWidget';
+import { FileInputWidget } from './widgets/FileWidget';
+import { KpiWidget } from './widgets/KpiWidget';
+import { BarChartWidget } from './widgets/BarChartWidget';
+import { ImageWidget } from './widgets/ImageWidget';
+import { DataGridEditorWidget } from './widgets/DataGridEditorWidget';
+import { CheckboxGroupWidget } from './widgets/CheckboxGroupWidget';
+import { PercentCurrencyInputWidget, PercentCurrencyOutputWidget } from './widgets/PercentCurrencyWidget';
 import { InputWidgetProps } from './widgets/types';
 
 interface Props {
@@ -60,6 +70,34 @@ export const WidgetRenderer: React.FC<Props> = ({ field, value, onChange, ...res
       return <BadgeWidget field={field} value={value} />;
     case 'markdown':
       return <MarkdownWidget content={String(field.defaultValue ?? '')} />;
+    case 'table':
+      return <TableWidget field={field} value={value} labelId={rest.labelId} />;
+    case 'date':
+    case 'datetime':
+      return field.direction === 'input'
+        ? <DateInputWidget {...inputProps} />
+        : <DateOutputWidget field={field} value={value} />;
+    case 'checkbox':
+      return field.direction === 'input'
+        ? <CheckboxInputWidget {...inputProps} />
+        : <CheckboxOutputWidget field={field} value={value} type={rest.parameter?.type} />;
+    case 'percent':
+    case 'currency':
+      return field.direction === 'input'
+        ? <PercentCurrencyInputWidget {...inputProps} />
+        : <PercentCurrencyOutputWidget field={field} value={value} />;
+    case 'checkboxgroup':
+      return <CheckboxGroupWidget {...inputProps} />;
+    case 'datagrid':
+      return <DataGridEditorWidget {...inputProps} />;
+    case 'image':
+      return <ImageWidget field={field} value={value} />;
+    case 'barchart':
+      return <BarChartWidget field={field} value={value} labelId={rest.labelId} />;
+    case 'kpi':
+      return <KpiWidget field={field} value={value} />;
+    case 'file':
+      return <FileInputWidget {...inputProps} />;
     case 'hidden':
       return null;
     default:

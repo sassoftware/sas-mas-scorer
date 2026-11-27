@@ -9,6 +9,8 @@
  */
 
 import { Step, StepParameter } from '../../types';
+import { gridProblems } from '../../utils/datagrid';
+import { conditionHolds } from '../../utils/showWhen';
 import { FieldErrors, UIDefinition, UIField } from '../../types/uiBuilder';
 import {
   findParameter,
@@ -71,11 +73,23 @@ export function validateFieldValue(
 ): string | null {
   if (field.direction !== 'input' || !field.visible || UNCHECKED_WIDGETS.has(field.widget)) return null;
 
+  if (field.widget === 'checkboxgroup') {
+    const n = Array.isArray(value) ? value.length : 0;
+    const { minChecked, maxChecked } = field.validation ?? {};
+    if (minChecked !== undefined && n < minChecked) return `Tick at least ${minChecked} (now ${n}).`;
+    if (maxChecked !== undefined && n > maxChecked) return `Tick at most ${maxChecked} (now ${n}).`;
+  }
+
   if (isEmptyValue(value)) {
     if (!field.validation?.required) return null;
     return field.widget === 'dropdown' || field.widget === 'radio'
       ? 'Required. Choose an option.'
       : 'Required. Enter a value.';
+  }
+
+  if (field.widget === 'datagrid') {
+    const problems = gridProblems(value, 1);
+    return problems.length ? `Fix the cells that do not fit their column: ${problems[0]}.` : null;
   }
 
   const type = param?.type;
@@ -116,6 +130,8 @@ export function validateInputs(
   for (const section of definition.layout.sections) {
     for (const field of section.fields) {
       if (field.direction !== 'input') continue;
+      // Not shown, so not checked: it sends its default or missing.
+      if (!conditionHolds(field, definition, values)) continue;
       const param = findParameter(inputs, field.parameterId);
       if (step && !param) continue;
       const message = validateFieldValue(field, param, resolveInputValue(field, param, values));

@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { UIDefinition, UISection, UISettings } from '../../types/uiBuilder';
+import { UIDefinition, UILayout } from '../../types/uiBuilder';
 import { Step, Module } from '../../types';
 import { PageHeader } from '../layout/Layout';
 import { Loading } from '../common/Loading';
 import { Alert } from '../common/Alert';
 import { Button } from '../common/Button';
 import { Modal, isAnyModalOpen } from '../common/Modal';
-import { MenuButton } from '../common/MenuButton';
-import { BuilderToolbar } from './BuilderToolbar';
-import { BuilderCanvas } from './BuilderCanvas';
+import { BuilderBar } from './canvas/BuilderBar';
+import { CanvasEditor } from './canvas/CanvasEditor';
 import { BuilderPreview } from './BuilderPreview';
 import { ReplaceModuleDialog } from './ReplaceModuleDialog';
 import { ShareDialog } from './ShareDialog';
@@ -21,13 +20,17 @@ import { getModule } from '../../api/modules';
 import { saveUIDefinition } from '../../storage/uiStorage';
 import {
   computeSignatureDrift,
-  createFieldForParameter,
   describeSignatureDrift,
   generateDefaultUI,
   hasSignatureDrift,
+  applyDateKinds,
+  applyGridSchemas,
 } from '../../utils/uiDefaults';
 import { getScoreableStep } from '../../utils/moduleHelper';
 import { inspectEndpoint, scrStep } from '../../api/scr';
+import { DateKinds, getDecisionDateKinds, getDecisionGridSchemas, GridSchema } from '../../api/decisionDateTypes';
+import { modelIdOf } from '../uiRunner/ModelInfoPanel';
+import { decisionSourceOf } from '../uiRunner/SaveScenarioButton';
 
 interface UIBuilderProps {
   /** Existing definition to edit, or null for new */
@@ -61,7 +64,6 @@ interface UndoEntry {
 const MAX_UNDO = 50;
 /** Edits with the same key within this window (one typing burst) undo as one. */
 const COALESCE_MS = 1500;
-const NEW_SECTION = '__new-section__';
 
 /** Ctrl+Z belongs to the text field when the user is typing in one. */
 const isTextEntry = (el: EventTarget | null): boolean => {
@@ -72,7 +74,8 @@ const isTextEntry = (el: EventTarget | null): boolean => {
   return el instanceof HTMLElement && el.isContentEditable;
 };
 
-const newSectionId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+/** The definition with nothing on the page yet (the canvas-first starting point). */
+
 
 export const UIBuilder: React.FC<UIBuilderProps> = ({
   definition: initialDef,
@@ -107,6 +110,12 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   // The held navigation while the "unsaved changes" dialog is open.
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
   const [driftDismissed, setDriftDismissed] = useState(false);
+  // What "Use template" puts back on an emptied page: the generated layout.
+  const [generatedLayout, setGeneratedLayout] = useState<UILayout | null>(null);
+  // Date and datetime parameters, from the decision the module was published from.
+  const [dateKinds, setDateKinds] = useState<DateKinds>({});
+  // DataGrid inputs' declared columns, from the same decision.
+  const [gridSchemas, setGridSchemas] = useState<Record<string, GridSchema>>({});
 
   const defRef = useRef(def);
   defRef.current = def;
@@ -118,7 +127,7 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   const dirtyRef = useRef(isDirty);
   dirtyRef.current = isDirty;
 
-  const { steps } = useSteps(effectiveModuleId);
+  const { steps, loading: stepsLoading, error: stepsError, loadedModuleId } = useSteps(effectiveModuleId);
 
   // SCR: read the endpoint's signature; it stands in for the module's step.
   useEffect(() => {
@@ -142,6 +151,8 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
               }
             }
           }
+          // A new app starts with every input and result on the page.
+          setGeneratedLayout(generated.layout);
           setDef(generated);
           setBaseline(serialize(generated));
         }
@@ -178,6 +189,15 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
   // (with a generated layout) when creating. `steps` belong to the module the
   // builder opened with; after Replace Module they describe the old module,
   // so they are ignored then (the dialog has set the new step).
+  // A module MAS lists no steps for (or whose steps can't be read) has nothing to build from.
+  useEffect(() => {
+    if (scrUrl || !module || stepsLoading || steps.length > 0 || defRef.current) return;
+    if (!loadedModuleId || loadedModuleId !== effectiveModuleId) return;
+    setLoadError(stepsError
+      ? `Could not read the steps of the module "${module.name}": ${stepsError}`
+      : `MAS lists no steps for the module "${module.name}", so there is nothing to build a form from. Check the module in MAS or publish it again.`);
+  }, [scrUrl, module, steps, stepsLoading, stepsError, loadedModuleId, effectiveModuleId]);
+
   useEffect(() => {
     if (!module || steps.length === 0) return;
     if (steps.every(s => s.moduleId && s.moduleId !== module.id)) return;
@@ -186,16 +206,29 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     const scoreable = getScoreableStep(module, steps);
     if (!current) {
       if (scoreable) {
-        const generated = generateDefaultUI(module.id, scoreable, `${module.name} UI`);
-        setDef(generated);
-        setBaseline(serialize(generated));
-        setStep(scoreable);
+        // Dates and datetimes get their pickers from the start: read the
+        // decision's types first (an empty answer for other modules).
+        Promise.all([getDecisionDateKinds(module), getDecisionGridSchemas(module)]).then(([kinds, grids]) => {
+          if (defRef.current) return;
+          const generated = applyGridSchemas(
+            applyDateKinds(generateDefaultUI(module.id, scoreable, `${module.name} UI`), kinds),
+            grids
+          );
+          setDateKinds(kinds);
+          setGridSchemas(grids);
+          setGeneratedLayout(generated.layout);
+          setDef(generated);
+          setBaseline(serialize(generated));
+          setStep(scoreable);
+        });
       } else {
         setLoadError('No scoreable step found (needs score or execute step)');
       }
       return;
     }
     setStep(steps.find(s => s.id === current.stepId) ?? scoreable ?? null);
+    getDecisionDateKinds(module).then(setDateKinds);
+    getDecisionGridSchemas(module).then(setGridSchemas);
   }, [module, steps]);
 
   // --- Edits and undo ---------------------------------------------------
@@ -329,34 +362,6 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     [def, step]
   );
 
-  const handleAddNewParameters = (sectionId: string) => {
-    if (!def || !drift) return;
-    const params = [
-      ...drift.newInputs.map(p => ({ p, dir: 'input' as const })),
-      ...drift.newOutputs.map(p => ({ p, dir: 'output' as const })),
-    ];
-    if (params.length === 0) return;
-    let sections: UISection[] = def.layout.sections;
-    let targetId = sectionId;
-    if (sectionId === NEW_SECTION || !sections.some(s => s.id === sectionId)) {
-      targetId = newSectionId();
-      sections = [...sections, { id: targetId, title: 'New Parameters', fields: [] }];
-    }
-    sections = sections.map(s => {
-      if (s.id !== targetId) return s;
-      const start = s.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
-      return {
-        ...s,
-        fields: [...s.fields, ...params.map(({ p, dir }, i) => createFieldForParameter(p, dir, start + i))],
-      };
-    });
-    applyChange(
-      { ...def, layout: { ...def.layout, sections } },
-      `Add ${params.length} new parameter${params.length === 1 ? '' : 's'}`
-    );
-    setAnnouncement(`Added ${params.length} field${params.length === 1 ? '' : 's'}.`);
-  };
-
   const handleRemoveOrphans = () => {
     if (!def || !drift || drift.orphaned.length === 0) return;
     const orphaned = new Set(drift.orphaned.map(o => o.field));
@@ -387,19 +392,47 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
     );
   }
 
-  const newParamCount = drift ? drift.newInputs.length + drift.newOutputs.length : 0;
+  // Canvas first: parameters with no field are normal (the field list offers
+  // them), so only fields whose parameter left the signature are flagged.
+  const orphanDrift = drift && drift.orphaned.length > 0 ? { ...drift, newInputs: [], newOutputs: [] } : null;
+  const templateLayout = generatedLayout
+    ?? (step ? generateDefaultUI(def.moduleId, step, def.name).layout : null);
+  const source = scrUrl ? `SCR endpoint: ${scrUrl}` : module ? `MAS module: ${module.name}` : '';
 
-  return (
-    <div className="ui-builder">
-      <PageHeader
-        title={initialDef ? `Edit: ${def.name}` : 'Create UI App'}
-        subtitle={scrUrl ? `SCR endpoint: ${scrUrl}` : module ? `MAS module: ${module.name}` : undefined}
-        breadcrumbs={[
-          { label: 'UI Apps', onClick: handleBack },
-          { label: def.name },
-        ]}
+  const appName = def.name || 'Untitled app';
+  const topBar = (
+    <div className="cb-top">
+      <nav className="cb-top__crumbs" aria-label="Breadcrumb">
+        <ol className="sas-breadcrumbs">
+          <li className="sas-breadcrumbs__item">
+            <button type="button" className="sas-breadcrumbs__link" onClick={handleBack}>UI Apps</button>
+            <span className="sas-breadcrumbs__separator" aria-hidden="true">›</span>
+          </li>
+          <li className="sas-breadcrumbs__item">
+            {/* The page's heading: the app's name, as the title bar of the app. */}
+            <h1 className="cb-top__title" aria-current="page">{appName}</h1>
+          </li>
+        </ol>
+      </nav>
+      <BuilderBar
+        isPreview={isPreview}
+        onModeChange={setIsPreview}
+        onSave={handleSave}
+        onSaveAndRun={handleSaveAndRun}
+        onShare={() => setShowShare(true)}
+        onReplaceModule={initialDef && !scrUrl ? () => setShowReplaceModule(true) : undefined}
+        onUndo={handleUndo}
+        undoLabel={isPreview ? null : undoLabel}
+        isDirty={isDirty}
+        isSaved={hasSaved}
+        saving={saving}
       />
+    </div>
+  );
 
+  const showDrift = !driftDismissed && hasSignatureDrift(orphanDrift);
+  const notices = (saveMessage || showDrift) ? (
+    <>
       {saveMessage && (
         <Alert
           variant={saveMessage.startsWith('Save failed') ? 'error' : 'success'}
@@ -410,85 +443,54 @@ export const UIBuilder: React.FC<UIBuilderProps> = ({
         </Alert>
       )}
 
-      {!driftDismissed && hasSignatureDrift(drift) && (
+      {showDrift && orphanDrift && (
         <Alert
           variant="warning"
-          title={`Compared with the ${scrUrl ? "endpoint's current" : "module's current step"} signature: ${describeSignatureDrift(drift)}`}
+          title={`Compared with the ${scrUrl ? "endpoint's current" : "module's current step"} signature: ${describeSignatureDrift(orphanDrift)}`}
           dismissible
           onClose={() => setDriftDismissed(true)}
           actions={
-            <div className="ui-builder__drift-actions">
-              {newParamCount > 0 && (
-                <MenuButton
-                  label="Add to section…"
-                  ariaLabel={`Add ${newParamCount} new parameter${newParamCount === 1 ? '' : 's'} to a section`}
-                  items={[
-                    ...def.layout.sections.map(s => ({
-                      id: s.id,
-                      label: s.title || '(untitled)',
-                      onSelect: () => handleAddNewParameters(s.id),
-                    })),
-                    { id: NEW_SECTION, label: 'New section', onSelect: () => handleAddNewParameters(NEW_SECTION) },
-                  ]}
-                />
-              )}
-              {drift.orphaned.length > 0 && (
-                <Button variant="secondary" size="small" onClick={handleRemoveOrphans}>
-                  Remove orphaned fields
-                </Button>
-              )}
-            </div>
+            <Button variant="secondary" size="small" onClick={handleRemoveOrphans}>
+              Remove orphaned fields
+            </Button>
           }
         >
-          <ul className="ui-builder__drift-list">
-            {drift.newInputs.length > 0 && (
-              <li>
-                New inputs with no field (sent as missing, null, until added):{' '}
-                <strong>{drift.newInputs.map(p => p.name).join(', ')}</strong>
-              </li>
-            )}
-            {drift.newOutputs.length > 0 && (
-              <li>
-                New outputs with no field: <strong>{drift.newOutputs.map(p => p.name).join(', ')}</strong>
-              </li>
-            )}
-            {drift.orphaned.length > 0 && (
-              <li>
-                Fields for parameters the signature no longer lists (not sent):{' '}
-                <strong>{drift.orphaned.map(o => `${o.field.label} (${o.field.parameterId})`).join(', ')}</strong>
-              </li>
-            )}
-          </ul>
+          <p>
+            Fields for parameters the signature no longer lists (not sent):{' '}
+            <strong>{orphanDrift.orphaned.map(o => `${o.field.label} (${o.field.parameterId})`).join(', ')}</strong>
+          </p>
         </Alert>
       )}
+    </>
+  ) : null;
 
-      <BuilderToolbar
-        definition={def}
-        onNameChange={(name) => applyChange({ ...def, name }, 'Rename app', 'name')}
-        onDescriptionChange={(desc) => applyChange({ ...def, description: desc || undefined }, 'Edit description', 'description')}
-        onSettingsChange={(settings: UISettings) => applyChange({ ...def, settings }, 'Change app settings', 'settings')}
-        onColumnsChange={(cols) => applyChange({ ...def, layout: { ...def.layout, columns: cols } }, 'Change columns')}
-        onSave={handleSave}
-        onSaveAndRun={handleSaveAndRun}
-        onPreview={() => setIsPreview(!isPreview)}
-        onShare={() => setShowShare(true)}
-        onReplaceModule={initialDef && !scrUrl ? () => setShowReplaceModule(true) : undefined}
-        onUndo={handleUndo}
-        undoLabel={isPreview ? null : undoLabel}
-        isDirty={isDirty}
-        isSaved={hasSaved}
-        saving={saving}
-        isPreview={isPreview}
-      />
-
+  return (
+    <div className="ui-builder ui-builder--full">
       {isPreview ? (
-        <BuilderPreview definition={def} isDirty={isDirty} />
+        <div className="cb cb--preview">
+          <div className="cb-center">
+            {topBar}
+            {notices && <div className="cb-notices">{notices}</div>}
+            <div className="cb-preview">
+              <BuilderPreview definition={def} isDirty={isDirty} />
+            </div>
+          </div>
+        </div>
       ) : (
-        <BuilderCanvas
+        <CanvasEditor
           definition={def}
           step={step}
+          dateKinds={dateKinds}
+          gridSchemas={gridSchemas}
+          isModelModule={!scrUrl && !!modelIdOf(module)}
+          isDecisionModule={!scrUrl && !!decisionSourceOf(module)}
+          source={source}
           onChange={applyChange}
           selectionResetKey={selectionResetKey}
+          templateLayout={templateLayout}
+          announce={setAnnouncement}
+          topBar={topBar}
+          notices={notices}
         />
       )}
 
